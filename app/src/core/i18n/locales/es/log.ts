@@ -35,7 +35,7 @@ export const log: Messages['log'] = {
     body: 'Pruebe con menos filtros o con otra palabra.',
   },
   groups: {
-    project: 'Proyecto, exportación y copia de seguridad',
+    project: 'Proyecto, codificadores, exportación y copia de seguridad',
     documents: 'Documentos',
     codes: 'Libro de códigos',
     coding: 'Codificación',
@@ -69,9 +69,9 @@ export const log: Messages['log'] = {
       restore: { plain: 'Restauró un documento', one: 'Restauró el documento {a}' },
     },
     code: {
-      create: { plain: 'Creó un código', one: 'Creó el código {a}' },
+      create: { plain: 'Creó un código', one: 'Creó el código {a}', n: 'Creó {n} códigos', nB: 'Creó {n} códigos a partir de {b}' },
       rename: { plain: 'Cambió el nombre de un código', two: 'Cambió el nombre del código {a} a {b}' },
-      edit: { plain: 'Editó un código', one: 'Editó el código {a}' },
+      edit: { plain: 'Editó un código', one: 'Editó el código {a}', n: 'Editó {n} códigos', nB: 'Editó {n} códigos a partir de {b}' },
       move: { plain: 'Movió un código', one: 'Movió el código {a}', two: 'Movió el código {a} dentro de {b}' },
       merge: { plain: 'Combinó códigos', twoN: 'Combinó {a} en {b} ({n} segmentos codificados)' },
       split: { plain: 'Dividió un código', twoN: 'Separó {b} de {a} ({n} segmentos codificados)' },
@@ -110,6 +110,10 @@ export const log: Messages['log'] = {
     },
     pseudonym: {
       apply: { plain: 'Aplicó la seudonimización', n: 'Seudonimizó los documentos ({n} sustituciones)', nB: 'Seudonimizó {b} ({n} sustituciones)' },
+    },
+    coder: {
+      add: { plain: 'Añadió un codificador', one: 'Añadió el codificador {a}' },
+      edit: { plain: 'Cambió un codificador', one: 'Cambió el codificador {a}', two: 'Cambió el nombre del codificador {a} a {b}' },
     },
   },
 };

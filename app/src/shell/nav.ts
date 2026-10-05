@@ -14,6 +14,8 @@ export interface NavItem {
   icon: LucideIcon;
   label: MessageKey;
   group: NavGroup;
+  /** More words that find it in the palette, comma-separated in the reader's language. */
+  keywords?: MessageKey;
 }
 
 export const NAV: readonly NavItem[] = [
@@ -25,7 +27,7 @@ export const NAV: readonly NavItem[] = [
   { name: 'analysis', icon: ChartNetwork, label: 'app.nav.analysis', group: 'analyse' },
   { name: 'agreement', icon: Scale, label: 'app.nav.agreement', group: 'analyse' },
   { name: 'import', icon: FileDown, label: 'app.nav.import', group: 'project' },
-  { name: 'project', icon: Package, label: 'app.nav.project', group: 'project' },
+  { name: 'project', icon: Package, label: 'app.nav.project', group: 'project', keywords: 'app.nav.projectKeywords' },
   { name: 'pseudonyms', icon: VenetianMask, label: 'app.nav.pseudonyms', group: 'project' },
   { name: 'log', icon: History, label: 'app.nav.log', group: 'project' },
   { name: 'settings', icon: Settings, label: 'app.nav.settings', group: 'foot' },

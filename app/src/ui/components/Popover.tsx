@@ -1,16 +1,16 @@
-import React, { useEffect, useRef, type ReactNode, type RefObject } from 'react';
+import React, { useEffect, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { cx } from '../cx';
 import { focusBackTo, pushLayer } from '../focus';
-import type { Align, Rect, Side } from '../position';
-import { floatingStyle, useFloating } from './floating';
+import type { Align, Side } from '../position';
+import { type Anchor, anchorElement, floatingStyle, useFloating } from './floating';
 import './floating.css';
 
 export interface PopoverProps {
   open: boolean;
   onClose: () => void;
-  /** The element it hangs from, or a point (a right click). */
-  anchor: RefObject<HTMLElement | null> | Rect | null;
+  /** The element it hangs from, a fixed point (a right click), or a point that moves (see Anchor). */
+  anchor: Anchor;
   side?: Side;
   align?: Align;
   children: ReactNode;
@@ -60,7 +60,7 @@ export function Popover({ open, onClose, anchor, side = 'bottom', align = 'start
     const onDown = (e: PointerEvent) => {
       const t = e.target as Node;
       if (box.current?.contains(t)) return;
-      const a = anchor && 'current' in anchor ? anchor.current : null;
+      const a = anchorElement(anchor);
       // A click on the anchor toggles it: the anchor's own handler closes it.
       if (a?.contains(t)) return;
       if (layer.isTop()) closeRef.current();
@@ -78,7 +78,7 @@ export function Popover({ open, onClose, anchor, side = 'bottom', align = 'start
   }, [open]);
 
   if (!open) return null;
-  const anchorWidth = matchAnchorWidth && anchor && 'current' in anchor ? anchor.current?.offsetWidth : undefined;
+  const anchorWidth = matchAnchorWidth ? anchorElement(anchor)?.offsetWidth : undefined;
   return createPortal(
     <div
       ref={box}

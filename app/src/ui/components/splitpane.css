@@ -23,6 +23,15 @@
   flex: 1;
 }
 
+/* The second pane holds the size; the first takes the rest. */
+.split--sized-second > .split__pane--first {
+  flex: 1;
+}
+
+.split--sized-second > .split__pane--second {
+  flex: none;
+}
+
 .split__handle {
   position: relative;
   flex: none;

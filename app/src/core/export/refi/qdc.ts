@@ -1,5 +1,6 @@
 // REFI-QDA codebook exchange (.qdc): a single XML file with the code tree.
 import type { Code, Draft } from '../../model/types';
+import type { QdpxWarning } from './qdpx-import';
 import { HEX_COLOR, LIMITS, PALETTE } from '../../model/types';
 import { decodeText } from '../../bytes';
 import { uuid } from '../../ids';
@@ -62,7 +63,10 @@ export interface QdcImport {
   /** Code drafts with ids; parent_id points to another draft in the list. Parents come first. */
   codes: (Draft<'code'> & { id: string })[];
   origin: string | null;
+  /** What could not be imported, in plain English (the messages of `issues`). */
   warnings: string[];
+  /** The same as data, coded like a project import's warnings. */
+  issues: QdpxWarning[];
 }
 
 /** Reads a .qdc (text or bytes). Throws RefiError when it is not a REFI-QDA codebook. */
@@ -118,6 +122,7 @@ export function importQdc(input: string | Uint8Array): QdcImport {
   const nSets = sets ? children(sets, 'Set').length : 0;
   // Code sets: in a .qdc their members use guid="…" (in a .qde, targetGUID). Trama has no code
   // sets yet, so they are only reported.
-  if (nSets) warnings.push(`${nSets} set(s) of codes were not imported (Trama has no code sets).`);
-  return { codes, origin, warnings };
+  const issues: QdpxWarning[] = nSets ? [{ code: 'codeSet', count: nSets, message: `${nSets} set(s) of codes were not imported (Trama has no code sets).` }] : [];
+  for (const w of issues) warnings.push(w.message);
+  return { codes, origin, warnings, issues };
 }

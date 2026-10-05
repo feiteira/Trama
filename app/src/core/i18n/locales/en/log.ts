@@ -35,7 +35,7 @@ export const log = {
     body: 'Try fewer filters or another word.',
   },
   groups: {
-    project: 'Project, export and backup',
+    project: 'Project, coders, export and backup',
     documents: 'Documents',
     codes: 'Codebook',
     coding: 'Coding',
@@ -69,9 +69,9 @@ export const log = {
       restore: { plain: 'Restored a document', one: 'Restored the document {a}' },
     },
     code: {
-      create: { plain: 'Created a code', one: 'Created the code {a}' },
+      create: { plain: 'Created a code', one: 'Created the code {a}', n: 'Created {n} codes', nB: 'Created {n} codes from {b}' },
       rename: { plain: 'Renamed a code', two: 'Renamed the code {a} to {b}' },
-      edit: { plain: 'Edited a code', one: 'Edited the code {a}' },
+      edit: { plain: 'Edited a code', one: 'Edited the code {a}', n: 'Edited {n} codes', nB: 'Edited {n} codes from {b}' },
       move: { plain: 'Moved a code', one: 'Moved the code {a}', two: 'Moved the code {a} under {b}' },
       merge: { plain: 'Merged codes', twoN: 'Merged {a} into {b} ({n} coded segments)' },
       split: { plain: 'Split a code', twoN: 'Split {b} out of {a} ({n} coded segments)' },
@@ -110,6 +110,10 @@ export const log = {
     },
     pseudonym: {
       apply: { plain: 'Applied pseudonymisation', n: 'Pseudonymised the documents ({n} replacements)', nB: 'Pseudonymised {b} ({n} replacements)' },
+    },
+    coder: {
+      add: { plain: 'Added a coder', one: 'Added the coder {a}' },
+      edit: { plain: 'Changed a coder', one: 'Changed the coder {a}', two: 'Renamed the coder {a} to {b}' },
     },
   },
 };

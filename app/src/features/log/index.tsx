@@ -20,8 +20,8 @@ import { Popover } from '../../ui/components/Popover';
 import { useToast } from '../../ui/components/Toast';
 import { csvDelimiter, saveExport, stamp } from './exportFile';
 import {
-  ACTION_GROUPS, type ActionGroup, actionsOf, beforeBound, buildSentence, EMPTY_FILTER, filterActive, groupByDay, groupOf, type LogFilter, matchesText,
-  onOrAfter, quotesFor, type Quotes, type Sentence, sentenceText, splitTemplate,
+  ACTION_GROUPS, type ActionGroup, actionsOf, afterBound, beforeBound, buildSentence, EMPTY_FILTER, filterActive, groupByDay, groupOf, type LogFilter,
+  quotesFor, type Quotes, type Sentence, sentenceText, splitTemplate,
 } from './sentence';
 import './log.css';
 
@@ -61,21 +61,20 @@ export default function LogScreen(_props: ScreenProps<'log'>) {
   const [exporting, setExporting] = useState(false);
   const scroller = useRef<HTMLDivElement>(null);
 
+  // The search reads the trail page by page: wait for a pause in typing before asking.
+  const [text, setText] = useState(filter.text);
+  useEffect(() => {
+    if (!filter.text.trim()) return setText('');
+    const timer = setTimeout(() => setText(filter.text), 250);
+    return () => clearTimeout(timer);
+  }, [filter.text]);
+
   // A new filter starts again from the newest page.
   const groupsKey = filter.groups.join(',');
   useEffect(() => {
     setLimit(PAGE);
     scroller.current?.scrollTo({ top: 0 });
-  }, [groupsKey, filter.coderId, filter.to, filter.from]);
-
-  const query = useMemo(
-    () => ({ action: filter.groups.length ? actionsOf(filter.groups) : undefined, coderId: filter.coderId ?? undefined, before: beforeBound(filter.to) }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [groupsKey, filter.coderId, filter.to],
-  );
-  const { data: raw } = useLive(() => listLog(project, { ...query, limit }), [query, limit], ['log']);
-  const { data: coders } = useLive(() => listCoders(project), [], ['coder']);
-  const coderById = useMemo(() => new Map((coders ?? []).map((c) => [c.coder.id, c])), [coders]);
+  }, [groupsKey, filter.coderId, filter.to, filter.from, text]);
 
   const fmtN = useCallback((n: number) => n.toLocaleString(meta.bcp47), [meta.bcp47]);
   const quotes = useMemo(() => quotesFor(locale), [locale]);
@@ -88,14 +87,27 @@ export default function LogScreen(_props: ScreenProps<'log'>) {
     [t, fmtN, quotes],
   );
 
-  const rows = useMemo(() => (raw ?? []).map(toRow), [raw, toRow]);
-  const shown = useMemo(
-    () => rows.filter((r) => onOrAfter(r.entry.at, filter.from) && matchesText(`${r.text}\n${r.entry.summary}`, filter.text)),
-    [rows, filter.from, filter.text],
+  // Every filter is applied by the service, the search included (on what each entry says in the
+  // reader's language, as shown here), so each page is full of matching entries.
+  const query = useMemo(
+    () => ({
+      action: filter.groups.length ? actionsOf(filter.groups) : undefined,
+      coderId: filter.coderId ?? undefined,
+      before: beforeBound(filter.to),
+      after: afterBound(filter.from),
+      text,
+      describe: (e: LogEntry) => toRow(e).text,
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [groupsKey, filter.coderId, filter.to, filter.from, text, toRow],
   );
-  const oldest = raw?.[raw.length - 1];
-  // More to load: the page came back full, and (with a start date) it has not reached it yet.
-  const hasMore = !!raw && raw.length >= limit && !(filter.from && oldest && !onOrAfter(oldest.at, filter.from));
+  const { data: raw } = useLive(() => listLog(project, { ...query, limit }), [query, limit], ['log']);
+  const { data: coders } = useLive(() => listCoders(project), [], ['coder']);
+  const coderById = useMemo(() => new Map((coders ?? []).map((c) => [c.coder.id, c])), [coders]);
+
+  const shown = useMemo(() => (raw ?? []).map(toRow), [raw, toRow]);
+  // More to load: the page came back full.
+  const hasMore = !!raw && raw.length >= limit;
   const days = useMemo(() => groupByDay(shown.map((r) => ({ at: r.entry.at, row: r }))), [shown]);
   const loading = raw === undefined;
 
@@ -115,10 +127,10 @@ export default function LogScreen(_props: ScreenProps<'log'>) {
   async function exportCsv() {
     setExporting(true);
     try {
-      const all = await listLog(project, { ...query, limit: 10_000_000 });
+      // What the screen shows, with the search as typed (it may not have been applied yet).
+      const all = await listLog(project, { ...query, text: filter.text, limit: 10_000_000 });
       const kept = all
         .map(toRow)
-        .filter((r) => onOrAfter(r.entry.at, filter.from) && matchesText(`${r.text}\n${r.entry.summary}`, filter.text))
         .sort((a, b) => (a.entry.at < b.entry.at ? -1 : a.entry.at > b.entry.at ? 1 : a.entry.updated_at_hlc < b.entry.updated_at_hlc ? -1 : 1));
       const names = new Map((coders ?? []).map((c) => [c.coder.id, c.coder.name]));
       const body = logAsRows(
@@ -145,7 +157,7 @@ export default function LogScreen(_props: ScreenProps<'log'>) {
     }
   }
 
-  useCommands(() => [{ id: 'log.export', label: t('log.exportTitle'), group: t('app.nav.log'), icon: FileDown, run: () => void exportCsv() }], [t, query, filter.text, filter.from, coders]);
+  useCommands(() => [{ id: 'log.export', label: t('log.exportTitle'), group: t('app.nav.log'), icon: FileDown, run: () => void exportCsv() }], [t, query, filter.text, coders]);
 
   const today = DateTime.now().toISODate();
   const yesterday = DateTime.now().minus({ days: 1 }).toISODate();

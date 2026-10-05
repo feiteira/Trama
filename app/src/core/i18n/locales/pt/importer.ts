@@ -328,7 +328,10 @@ export const importer: Messages['importer'] = {
     merged: 'Integrado em «{name}»: {added} novos, {updated} atualizados.',
     mergedNothing: '«{name}» já tinha tudo o que este ficheiro contém.',
     errorTitle: 'Este ficheiro não pode ser importado',
-    imported: '«{name}» importado.',
+    importedTitle: '«{name}» está na sua biblioteca',
+    importedBody: 'O projeto foi importado. Abra-o agora, ou mais tarde a partir da lista de projetos.',
+    openNow: 'Abrir agora',
+    later: 'Agora não',
     defaultCoder: 'Investigador',
     errors: {
       notProject: 'Isto não é um ficheiro de projeto do Trama nem REFI-QDA. Os documentos, transcrições e inquéritos importam-se dentro de um projeto, no ecrã Importar.',

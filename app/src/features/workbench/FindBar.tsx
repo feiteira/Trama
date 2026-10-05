@@ -66,7 +66,19 @@ export function FindBar({ query, onQuery, count, index, onStep, onClose, options
       </div>
       <IconButton size="sm" icon={ChevronUp} label={t('workbench.find.prev')} shortcut="Shift+Enter" disabled={!count} onClick={() => onStep(-1)} data-testid="find-prev" />
       <IconButton size="sm" icon={ChevronDown} label={t('workbench.find.next')} shortcut="Enter" disabled={!count} onClick={() => onStep(1)} data-testid="find-next" />
-      <Button ref={codeAllRef} size="sm" variant="ghost" icon={Highlighter} disabled={!count} onClick={() => setPicking((p) => !p)} aria-haspopup="dialog" aria-expanded={picking} data-testid="find-code-all">
+      <Button
+        ref={codeAllRef}
+        size="sm"
+        variant="ghost"
+        icon={Highlighter}
+        disabled={!count}
+        onClick={() => setPicking((p) => !p)}
+        aria-haspopup="dialog"
+        aria-expanded={picking}
+        title={tp('workbench.find.codeAll', count)}
+        className="wb-find__code-all"
+        data-testid="find-code-all"
+      >
         {tp('workbench.find.codeAll', count)}
       </Button>
       <IconButton size="sm" icon={X} label={t('workbench.find.close')} shortcut="Esc" onClick={onClose} data-testid="find-close" />

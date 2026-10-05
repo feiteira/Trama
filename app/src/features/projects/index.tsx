@@ -1,4 +1,4 @@
-import React, { lazy, Suspense, useMemo, useRef, useState } from 'react';
+import React, { lazy, Suspense, useCallback, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { DateTime } from 'luxon';
 import { Ellipsis, FileUp, FolderOpen, Lock, Pencil, Plus, Settings2, Sparkles, Trash2 } from 'lucide-react';
 import { AUTO_LOCK_MINUTES, type AutoLockMinutes, type ThemePref } from '../../services/prefs';
@@ -46,9 +46,12 @@ export function ProjectsScreen() {
   const toast = useToast();
   const confirm = useConfirm();
   const key = useKeyLabel();
-  // The library's list is not observable: bump to re-read it after a change made here.
-  const [version, setVersion] = useState(0);
-  const projects = useMemo(() => library.projects, [library, version]);
+  // Re-read after every change to the list, wherever it was made.
+  const revision = useSyncExternalStore(
+    useCallback((onChange: () => void) => library.subscribe(onChange), [library]),
+    () => library.revision,
+  );
+  const projects = useMemo(() => library.projects, [library, revision]);
   const [query, setQuery] = useState('');
   const [sort, setSortState] = useState<ProjectSort>(readSort);
   const [creating, setCreating] = useState(false);
@@ -80,7 +83,6 @@ export function ProjectsScreen() {
     } catch (e) {
       console.error('opening a project failed', e);
       toast.show({ message: t('projects.openFailed', { name: p.name, message: message(e) }), tone: 'danger' });
-      setVersion((v) => v + 1);
     } finally {
       busy.current = false;
       setOpening(null);
@@ -98,7 +100,6 @@ export function ProjectsScreen() {
   async function save(p: ProjectInfo, d: ProjectDraft) {
     await library.updateProject(p.id, { name: d.name, description: d.description, color: d.color });
     setEditing(null);
-    setVersion((v) => v + 1);
     toast.show({ message: t('projects.saved'), tone: 'success' });
   }
 
@@ -119,8 +120,6 @@ export function ProjectsScreen() {
       toast.show({ message: t('projects.deleted', { name: p.name }) });
     } catch (e) {
       toast.error(e);
-    } finally {
-      setVersion((v) => v + 1);
     }
   }
 
@@ -134,7 +133,6 @@ export function ProjectsScreen() {
       enterProject(project);
     } catch (e) {
       toast.error(e);
-      setVersion((v) => v + 1);
     } finally {
       busy.current = false;
       setAddingExample(false);
@@ -281,8 +279,7 @@ export function ProjectsScreen() {
             open
             onClose={() => {
               setImporting(false);
-              setVersion((v) => v + 1);
-            }}
+                    }}
           />
         </Suspense>
       ) : null}

@@ -72,6 +72,94 @@ export async function createCode(ctx: ProjectContext, input: NewCode): Promise<{
   return { code: saved.get('code', id), undo };
 }
 
+/** One code of a batch (`createCodes`). */
+export interface CodeDraft extends Omit<NewCode, 'parent_id' | 'beforeId'> {
+  /** A key other drafts of the batch name as their parent (any string, unique in the batch). */
+  ref?: string;
+  /** Under an existing code (`id`), under an earlier draft of the batch (`ref`), or at the top (null). */
+  parent?: { id: string } | { ref: string } | null;
+}
+
+export interface CreateCodesOptions {
+  /** Changes to existing codes written in the same step (an imported codebook updating definitions). */
+  updates?: readonly { id: string; patch: CodePatch }[];
+  /** What the batch came from (a file name), for the audit trail. */
+  source?: string;
+}
+
+/**
+ * Creates many codes, nested through references to each other, and optionally edits existing
+ * ones, in one write: one undo step and one audit-trail entry. New codes go after their
+ * siblings in the order given; colours continue the palette.
+ */
+export async function createCodes(
+  ctx: ProjectContext,
+  drafts: readonly CodeDraft[],
+  opts: CreateCodesOptions = {},
+): Promise<{ codes: Code[]; updated: number; undo: Undoable }> {
+  const updates = opts.updates ?? [];
+  if (!drafts.length && !updates.length) return { codes: [], updated: 0, undo: noopUndo('code.create') };
+  const stored = await ctx.store.list('code');
+  const byId = new Map(stored.map((c) => [c.id, c]));
+  const plan = new Plan();
+  const refs = new Map<string, string>();
+  const nextOrder = new Map<string | null, number>();
+  const orderUnder = (parentId: string | null) => {
+    const o = nextOrder.get(parentId) ?? orderAfterLast(stored.filter((c) => c.parent_id === parentId));
+    nextOrder.set(parentId, o + 1);
+    return o;
+  };
+  let colours = stored.length;
+  const ids: string[] = [];
+  for (const d of drafts) {
+    const name = requireName(d.name);
+    let parentId: string | null = null;
+    if (d.parent && 'ref' in d.parent) {
+      const p = refs.get(d.parent.ref);
+      if (!p) throw new ServiceError('invalid_argument', `parent ${q(d.parent.ref)} is not an earlier code of the batch`);
+      parentId = p;
+    } else if (d.parent && 'id' in d.parent) {
+      if (!byId.has(d.parent.id)) throw new ServiceError('not_found', `code ${d.parent.id} not found`);
+      parentId = d.parent.id;
+    }
+    if (d.ref !== undefined && refs.has(d.ref)) throw new ServiceError('invalid_argument', `the batch names ${q(d.ref)} twice`);
+    const id = plan.create('code', {
+      name,
+      parent_id: parentId,
+      color: d.color ?? nextColor(colours++),
+      description: d.description ?? '',
+      inclusion: d.inclusion ?? '',
+      exclusion: d.exclusion ?? '',
+      example: d.example ?? '',
+      order: orderUnder(parentId),
+      codable: d.codable ?? true,
+      shortcut: null,
+    });
+    if (d.ref !== undefined) refs.set(d.ref, id);
+    ids.push(id);
+  }
+  let updated = 0;
+  for (const u of updates) {
+    const code = byId.get(u.id);
+    if (!code) throw new ServiceError('not_found', `code ${u.id} not found`);
+    const clean: CodePatch = { ...u.patch };
+    if (clean.name !== undefined) clean.name = requireName(clean.name);
+    const changed = (Object.keys(clean) as (keyof CodePatch)[]).filter((k) => clean[k] !== undefined && clean[k] !== code[k]);
+    if (!changed.length) continue;
+    plan.change('code', code, clean);
+    updated++;
+  }
+  if (plan.isEmpty) return { codes: [], updated: 0, undo: noopUndo('code.create') };
+  // `×3 → "book.qdc" ~1` (3 created from the file, 1 edited), `~1 ×3` without a source; only
+  // edits are logged as such.
+  const action = ids.length ? 'code.create' : 'code.edit';
+  const n = ids.length || updated;
+  const edits = ids.length && updated ? `~${updated}` : '';
+  const summary = opts.source !== undefined ? `×${n} → ${q(opts.source)}${edits ? ` ${edits}` : ''}` : `${edits ? `${edits} ` : ''}×${n}`;
+  const { saved, undo } = await commit(ctx, plan, { label: action, detail: summary, logs: [{ action, summary }] });
+  return { codes: ids.map((id) => saved.get('code', id)), updated, undo };
+}
+
 /** Edits a code. A rename is logged as such; definition edits typed over a few minutes log once. */
 export async function updateCode(ctx: ProjectContext, id: string, patch: CodePatch): Promise<{ code: Code; undo: Undoable }> {
   const code = await need(ctx, 'code', id);

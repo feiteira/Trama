@@ -10,6 +10,7 @@ import { applyCode, autocode, inVivo, recode, removeCoding, resizeCoding, setCom
 import { attachMedia, detachMedia, editDocumentText } from '../../services/documents';
 import { createMemo, memosFor } from '../../services/memos';
 import { combineUndo, q, ServiceError } from '../../services/undo';
+import { claimAltArrows } from '../../shell/activity.web';
 import { useAppState, useProject, useRegisterSaver } from '../../shell/AppState';
 import { useKeyLabel } from '../../shell/keys';
 import { useRouter } from '../../shell/router';
@@ -19,6 +20,7 @@ import { useCommands } from '../../shell/useCommands';
 import { useLive } from '../../shell/useLive';
 import { Badge, Button, IconButton, Menu, type MenuEntry, Popover, Spinner, useConfirm, useToast } from '../../ui/components';
 import { isTextEntry, modalOpen } from '../../ui/focus';
+import type { Rect } from '../../ui/position';
 import { type MessageKey, useI18n } from '../../ui/i18n';
 import { CodingPopover } from './CodingPopover';
 import { type Box, rangeFor, scrollToOffset, spanExtent, spanRects, visibleParagraphs } from './dom';
@@ -77,10 +79,22 @@ function excerpt(text: string, max = 60): string {
   return s.length > max ? `${s.slice(0, max - 1).trimEnd()}…` : s;
 }
 
-/** A ref object for a Popover anchor that changes identity with `key`, so the popover re-measures. */
-function useMovingAnchor(el: React.RefObject<HTMLElement | null>, key: string): React.RefObject<HTMLElement | null> {
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  return useMemo(() => ({ get current() { return el.current; } }), [el, key]);
+/**
+ * A Popover anchor for a box in the page's coordinates: read afresh on every scroll and resize,
+ * so the popover moves with the text. A new box gives a new function, which re-measures.
+ */
+function usePageAnchor(page: React.RefObject<HTMLElement | null>, box: Box | null): (() => Rect | null) | null {
+  const key = box ? `${box.top},${box.left},${box.width},${box.height}` : '';
+  return useMemo(() => {
+    if (!box) return null;
+    return () => {
+      const el = page.current;
+      if (!el) return null;
+      const b = el.getBoundingClientRect();
+      return { top: b.top + box.top, left: b.left + box.left, width: box.width, height: box.height };
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, key]);
 }
 
 const MEDIA_EXT = ['mp3', 'm4a', 'wav', 'ogg', 'oga', 'opus', 'flac', 'aac', 'webm', 'mp4', 'm4v', 'mov', 'mkv'];
@@ -344,8 +358,7 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ do
   const resizingRef = useRef<string | null>(null);
   resizingRef.current = resizing;
   const dragging = useRef(false);
-  const selAnchorEl = useRef<HTMLSpanElement>(null);
-  const selAnchor = useMovingAnchor(selAnchorEl, JSON.stringify(selBox));
+  const selAnchor = usePageAnchor(pageRef, selBox);
   const selInput = useRef<HTMLInputElement>(null);
 
   const pageBox = (r: DOMRect): Box | null => {
@@ -630,8 +643,7 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ do
 
   // Coding popover (a click on a highlight or a stripe).
   const [codPop, setCodPop] = useState<{ ids: string[]; box: Box } | null>(null);
-  const codAnchorEl = useRef<HTMLSpanElement>(null);
-  const codAnchor = useMovingAnchor(codAnchorEl, JSON.stringify(codPop?.box ?? null));
+  const codAnchor = usePageAnchor(pageRef, codPop?.box ?? null);
   const popCodings = useMemo(() => (codPop ? codPop.ids.map((id) => shownById.get(id)).filter((c): c is Coding => !!c) : []), [codPop, shownById]);
   useEffect(() => {
     if (codPop && !popCodings.length) setCodPop(null);
@@ -897,7 +909,7 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ do
     };
     const move = nav[e.key];
     if (move) {
-      // Alt+Shift+arrows belong to the recording; plain Alt+← is the app's Back.
+      // Alt+arrows belong to the recording (Alt+Shift always, plain Alt while it plays) or are the app's Back.
       if (e.altKey && (e.shiftKey || !(e.ctrlKey || e.metaKey))) return;
       e.preventDefault();
       const inside = sel.rangeCount > 0 && root.contains(sel.getRangeAt(0).startContainer);
@@ -999,7 +1011,9 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ do
         media.current.toggle();
         return;
       }
-      if (e.altKey && e.shiftKey && !mod && (e.key === 'ArrowLeft' || e.key === 'ArrowRight') && !typing && media.current) {
+      // Alt+←/→ skip while the recording plays or has the focus (the shell's Back gives way, see
+      // claimAltArrows below); Alt+Shift+←/→ skip at any time.
+      if (e.altKey && !mod && (e.key === 'ArrowLeft' || e.key === 'ArrowRight') && !typing && media.current && (e.shiftKey || media.current.active())) {
         e.preventDefault();
         media.current.skip(e.key === 'ArrowLeft' ? -5000 : 5000);
         return;
@@ -1043,6 +1057,7 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ do
   }, [editing]);
   const timedRef = useRef(timed);
   timedRef.current = timed;
+  useEffect(() => claimAltArrows(() => !!media.current?.active() && !modalOpen()), []);
 
   // ── Pointer ─────────────────────────────────────────────────────────────────────────────
   const onRootMouseDown = (e: React.MouseEvent) => {
@@ -1109,6 +1124,10 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ do
     return out.join('\n');
   }, [hovered, shownById, codeMap, current, currentPi]);
 
+  // Every hook runs before the early return below: the document can disappear while it is
+  // open (deleted from the panel, or undone), and React needs the same hooks on every render.
+  const headerW = useHeaderWidth();
+
   // ── Render ──────────────────────────────────────────────────────────────────────────────
   if (loaded && (!doc || !dt)) {
     return (
@@ -1132,20 +1151,19 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ do
     <span className="wb-sub">
       <span className="wb-sub__kind">{t(`workbench.kind.${doc.kind}`)}</span>
       {caseName ? (
-        <Badge tone="neutral" className="wb-sub__chip" title={t('workbench.header.case')}>
-          {caseName}
+        <Badge tone="neutral" className="wb-sub__chip" title={`${t('workbench.header.case')}: ${caseName}`}>
+          <span className="wb-sub__chip-text">{caseName}</span>
         </Badge>
       ) : null}
       {groupNames.map((g) => (
-        <Badge key={g.id} color={g.color} className="wb-sub__chip" title={t('workbench.header.group')}>
-          {g.name}
+        <Badge key={g.id} color={g.color} className="wb-sub__chip" title={`${t('workbench.header.group')}: ${g.name}`}>
+          <span className="wb-sub__chip-text">{g.name}</span>
         </Badge>
       ))}
     </span>
   ) : null;
 
   // The toolbar folds into the More menu as the header narrows (1000 px windows).
-  const headerW = useHeaderWidth();
   const foldFont = headerW > 0 && headerW < 1180;
   const foldView = headerW > 0 && headerW < 900;
   const smaller = () => setFontSize((f) => FONT_SIZES.slice().reverse().find((s) => s < f) ?? f);
@@ -1344,8 +1362,6 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ do
                       ? flashRects.map((r, i) => <span key={`${flash.n}-${i}`} className="wb-flash" style={{ top: r.top - 1, left: r.left - 2, width: r.width + 4, height: r.height + 2 }} />)
                       : null}
                     {focused && caret && !pending ? <span className="wb-caret" style={{ top: caret.top, left: caret.left - 0.75, height: caret.height }} /> : null}
-                    <span ref={selAnchorEl} className="wb-anchor" style={selBox ? { top: selBox.top, left: selBox.left, width: selBox.width, height: selBox.height } : undefined} />
-                    <span ref={codAnchorEl} className="wb-anchor" style={codPop ? { top: codPop.box.top, left: codPop.box.left, width: codPop.box.width, height: codPop.box.height } : undefined} />
                   </div>
                 )}
               </div>
@@ -1370,7 +1386,7 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ do
                 follow={follow}
                 onFollow={setFollow}
                 onTime={onTime}
-                keys={{ toggle: key('Space'), back: 'Alt+Shift+←', forward: 'Alt+Shift+→' }}
+                keys={{ toggle: key('Space'), back: 'Alt+←', forward: 'Alt+→' }}
               />
             ) : null}
           </>

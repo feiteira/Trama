@@ -50,18 +50,13 @@
   min-width: 0;
 }
 
-.wb-panes .split__pane--first {
+.wb-panes .split__pane {
   overflow: hidden;
 }
 
-.wb-panes__main {
+.wb-panes__right > .split__pane--first {
   display: flex;
   flex-direction: column;
-  overflow: hidden;
-}
-
-.wb-panes__side {
-  overflow: hidden;
 }
 
 .wb-centre {
@@ -90,18 +85,31 @@
 }
 
 .wb-sub {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: 6px;
   min-width: 0;
+  overflow: hidden;
 }
 
 .wb-sub__kind {
+  flex: none;
   color: var(--ink-3);
 }
 
+/* Chips shrink to an ellipsis rather than being cut off at the edge of the header. */
 .wb-sub__chip {
+  flex: 0 1 auto;
+  min-width: 3.5em;
   max-width: 160px;
+}
+
+.wb-sub__chip .badge__dot {
+  flex: none;
+}
+
+.wb-sub__chip-text {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -349,14 +357,9 @@
 
 .wb-sel,
 .wb-flash,
-.wb-caret,
-.wb-anchor {
+.wb-caret {
   position: absolute;
   pointer-events: none;
-}
-
-.wb-anchor {
-  visibility: hidden;
 }
 
 .wb-sel {
@@ -464,6 +467,30 @@
   color: var(--ink-3);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+}
+
+/* A narrow centre pane (both side panels open in a small window): the field keeps the room
+   to type, and "Code all matches" shows as its icon (the label stays its accessible name). */
+.wb-find {
+  container-type: inline-size;
+}
+
+@container (max-width: 520px) {
+  .wb-find__field {
+    min-width: 0;
+  }
+  .wb-find__code-all {
+    flex: none;
+    padding-inline: 6px;
+  }
+  .wb-find__code-all .btn__label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
 }
 
 .wb-adjust {

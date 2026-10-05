@@ -3,9 +3,9 @@ import { Ellipsis, FileSpreadsheet, FileText, Files, Plus, SlidersHorizontal, Ta
 import type { Attribute } from '../../core/model/types';
 import { csvBytes } from '../../core/export/office/csv';
 import { buildXlsx, safeSheetName } from '../../core/export/office/xlsx';
-import { createCase, deleteCase, listAttributes, setCaseValue, updateCase } from '../../services/cases';
+import { createCase, deleteCases, listAttributes, setCaseValue, updateCase } from '../../services/cases';
 import { listDocuments } from '../../services/queries';
-import { combineUndo, ServiceError, type Undoable } from '../../services/undo';
+import { ServiceError } from '../../services/undo';
 import { usePlatform, useProject } from '../../shell/AppState';
 import { ScreenHeader } from '../../shell/ScreenHeader';
 import { type ScreenProps, useRouter } from '../../shell/router';
@@ -35,7 +35,7 @@ export default function CasesScreen({ route }: ScreenProps<'cases'>) {
   const { t, tp, meta, locale } = useI18n();
   const project = useProject();
   const platform = usePlatform();
-  const { record } = useUndo();
+  const { record, undo: undoLast } = useUndo();
   const { replace } = useRouter();
   const toast = useToast();
   const confirm = useConfirm();
@@ -150,15 +150,14 @@ export default function CasesScreen({ route }: ScreenProps<'cases'>) {
     });
     if (!ok) return;
     try {
-      const parts: Undoable[] = [];
-      for (const id of ids) parts.push((await deleteCase(project, id)).undo);
-      const undo = parts.length === 1 ? parts[0]! : combineUndo('case.delete', `×${parts.length}`, parts);
+      const { undo } = await deleteCases(project, ids);
       record(undo);
       setSelected(new Set());
       if (openId && ids.includes(openId)) open(null);
       toast.show({
         message: ids.length === 1 ? t('cases.deleted', { name: names[0] ?? '' }) : tp('cases.deletedN', ids.length),
-        action: { label: t('common.undo'), run: () => undo.undo(), testId: 'cases-undo-delete' },
+        // Through the undo stack, so the step does not stay there to be undone twice.
+        action: { label: t('common.undo'), run: () => void undoLast(), testId: 'cases-undo-delete' },
       });
     } catch (e) {
       toast.error(e);

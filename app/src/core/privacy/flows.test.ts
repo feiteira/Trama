@@ -24,6 +24,30 @@ describe('privacy flows', () => {
     expect(FLOWS.find((f) => f.id === 'qdpx')!.text.en.what).toMatch(/Never the pseudonymisation key/);
   });
 
+  it('names every way data leaves, with the formats each one writes', () => {
+    const title = (id: string) => FLOWS.find((f) => f.id === id)?.text.en.title ?? '';
+    const formats: Record<string, string[]> = {
+      backup: [],
+      trama: ['.trama'],
+      teammate: [],
+      qdpx: ['.qdpx'],
+      codebook: ['.qdc', 'Word', 'CSV', 'Excel', 'Markdown'],
+      segments: ['CSV', 'Excel', 'Word', 'HTML'],
+      memos: ['Word', 'Markdown'],
+      analysis: ['CSV', 'Excel', 'SVG', 'PNG'],
+      cases: ['CSV', 'Excel'],
+      audit: ['CSV'],
+      agreement: ['Word', 'HTML', 'Excel', 'CSV'],
+      report: ['Word', 'HTML'],
+      pseudonyms: [],
+      clipboard: [],
+    };
+    expect(Object.keys(formats).sort()).toEqual([...FLOW_IDS].sort());
+    for (const [id, list] of Object.entries(formats)) for (const f of list) expect(title(id), id).toContain(f);
+    // Only backups happen on their own; everything else is something you do.
+    expect(FLOWS.filter((f) => f.trigger === 'setting').map((f) => f.id)).toEqual(['backup']);
+  });
+
   it('makes GitHub-style anchors', () => {
     expect(headingAnchor('What leaves this computer')).toBe('what-leaves-this-computer');
     expect(headingAnchor('Qué sale de este ordenador')).toBe('qué-sale-de-este-ordenador');

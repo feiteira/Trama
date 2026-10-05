@@ -101,7 +101,6 @@ function Details() {
   const { t } = useI18n();
   const project = useProject();
   const library = useLibrary();
-  const { setPrefs } = useAppState();
   const toast = useToast();
   const [saved, setSaved] = useState({ name: project.info.name, description: project.info.description });
   const [name, setName] = useState(saved.name);
@@ -122,8 +121,7 @@ function Details() {
       setName(next.name);
       setDescription(next.description);
       setError(null);
-      // The rail and window title read the name from the library: an empty patch re-renders the shell.
-      void setPrefs({});
+      // The rail and window title follow through Library.subscribe ('update').
       toast.show({ message: t('exporter.overview.saved'), tone: 'success' });
     } catch (e) {
       toast.error(e);

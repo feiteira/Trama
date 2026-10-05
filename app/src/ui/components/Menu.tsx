@@ -3,6 +3,7 @@ import { Check, ChevronDown, type LucideIcon } from 'lucide-react';
 import { cx } from '../cx';
 import { pointRect, type Align, type Rect, type Side } from '../position';
 import { Button, type ButtonSize, type ButtonVariant, IconButton } from './Button';
+import type { Anchor } from './floating';
 import { Popover } from './Popover';
 
 export interface MenuItem {
@@ -27,7 +28,7 @@ const isItem = (e: MenuEntry): e is MenuItem => e.kind === undefined || e.kind =
 export interface MenuProps {
   open: boolean;
   onClose: () => void;
-  anchor: RefObject<HTMLElement | null> | Rect | null;
+  anchor: Anchor;
   items: MenuEntry[];
   side?: Side;
   align?: Align;
@@ -45,6 +46,9 @@ export function Menu({ open, onClose, anchor, items, side = 'bottom', align = 's
   const [active, setActive] = useState(-1);
   const list = useRef<HTMLDivElement>(null);
   const enabled = items.map((e, i) => (isItem(e) && !e.disabled ? i : -1)).filter((i) => i >= 0);
+  // Labels line up in one column: items without a tick or an icon keep the room for one.
+  const hasChecks = items.some((x) => isItem(x) && x.checked !== undefined);
+  const hasIcons = items.some((x) => isItem(x) && x.icon !== undefined);
 
   useEffect(() => {
     if (open) setActive(enabled[0] ?? -1);
@@ -109,7 +113,6 @@ export function Menu({ open, onClose, anchor, items, side = 'bottom', align = 's
           if (entry.kind === 'separator') return <div key={entry.id ?? `sep-${i}`} role="separator" className="menu__sep" />;
           if (entry.kind === 'heading') return <div key={entry.id ?? `h-${i}`} role="presentation" className="menu__heading">{entry.label}</div>;
           const Icon = entry.icon;
-          const hasChecks = items.some((x) => isItem(x) && x.checked !== undefined);
           return (
             <button
               key={entry.id}
@@ -126,7 +129,7 @@ export function Menu({ open, onClose, anchor, items, side = 'bottom', align = 's
               onClick={() => choose(entry)}
             >
               {hasChecks ? <span className="menu__check">{entry.checked ? <Check size={15} aria-hidden /> : null}</span> : null}
-              {Icon ? <Icon size={15} aria-hidden strokeWidth={1.75} /> : null}
+              {Icon ? <Icon size={15} aria-hidden strokeWidth={1.75} /> : hasIcons ? <span className="menu__icon" aria-hidden /> : null}
               <span className="menu__label">{entry.label}</span>
               {entry.hint ? <span className="menu__hint">{entry.hint}</span> : null}
             </button>
@@ -148,23 +151,33 @@ export interface MenuButtonProps {
   side?: Side;
   align?: Align;
   className?: string;
+  disabled?: boolean;
+  /** Something the menu started is running: a spinner shows and the menu does not open. */
+  busy?: boolean;
   'data-testid'?: string;
 }
 
 /** A button that opens a menu (aria-haspopup). ArrowDown on the button opens it too. */
-export function MenuButton({ items, label, icon, iconOnly, variant = 'secondary', size = 'md', side = 'bottom', align = 'start', className, ...rest }: MenuButtonProps) {
+export function MenuButton({ items, label, icon, iconOnly, variant = 'secondary', size = 'md', side = 'bottom', align = 'start', className, disabled = false, busy = false, ...rest }: MenuButtonProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLButtonElement>(null);
   const menuId = useId();
+  const blocked = disabled || busy;
+  // A menu left open over a control that has just become unavailable would act on it anyway.
+  useEffect(() => {
+    if (blocked) setOpen(false);
+  }, [blocked]);
   const common = {
     ref,
     className,
+    disabled,
+    busy,
     'aria-haspopup': 'menu' as const,
     'aria-expanded': open,
     'aria-controls': open ? menuId : undefined,
-    onClick: () => setOpen((o) => !o),
+    onClick: () => !blocked && setOpen((o) => !o),
     onKeyDown: (e: React.KeyboardEvent) => {
-      if (e.key === 'ArrowDown') {
+      if (e.key === 'ArrowDown' && !blocked) {
         e.preventDefault();
         setOpen(true);
       }
@@ -180,7 +193,7 @@ export function MenuButton({ items, label, icon, iconOnly, variant = 'secondary'
           {label}
         </Button>
       )}
-      <Menu open={open} onClose={() => setOpen(false)} anchor={ref} items={items} side={side} align={align} label={label} id={menuId} />
+      <Menu open={open && !blocked} onClose={() => setOpen(false)} anchor={ref} items={items} side={side} align={align} label={label} id={menuId} />
     </>
   );
 }

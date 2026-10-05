@@ -576,7 +576,7 @@ export function DocumentsPanel({ activeDocId, onOpen }: DocumentsPanelProps) {
     <section className="dpanel" aria-label={t('documents.panel.title')} data-testid="documents-panel">
       <header className="wpanel__head">
         <h2 className="wpanel__title">
-          {t('documents.panel.title')}
+          <span className="wpanel__name">{t('documents.panel.title')}</span>
           {rows ? <span className="wpanel__count">{rows.length}</span> : null}
         </h2>
         <div className="wpanel__tools">

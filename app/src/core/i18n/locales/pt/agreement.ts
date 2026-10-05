@@ -336,6 +336,7 @@ export const agreement: Messages['agreement'] = {
     done: 'Entraram {added} registos novos e {updated} mais recentes.',
     doneFiles: { one: 'Foi adicionado {n} ficheiro.', other: 'Foram adicionados {n} ficheiros.' },
     doneRejected: { one: '{n} registo ficou de fora por estar danificado.', other: '{n} registos ficaram de fora por estarem danificados.' },
+    previewRejected: { one: '{n} registo desta cópia está danificado e vai ficar de fora.', other: '{n} registos desta cópia estão danificados e vão ficar de fora.' },
     compare: 'Comparar codificadores',
     differentTitle: 'Esta cópia é de outro projeto',
     different:

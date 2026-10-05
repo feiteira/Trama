@@ -188,7 +188,8 @@ export const workbench = {
     remove: 'Remove the selected coding',
     undo: 'Undo, redo',
     playPause: 'Play or pause',
-    skip: 'Back or forward 5 seconds',
+    skip: 'Back or forward 5 seconds while it plays',
+    skipAlways: 'Back or forward 5 seconds, at any time',
     playHere: 'Play from the paragraph at the cursor',
   },
   goto: {

@@ -11,7 +11,7 @@ import { uuid } from '../core/ids';
 import type { Document, Draft, Entity, Kind, MediaRef } from '../core/model/types';
 import { HEX_COLOR, KINDS, LIMITS, PALETTE, SETTING_KEYS } from '../core/model/types';
 import { validate } from '../core/model/validate';
-import type { Db, SqlParam } from '../core/store/db';
+import type { Db, Row, SqlParam, SqlStatement } from '../core/store/db';
 import { TABLES } from '../core/store/schema';
 import { Store } from '../core/store/store';
 import { type Platform, PlatformError } from '../platform/types';
@@ -72,7 +72,17 @@ export interface ImportOptions {
   /** An existing coder of the bundle to make `me` (a restore knows who made the backup). */
   me?: string | null;
   color?: string;
+  /**
+   * true (the default): close the open project and open the new one. false: only add the new
+   * project to the library; the open project stays open (see `importBundle`).
+   */
+  open?: boolean;
 }
+
+/** What changed in the library, for `Library.subscribe`. */
+export type LibraryChange =
+  | { type: 'create' | 'import' | 'update' | 'delete' | 'open' | 'close'; id: string }
+  | { type: 'lock'; id: null };
 
 // ── library.json ───────────────────────────────────────────────────────────────────────
 
@@ -260,6 +270,10 @@ export class Library {
   private saveQueue: Promise<void> = Promise.resolve();
   /** The secret change running now, if any: the next one waits for it (see `changeSecret`). */
   private secretQueue: Promise<void> = Promise.resolve();
+  private listeners = new Set<(change: LibraryChange) => void>();
+  private revision_ = 0;
+  /** The database of the open project, which an import that does not open its project parks. */
+  private gates = new WeakMap<Project, ParkableDb>();
 
   private constructor(
     readonly platform: Platform,
@@ -393,6 +407,32 @@ export class Library {
     return this.list.map((p) => ({ ...p }));
   }
 
+  /**
+   * Calls `listener` after every change to the project list or to which project is open:
+   * a project created, imported, renamed (or re-described, recoloured), deleted, opened or
+   * closed, and when the library locks. Returns the function that stops it.
+   */
+  subscribe(listener: (change: LibraryChange) => void): () => void {
+    this.listeners.add(listener);
+    return () => void this.listeners.delete(listener);
+  }
+
+  /** Goes up by one with every change `subscribe` reports (a snapshot for React's useSyncExternalStore). */
+  get revision(): number {
+    return this.revision_;
+  }
+
+  private emit(change: LibraryChange): void {
+    this.revision_++;
+    for (const l of [...this.listeners]) {
+      try {
+        l(change);
+      } catch (e) {
+        console.error('a library listener failed', e);
+      }
+    }
+  }
+
   /** The open project, if any. */
   get current(): Project | null {
     return this.openProject_?.isOpen ? this.openProject_ : null;
@@ -439,24 +479,31 @@ export class Library {
   private async closeCurrent(): Promise<void> {
     const p = this.openProject_;
     this.openProject_ = null;
-    if (p) await p.close();
+    if (!p) return;
+    try {
+      await p.close();
+    } finally {
+      this.emit({ type: 'close', id: p.id });
+    }
   }
 
   /** Opens a project database with a key derived now, while the library key is known to be intact. */
-  private async openStore(id: string, create: boolean, init?: (db: Db) => Promise<void>): Promise<{ store: Store; key: Uint8Array }> {
+  private async openStore(id: string, create: boolean, init?: (db: Db) => Promise<void>): Promise<{ store: Store; key: Uint8Array; gate: ParkableDb }> {
     this.ensureOpen();
     const key = projectKeyOf(this.key, id);
     let db: Db | null = null;
     try {
       db = await this.platform.projects.open(id, key, create);
       if (init) await init(db);
-      const store = await Store.open(db, { now: this.now });
+      const gate = new ParkableDb(db);
+      db = gate;
+      const store = await Store.open(gate, { now: this.now });
       if (this.closed) {
         // Locked while the database opened: it must not stay open with nobody holding it.
         await store.close().catch(() => undefined);
         throw new LibraryError('LOCKED', 'the library is locked');
       }
-      return { store, key };
+      return { store, key, gate };
     } catch (e) {
       if (db && !(e instanceof LibraryError)) await db.close().catch(() => undefined);
       wipe(key);
@@ -464,8 +511,8 @@ export class Library {
     }
   }
 
-  private attach(id: string, store: Store, key: Uint8Array): Promise<Project> {
-    return Project.attach({
+  private async attach(id: string, store: Store, key: Uint8Array, gate: ParkableDb): Promise<Project> {
+    const project = await Project.attach({
       platform: this.platform,
       id,
       store,
@@ -481,6 +528,8 @@ export class Library {
         if (this.openProject_ === p) this.openProject_ = null;
       },
     });
+    this.gates.set(project, gate);
+    return project;
   }
 
   // ── Projects ───────────────────────────────────────────────────────────────────────────
@@ -497,11 +546,11 @@ export class Library {
       const id = uuid();
       const now = this.now();
       const info: ProjectInfo = { id, name, description, color, created_at: now.toISOString(), opened_at: now.toISOString() };
-      const { store, key } = await this.openStore(id, true, (db) => initProjectDb(db, id, now));
+      const { store, key, gate } = await this.openStore(id, true, (db) => initProjectDb(db, id, now));
       this.list.push(info);
       let project: Project | null = null;
       try {
-        project = await this.attach(id, store, key);
+        project = await this.attach(id, store, key, gate);
         const coder = await project.addCoder(coderName);
         await project.setMe(coder.id);
         await store.putMany(settingWrites([[SETTING_KEYS.projectName, name], [SETTING_KEYS.projectDescription, description]]));
@@ -512,6 +561,7 @@ export class Library {
         throw e;
       }
       this.openProject_ = project;
+      this.emit({ type: 'create', id });
       return project;
     });
   }
@@ -532,10 +582,10 @@ export class Library {
       const info = this.info(id);
       if (!info) throw new LibraryError('NOT_FOUND', `project ${id} not found`);
       await this.closeCurrent();
-      const { store, key } = await this.openStore(id, false);
+      const { store, key, gate } = await this.openStore(id, false);
       let project: Project | null = null;
       try {
-        project = await this.attach(id, store, key);
+        project = await this.attach(id, store, key, gate);
         const patch: Partial<ProjectInfo> = { opened_at: this.now().toISOString() };
         if (info.recovered) {
           // Found on disk without a list entry: take the name saved inside the project.
@@ -558,6 +608,7 @@ export class Library {
         throw e;
       }
       this.openProject_ = project;
+      this.emit({ type: 'open', id });
       return project;
     });
   }
@@ -580,7 +631,11 @@ export class Library {
     };
     delete next.recovered;
     this.list = this.list.map((p) => (p.id === id ? next : p));
-    await this.saveRegistry();
+    try {
+      await this.saveRegistry();
+    } finally {
+      this.emit({ type: 'update', id });
+    }
     const open = this.current;
     if (open?.id === id) {
       const writes: [string, string][] = [];
@@ -601,7 +656,11 @@ export class Library {
       // next unlock drops, never a project nobody can see.
       await this.platform.projects.erase(id);
       this.list = this.list.filter((p) => p.id !== id);
-      await this.saveRegistry();
+      try {
+        await this.saveRegistry();
+      } finally {
+        this.emit({ type: 'delete', id });
+      }
     });
   }
 
@@ -610,8 +669,14 @@ export class Library {
    * it. Records keep their ids and write stamps. Anything failing part-way removes the project
    * again: there is never a half-imported project. Records that fail validation are left out
    * and counted in the log entry.
+   *
+   * With `open: false` the open project stays open and the new one is only added to the list
+   * (its info is returned). One database is open at a time, so the open project's database is
+   * closed while the import writes and reopened after; its reads and writes meanwhile wait.
    */
-  importBundle(bundle: ProjectBundle, opts: ImportOptions = {}): Promise<Project> {
+  importBundle(bundle: ProjectBundle, opts: ImportOptions & { open: false }): Promise<ProjectInfo>;
+  importBundle(bundle: ProjectBundle, opts?: ImportOptions & { open?: true }): Promise<Project>;
+  importBundle(bundle: ProjectBundle, opts: ImportOptions = {}): Promise<Project | ProjectInfo> {
     return this.serial(async () => {
       this.ensureOpen();
       const keep = !!opts.keepId && !!bundle.project.id;
@@ -624,41 +689,105 @@ export class Library {
       const color = cleanColor(opts.color, PALETTE[this.list.length % PALETTE.length]!);
       const coderName = opts.coderName !== undefined ? cleanName(opts.coderName, 'coderName') : null;
       const sane = sanitizeRecords(bundle.records);
-      const { records, blobs } = prepareBlobs(sane.records, bundle.blobs);
+      const prepared = prepareBlobs(sane.records, bundle.blobs);
+      const job = { id, name, description, color, coderName, me: opts.me ?? null, origin: bundle.project.origin, rejected: sane.rejected, ...prepared };
 
-      await this.closeCurrent();
-      const now = this.now();
-      const info: ProjectInfo = { id, name, description, color, created_at: now.toISOString(), opened_at: now.toISOString() };
-      const { store, key } = await this.openStore(id, true, (db) => initProjectDb(db, id, now));
-      this.list.push(info);
-      let project: Project | null = null;
-      try {
-        project = await this.attach(id, store, key);
-        await store.merge(records);
-        for (const [blobId, bytes] of blobs) {
-          this.ensureOpen();
-          await project.restoreBlob(blobId, bytes);
-        }
-        // Written only when the file does not already say so: a copy of the same project keeps
-        // the stamps it came with, and merging it back changes nothing.
-        const settings: [string, string][] = [];
-        const has = (k: string, v: string) => records.some((r) => r.kind === 'setting' && r.record.id === k && !r.record.deleted && r.record.value === v);
-        if (!has(SETTING_KEYS.projectName, name)) settings.push([SETTING_KEYS.projectName, name]);
-        if (!has(SETTING_KEYS.projectDescription, description)) settings.push([SETTING_KEYS.projectDescription, description]);
-        if (settings.length) await store.putMany(settingWrites(settings));
-        const meCoder = opts.me ? await store.get('coder', opts.me) : null;
-        if (meCoder && !meCoder.deleted) await project.setMe(meCoder.id);
-        else if (coderName) await project.setMe((await project.addCoder(coderName)).id);
-        const origin = bundle.project.origin ? `${bundle.project.origin}: ` : '';
-        await project.log('project.import', `${origin}${records.length} records${sane.rejected ? `, ${sane.rejected} left out` : ''}`);
-        await this.saveRegistry();
-      } catch (e) {
-        await this.discard(id, project, store);
-        throw e;
+      if (opts.open === false) {
+        const current = this.current;
+        const gate = current ? this.gates.get(current) : undefined;
+        const run = async () => {
+          const project = await this.importInto(job, false);
+          await project.close();
+          return { ...this.info(id)! };
+        };
+        const info = current && gate ? await this.parked(current, gate, run) : await run();
+        this.emit({ type: 'import', id });
+        return info;
       }
+      await this.closeCurrent();
+      const project = await this.importInto(job, true);
       this.openProject_ = project;
+      this.emit({ type: 'import', id });
       return project;
     });
+  }
+
+  /** Creates the project of an import, writes the records and files, and lists it. */
+  private async importInto(
+    job: {
+      id: string;
+      name: string;
+      description: string;
+      color: string;
+      coderName: string | null;
+      me: string | null;
+      origin: string | null;
+      rejected: number;
+      records: BundleRecord[];
+      blobs: Map<string, Uint8Array>;
+    },
+    opening: boolean,
+  ): Promise<Project> {
+    const { id, name, description, records, blobs } = job;
+    const now = this.now();
+    const info: ProjectInfo = { id, name, description, color: job.color, created_at: now.toISOString(), opened_at: opening ? now.toISOString() : null };
+    const { store, key, gate } = await this.openStore(id, true, (db) => initProjectDb(db, id, now));
+    this.list.push(info);
+    let project: Project | null = null;
+    try {
+      project = await this.attach(id, store, key, gate);
+      await store.merge(records);
+      for (const [blobId, bytes] of blobs) {
+        this.ensureOpen();
+        await project.restoreBlob(blobId, bytes);
+      }
+      // Written only when the file does not already say so: a copy of the same project keeps
+      // the stamps it came with, and merging it back changes nothing.
+      const settings: [string, string][] = [];
+      const has = (k: string, v: string) => records.some((r) => r.kind === 'setting' && r.record.id === k && !r.record.deleted && r.record.value === v);
+      if (!has(SETTING_KEYS.projectName, name)) settings.push([SETTING_KEYS.projectName, name]);
+      if (!has(SETTING_KEYS.projectDescription, description)) settings.push([SETTING_KEYS.projectDescription, description]);
+      if (settings.length) await store.putMany(settingWrites(settings));
+      const meCoder = job.me ? await store.get('coder', job.me) : null;
+      if (meCoder && !meCoder.deleted) await project.setMe(meCoder.id);
+      else if (job.coderName) await project.setMe((await project.addCoder(job.coderName)).id);
+      const origin = job.origin ? `${job.origin}: ` : '';
+      await project.log('project.import', `${origin}${records.length} records${job.rejected ? `, ${job.rejected} left out` : ''}`);
+      await this.saveRegistry();
+    } catch (e) {
+      await this.discard(id, project, store);
+      throw e;
+    }
+    return project;
+  }
+
+  /**
+   * Runs `work` (which opens other databases) with the open project's database closed, then
+   * reopens it under the same store: the project stays open for the screens, whose calls wait.
+   * If it cannot be reopened (Trama locked meanwhile), the project is closed.
+   */
+  private async parked<T>(project: Project, gate: ParkableDb, work: () => Promise<T>): Promise<T> {
+    let reopened = false;
+    const reopen = async () => {
+      this.ensureOpen();
+      const key = projectKeyOf(this.key, project.id);
+      try {
+        const db = await this.platform.projects.open(project.id, key, false);
+        reopened = true;
+        return db;
+      } finally {
+        wipe(key);
+      }
+    };
+    try {
+      return await gate.park(work, reopen);
+    } catch (e) {
+      if (e instanceof ReopenError) return e.result as T;
+      throw e;
+    } finally {
+      // A project whose database did not come back cannot stay open.
+      if (!reopened && this.openProject_ === project) await this.closeCurrent().catch(() => undefined);
+    }
   }
 
   // ── Secrets ────────────────────────────────────────────────────────────────────────────
@@ -727,6 +856,7 @@ export class Library {
       }
       // Writes asked for before the lock were sealed then; let them land.
       await this.saveQueue;
+      this.emit({ type: 'lock', id: null });
     })();
     return this.lockPromise;
   }
@@ -735,4 +865,92 @@ export class Library {
 /** True for a platform error saying the database key is wrong (a project of another library). */
 export function isWrongKey(e: unknown): boolean {
   return e instanceof PlatformError && e.code === 'WRONG_KEY';
+}
+
+// ── Parking a database ─────────────────────────────────────────────────────────────────
+
+/** Thrown by `ParkableDb.park` when the work succeeded but the database could not be reopened. */
+class ReopenError extends Error {
+  constructor(
+    readonly result: unknown,
+    readonly reason: unknown,
+  ) {
+    super('the project database could not be reopened');
+  }
+}
+
+/**
+ * The open project's database as its store sees it. `park` closes the connection under it for a
+ * while (the desktop shell keeps one database open at a time) and reopens it: calls made
+ * meanwhile wait, and the store never notices.
+ */
+class ParkableDb implements Db {
+  private inner: Db;
+  /** Set while parked: calls wait for it. */
+  private gate: Promise<void> | null = null;
+  private inflight = new Set<Promise<unknown>>();
+
+  constructor(inner: Db) {
+    this.inner = inner;
+  }
+
+  private async run<T>(fn: (db: Db) => Promise<T>): Promise<T> {
+    while (this.gate) await this.gate;
+    const p = fn(this.inner);
+    this.inflight.add(p);
+    try {
+      return await p;
+    } finally {
+      this.inflight.delete(p);
+    }
+  }
+
+  exec(sql: string, params?: SqlParam[]) {
+    return this.run((db) => db.exec(sql, params));
+  }
+  query<T extends Row = Row>(sql: string, params?: SqlParam[]) {
+    return this.run((db) => db.query<T>(sql, params));
+  }
+  batch(statements: SqlStatement[]) {
+    return this.run((db) => db.batch(statements));
+  }
+  script(sql: string) {
+    return this.run((db) => db.script(sql));
+  }
+  async close(): Promise<void> {
+    while (this.gate) await this.gate;
+    await this.inner.close();
+  }
+
+  /**
+   * Waits for the calls in flight, closes the connection, runs `work`, and reopens with `reopen`
+   * whatever `work` did. A failed reopen leaves the closed connection (every call then fails
+   * like a closed database) and throws ReopenError carrying `work`'s result.
+   */
+  async park<T>(work: () => Promise<T>, reopen: () => Promise<Db>): Promise<T> {
+    while (this.gate) await this.gate;
+    let release!: () => void;
+    this.gate = new Promise<void>((resolve) => (release = resolve));
+    try {
+      await Promise.allSettled([...this.inflight]);
+      await this.inner.close();
+      let outcome: { ok: true; value: T } | { ok: false; error: unknown };
+      try {
+        outcome = { ok: true, value: await work() };
+      } catch (e) {
+        outcome = { ok: false, error: e };
+      }
+      try {
+        this.inner = await reopen();
+      } catch (e) {
+        console.error('reopening the project database failed', e);
+        if (outcome.ok) throw new ReopenError(outcome.value, e);
+      }
+      if (!outcome.ok) throw outcome.error;
+      return outcome.value;
+    } finally {
+      this.gate = null;
+      release();
+    }
+  }
 }

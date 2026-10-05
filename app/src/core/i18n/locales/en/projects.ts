@@ -4,7 +4,6 @@ export const projects = {
   count: { one: '{n} project in this library', other: '{n} projects in this library' },
   new: 'New project',
   import: 'Import a project file',
-  importSoon: 'Importing a project file will be possible from the export tools.',
   addExample: 'Add the example project',
   addingExample: 'Adding the example project…',
   search: 'Find a project',

@@ -11,7 +11,7 @@ import type { Store } from '../core/store/store';
 import { type FileEntry, type Platform, PlatformError } from '../platform/types';
 import { projectToBundle } from './datafile';
 import type { Library } from './library';
-import type { Project } from './project';
+import type { Project, ProjectInfo } from './project';
 
 // Automatic encrypted backups of the open project to a folder the researcher chooses (a USB
 // drive, a synced folder). Each backup is a .trama file encrypted under the library key with
@@ -358,7 +358,33 @@ export async function listBackups(platform: Platform, folder: string, tag?: stri
  * The restored project keeps the original id when this library does not hold it already, so
  * teammates' copies still merge with it.
  */
-export async function restoreBackup(library: Library, bytes: Uint8Array, slot?: SlotKind, secret?: string, opts: { now?: Date } = {}): Promise<Project> {
+export interface RestoreOptions {
+  now?: Date;
+  /**
+   * The restored project's name from the backup's and the day, in the reader's language
+   * ("Gardens (restored 2026-10-05)" by default). Long names are shortened to fit.
+   */
+  restoredName?: (name: string, date: Date) => string;
+  /** false: add the restored project to the library without opening it (see `Library.importBundle`). */
+  open?: boolean;
+}
+
+const defaultRestoredName = (name: string, date: Date) => `${name} (restored ${DateTime.fromJSDate(date).toFormat('yyyy-MM-dd')})`;
+
+/** `restoredName(name, date)`, with the backup's name shortened until the whole fits `max`. */
+export function restoredProjectName(name: string, date: Date, restoredName = defaultRestoredName, max: number = LIMITS.nameMax): string {
+  let base = name.replace(/\s+/g, ' ').trim() || 'Project';
+  let out = restoredName(base, date).replace(/\s+/g, ' ').trim();
+  while (out.length > max && base.length > 1) {
+    base = base.slice(0, Math.max(1, base.length - (out.length - max))).trimEnd();
+    out = restoredName(base, date).replace(/\s+/g, ' ').trim();
+  }
+  return out.slice(0, max).trim();
+}
+
+export async function restoreBackup(library: Library, bytes: Uint8Array, slot: SlotKind | undefined, secret: string | undefined, opts: RestoreOptions & { open: false }): Promise<ProjectInfo>;
+export async function restoreBackup(library: Library, bytes: Uint8Array, slot?: SlotKind, secret?: string, opts?: RestoreOptions & { open?: true }): Promise<Project>;
+export async function restoreBackup(library: Library, bytes: Uint8Array, slot?: SlotKind, secret?: string, opts: RestoreOptions = {}): Promise<Project | ProjectInfo> {
   let bundle: TramaBundle;
   const own = library.copyKeys();
   try {
@@ -377,10 +403,9 @@ export async function restoreBackup(library: Library, bytes: Uint8Array, slot?: 
   } finally {
     own.wipe();
   }
-  const date = DateTime.fromJSDate(opts.now ?? new Date()).toFormat('yyyy-MM-dd');
-  const suffix = ` (restored ${date})`;
-  const base = (bundle.project.name.trim() || 'Project').slice(0, LIMITS.nameMax - suffix.length);
+  const name = restoredProjectName(bundle.project.name, opts.now ?? new Date(), opts.restoredName);
   const id = bundle.project.id;
   const free = !!id && !library.projects.some((p) => p.id === id) && !(await library.platform.projects.exists(id));
-  return library.importBundle(bundle, { name: `${base}${suffix}`, keepId: free, me: bundle.manifest.me ?? null });
+  const options = { name, keepId: free, me: bundle.manifest.me ?? null };
+  return opts.open === false ? library.importBundle(bundle, { ...options, open: false }) : library.importBundle(bundle, options);
 }

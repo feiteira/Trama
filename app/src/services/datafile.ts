@@ -6,6 +6,8 @@ import {
 import type { Keyring } from '../core/crypto/keyring';
 import { compareHlc } from '../core/hlc';
 import type { Document, Entity, Kind, MediaRef } from '../core/model/types';
+import { KINDS } from '../core/model/types';
+import { TABLES } from '../core/store/schema';
 import type { Store, Tombstone, TombstoneInfo } from '../core/store/store';
 import type { Platform } from '../platform/types';
 import { JobStopped, stopper } from './jobs';
@@ -220,28 +222,97 @@ export interface MergeResult {
   rejected: number;
 }
 
+export interface KindCounts {
+  /** Records that will appear: new here, and not deleted in the copy. */
+  added: number;
+  /** Records the copy holds a newer version of. */
+  updated: number;
+}
+
+/** What merging a copy would do, worked out without writing anything (`previewMerge`). */
+export interface MergePreview extends Omit<MergeResult, 'blobs'> {
+  /** The project name the copy carries. */
+  projectName: string;
+  /** By kind; kinds the copy changes nothing of are left out. */
+  byKind: Partial<Record<Kind, KindCounts>>;
+  /** Coders the copy brings that this project does not have yet. */
+  newCoders: { id: string; name: string; color: string }[];
+}
+
+/** Write stamps of the records here (deleted ones too), by kind and id. */
+export type LocalStamps = ReadonlyMap<Kind, ReadonlyMap<string, string>>;
+
+/** Reads only ids and stamps (no record data), so a large project is compared quickly. */
+export async function localStamps(store: Store): Promise<LocalStamps> {
+  const out = new Map<Kind, Map<string, string>>();
+  for (const kind of KINDS) {
+    const rows = await store.db.query<{ id: string; hlc: string }>(`SELECT id, hlc FROM ${TABLES[kind].table}`);
+    out.set(kind, new Map(rows.map((r) => [r.id, r.hlc])));
+  }
+  return out;
+}
+
+/**
+ * How records readied for a merge compare with the ones here: the merge rule (the newer
+ * version of each record wins) applied to the stamps alone. Pure.
+ */
+export function classifyMerge(projectName: string, records: readonly BundleRecord[], local: LocalStamps, rejected = 0): MergePreview {
+  const byKind: MergePreview['byKind'] = {};
+  const newCoders: MergePreview['newCoders'] = [];
+  let added = 0;
+  let updated = 0;
+  let unchanged = 0;
+  for (const r of records) {
+    const mine = local.get(r.kind)?.get(r.record.id);
+    const bucket = (byKind[r.kind] ??= { added: 0, updated: 0 });
+    if (mine === undefined) {
+      added++;
+      // A record that arrives already deleted changes nothing anyone sees.
+      if (!r.record.deleted) bucket.added++;
+      if (r.kind === 'coder' && !r.record.deleted) newCoders.push({ id: r.record.id, name: r.record.name, color: r.record.color });
+    } else if (compareHlc(mine, r.record.updated_at_hlc) < 0) {
+      updated++;
+      bucket.updated++;
+    } else unchanged++;
+  }
+  for (const k of Object.keys(byKind) as Kind[]) if (!byKind[k]!.added && !byKind[k]!.updated) delete byKind[k];
+  return { projectName, added, updated, unchanged, rejected, byKind, newCoders };
+}
+
+function checkSameProject(project: Pick<Project, 'id'>, bundle: ProjectBundle): void {
+  if (!bundle.project.id || bundle.project.id !== project.id) {
+    throw new DataFileError('DIFFERENT_PROJECT', 'this file is a different project');
+  }
+}
+
+/** A copy's records as a merge would store them: readied (see `readyToMerge`) and checked. */
+async function mergeable(store: Store, bundle: ProjectBundle): Promise<{ records: BundleRecord[]; rejected: number }> {
+  return sanitizeRecords(await readyToMerge(store, bundle.records));
+}
+
+/**
+ * What merging a teammate's copy would add and update, without writing anything: the same
+ * records, checks and counts as `mergeTeammateCopy`. Throws DataFileError('DIFFERENT_PROJECT')
+ * for a copy of another project.
+ */
+export async function previewMerge(project: Pick<Project, 'id' | 'store'>, bundle: ProjectBundle): Promise<MergePreview> {
+  checkSameProject(project, bundle);
+  const sane = await mergeable(project.store, bundle);
+  return classifyMerge(bundle.project.name, sane.records, await localStamps(project.store), sane.rejected);
+}
+
 /**
  * Merges a teammate's copy of this same project: the newer version of each record wins, so
  * both sides can merge each other's copies in any order and end up alike. The teammate's coder
  * and codings arrive as records (that is how agreement between coders can be measured).
  */
 export async function mergeTeammateCopy(project: Project, bundle: ProjectBundle, opts: { shouldStop?: () => boolean } = {}): Promise<MergeResult> {
-  if (!bundle.project.id || bundle.project.id !== project.id) {
-    throw new DataFileError('DIFFERENT_PROJECT', 'this file is a different project');
-  }
+  checkSameProject(project, bundle);
   const check = stopper(opts.shouldStop);
   check();
   const { store } = project;
-  const sane = sanitizeRecords(await readyToMerge(store, bundle.records));
-  let added = 0;
-  let updated = 0;
-  let unchanged = 0;
-  for (const { kind, record } of sane.records) {
-    const local = await store.get(kind, record.id);
-    if (!local) added++;
-    else if (compareHlc(local.updated_at_hlc, record.updated_at_hlc) < 0) updated++;
-    else unchanged++;
-  }
+  const sane = await mergeable(store, bundle);
+  const { added, updated, unchanged } = classifyMerge(bundle.project.name, sane.records, await localStamps(store), sane.rejected);
   await store.merge(sane.records);
   // The newest write stamp may not move (a teammate's older work): the next backup is made anyway.
   await store.deleteMeta('backup.last_hlc');

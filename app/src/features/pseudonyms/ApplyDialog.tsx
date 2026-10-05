@@ -17,7 +17,8 @@ type Stage = 'confirm' | 'running' | 'done';
  * it did. Undo is offered right away, because later edits build on the changed text.
  */
 export function ApplyDialog({ preview, ids, entryCount, onClose }: { preview: Preview; ids: string[] | undefined; entryCount: number; onClose: () => void }) {
-  const { t, tp } = useI18n();
+  const { t, tp, meta } = useI18n();
+  const fmtN = (n: number) => n.toLocaleString(meta.bcp47);
   const project = useProject();
   const { record, undo: undoLast } = useUndo();
   const toast = useToast();
@@ -25,12 +26,20 @@ export function ApplyDialog({ preview, ids, entryCount, onClose }: { preview: Pr
   const [understood, setUnderstood] = useState(false);
   const [result, setResult] = useState<ApplyResult | null>(null);
   const [undone, setUndone] = useState(false);
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   useHold(stage === 'running');
 
   const run = async () => {
     setStage('running');
+    setProgress(null);
     try {
-      const r = await apply(project, ids);
+      const r = await apply(project, ids, {
+        onProgress: async (done, total) => {
+          setProgress({ done, total });
+          // Let the bar move: a fast store never yields on its own.
+          await new Promise<void>((resolve) => setTimeout(resolve, 0));
+        },
+      });
       record(r.undo);
       setResult(r);
       setStage('done');
@@ -121,8 +130,10 @@ export function ApplyDialog({ preview, ids, entryCount, onClose }: { preview: Pr
         </Notice>
         {running ? (
           <div className="papply__progress">
-            <ProgressBar value={null} label={t('pseudonyms.apply.running')} />
-            <span className="t-muted t-small">{t('pseudonyms.apply.running')}</span>
+            <ProgressBar value={progress ? progress.done : null} max={progress?.total || 1} label={t('pseudonyms.apply.running')} data-testid="apply-progress" />
+            <span className="t-muted t-small" aria-live="polite">
+              {progress && progress.total > 1 ? t('pseudonyms.apply.runningN', { n: fmtN(Math.min(progress.done + 1, progress.total)), total: fmtN(progress.total) }) : t('pseudonyms.apply.running')}
+            </span>
           </div>
         ) : (
           <Checkbox checked={understood} onChange={setUnderstood} label={t('pseudonyms.apply.understand')} data-testid="apply-understand" />

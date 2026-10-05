@@ -3,6 +3,7 @@ import { fromUtf8 } from '../core/bytes';
 import { newRecoveryPhrase, WrongSecretError } from '../core/crypto/keyring';
 import type { ProjectBundle } from '../core/export/bundle';
 import { SETTING_KEYS } from '../core/model/types';
+import type { Db } from '../core/store/db';
 import { Store } from '../core/store/store';
 import { createMemoryPlatform, type MemoryPlatform } from '../platform/memory';
 import { PlatformError } from '../platform/types';
@@ -414,6 +415,146 @@ describe('importing a bundle', () => {
     platform.blobs.write = write;
     expect(await platform.projects.list()).toEqual([]);
     expect(library.projects).toEqual([]);
+  });
+});
+
+describe('importing without opening', () => {
+  /** Like the desktop shell: opening a database closes the one open before, and its handle stops working. */
+  function oneConnection(platform: MemoryPlatform): void {
+    const open = platform.projects.open.bind(platform.projects);
+    let live: { dead: boolean } | null = null;
+    platform.projects.open = async (id, key, create) => {
+      if (live) live.dead = true;
+      const inner = await open(id, key, create);
+      const me = { dead: false };
+      live = me;
+      const check = () => {
+        if (me.dead) throw new PlatformError('DB_NOT_OPEN', 'this project database is closed');
+      };
+      return {
+        exec: async (sql, params) => (check(), inner.exec(sql, params)),
+        query: async (sql, params) => (check(), inner.query(sql, params)),
+        batch: async (st) => (check(), inner.batch(st)),
+        script: async (sql) => (check(), inner.script(sql)),
+        close: async () => {
+          me.dead = true;
+          await inner.close();
+        },
+      } as Db;
+    };
+  }
+
+  async function withOpenProject() {
+    const { bundle } = await (async () => {
+      const { library } = await setup();
+      const p = await library.createProject({ name: 'Fonte', coderName: 'Rui' });
+      await p.store.put('code', { name: 'Trust', parent_id: null, color: '#e4572e', description: '', inclusion: '', exclusion: '', example: '', order: 1, codable: true, shortcut: null });
+      const records = [];
+      for await (const r of p.store.all()) records.push(r);
+      const doc = await p.store.put('document', {
+        name: 'E1', kind: 'pdf', group_ids: [], case_id: null, source: null, original: await p.addBlob(new Uint8Array([1, 2, 3]), 'e1.pdf', 'application/pdf'), media: null, chars: 0, order: 1, color: null,
+      });
+      records.push({ kind: 'document', record: doc });
+      return { bundle: { project: { id: p.id, name: 'Fonte', description: '', origin: null }, records, blobs: new Map([[doc.original!.blob_id, new Uint8Array([1, 2, 3])]]), warnings: [] } as ProjectBundle };
+    })();
+    const { library, platform } = await setup();
+    oneConnection(platform);
+    const open = await library.createProject({ name: 'Aberto', coderName: 'Ana' });
+    return { library, platform, open, bundle };
+  }
+
+  it('adds the project to the list and leaves the open project open and working', async () => {
+    const { library, open, bundle } = await withOpenProject();
+    const info = await library.importBundle(bundle, { open: false, coderName: 'Ana' });
+    expect(info).toMatchObject({ name: 'Fonte', opened_at: null });
+    expect(library.current).toBe(open);
+    expect(open.isOpen).toBe(true);
+    await open.store.put('memo', { title: 'still here', body: '', target: { kind: 'project', id: null }, coder_id: open.me.id, color: null });
+    expect(await open.store.count('memo')).toBe(1);
+    expect(library.projects.map((p) => p.name)).toEqual(['Aberto', 'Fonte']);
+    const imported = await library.openProject(info.id);
+    expect(await imported.store.count('code')).toBe(1);
+    expect(imported.me.name).toBe('Ana');
+    expect(library.projects.find((p) => p.id === info.id)!.opened_at).not.toBeNull();
+  });
+
+  it('makes calls of the open project wait while its database is parked, instead of failing', async () => {
+    const { library, platform, open, bundle } = await withOpenProject();
+    const write = platform.blobs.write;
+    let during: Promise<number> | null = null;
+    platform.blobs.write = async (project, id, bytes) => {
+      // The import is writing the new project's files: the open project's database is closed now.
+      during ??= open.store.count('coder');
+      return write(project, id, bytes);
+    };
+    await library.importBundle(bundle, { open: false });
+    platform.blobs.write = write;
+    expect(during).not.toBeNull();
+    expect(await during).toBe(1);
+  });
+
+  it('keeps the open project open when the import fails part-way', async () => {
+    const { library, platform, open, bundle } = await withOpenProject();
+    const write = platform.blobs.write;
+    platform.blobs.write = async () => {
+      throw new PlatformError('ERROR', 'disk full');
+    };
+    await expect(library.importBundle(bundle, { open: false })).rejects.toThrow(/disk full/);
+    platform.blobs.write = write;
+    expect(library.current).toBe(open);
+    expect(await open.store.count('coder')).toBe(1);
+    expect(library.projects.map((p) => p.name)).toEqual(['Aberto']);
+  });
+
+  it('closes the open project if Trama locks while it is parked', async () => {
+    const { library, platform, open, bundle } = await withOpenProject();
+    const write = platform.blobs.write;
+    let locking: Promise<void> | null = null;
+    platform.blobs.write = async (project, id, bytes) => {
+      locking ??= library.lock();
+      return write(project, id, bytes);
+    };
+    await expect(library.importBundle(bundle, { open: false })).rejects.toMatchObject({ code: 'LOCKED' });
+    await locking;
+    expect(open.isOpen).toBe(false);
+    expect(library.current).toBeNull();
+  });
+
+  it('imports without opening when no project is open', async () => {
+    const { bundle } = await withOpenProject();
+    const { library } = await setup();
+    const info = await library.importBundle(bundle, { open: false, coderName: 'Ana' });
+    expect(library.current).toBeNull();
+    expect(library.projects.map((p) => p.id)).toEqual([info.id]);
+  });
+});
+
+describe('observing the library', () => {
+  it('reports every change to the list and to which project is open', async () => {
+    const { library } = await setup();
+    const seen: string[] = [];
+    const stop = library.subscribe((c) => seen.push(`${c.type}${c.id ? '' : ':-'}`));
+    const r0 = library.revision;
+    const a = await library.createProject({ name: 'A', coderName: 'Ana' });
+    await library.updateProject(a.id, { name: 'A2' });
+    const b = await library.createProject({ name: 'B', coderName: 'Ana' });
+    await library.openProject(a.id);
+    await library.closeProject();
+    await library.deleteProject(b.id);
+    expect(seen).toEqual(['create', 'update', 'close', 'create', 'close', 'open', 'close', 'delete']);
+    expect(library.revision).toBe(r0 + seen.length);
+    // A listener that throws does not break the library or the other listeners.
+    const other: string[] = [];
+    library.subscribe(() => {
+      throw new Error('boom');
+    });
+    library.subscribe((c) => other.push(c.type));
+    stop();
+    await library.updateProject(a.id, { color: '#29a37a' });
+    expect(other).toEqual(['update']);
+    expect(seen).toHaveLength(8);
+    await library.lock();
+    expect(other).toEqual(['update', 'lock']);
   });
 });
 

@@ -7,7 +7,6 @@ import { protectionOf, UnlockRequiredError } from '../../core/export/trama';
 import {
   type BackupFile, backupHistoryDays, HISTORY_DAYS, type HistoryDays, listBackups, restoreBackup, setBackupFolder, setBackupHistoryDays,
 } from '../../services/backup';
-import type { Project } from '../../services/project';
 import { useAppState, useHold, useLibrary, useProject } from '../../shell/AppState';
 import { useRouter } from '../../shell/router';
 import { cx } from '../../ui/cx';
@@ -108,36 +107,46 @@ export function Backups() {
     return `${date(dt, 'medium')}, ${time(dt)}`;
   };
 
-  /** Restores bytes as a new project and opens it; reopens this one if anything fails midway. */
+  /** Restores bytes as a new project of the library; this one stays open. Offers to open the new one. */
   const restoreBytes = useCallback(
     async (bytes: Uint8Array, slot?: SlotKind, secret?: string): Promise<'done' | 'unlock' | 'wrong'> => {
-      const previous = project.id;
       setRestoring(true);
       try {
         await runSavers();
-        const restored: Project = await restoreBackup(library, bytes, slot, secret);
-        enterProject(restored, { name: 'project' });
-        toast.show({ message: t('exporter.backups.restore.done', { name: restored.info.name }), tone: 'success', durationMs: 8000 });
+        const restored = await restoreBackup(library, bytes, slot, secret, {
+          open: false,
+          // A plain date (yyyy-mm-dd): it ends up in a project name, read in any language.
+          restoredName: (name, at) => t('exporter.backups.restore.restoredName', { name, date: DateTime.fromJSDate(at).toISODate() ?? '' }),
+        });
+        toast.show({
+          message: t('exporter.backups.restore.done', { name: restored.name }),
+          tone: 'success',
+          durationMs: 10_000,
+          action: {
+            label: t('exporter.backups.restore.openNow'),
+            testId: 'restore-open-now',
+            run: async () => {
+              try {
+                await runSavers();
+                enterProject(await library.openProject(restored.id), { name: 'project' });
+              } catch (e) {
+                toast.error(e);
+              }
+            },
+          },
+        });
         return 'done';
       } catch (e) {
         if (e instanceof UnlockRequiredError) return 'unlock';
         if (slot && (e instanceof WrongSecretError || e instanceof DecryptError)) return 'wrong';
         console.error('restoring a backup failed', e);
         toast.show({ message: t('exporter.backups.restore.failed', { message: e instanceof Error ? e.message : String(e) }), tone: 'danger' });
-        // Importing closes the open project first: bring it back if the restore stopped after that.
-        if (!project.isOpen) {
-          try {
-            enterProject(await library.openProject(previous), { name: 'project' });
-          } catch (again) {
-            console.error('reopening the project failed', again);
-          }
-        }
         return 'done';
       } finally {
         setRestoring(false);
       }
     },
-    [project, library, runSavers, enterProject, toast, t],
+    [library, runSavers, enterProject, toast, t],
   );
 
   async function startRestore(bytes: Uint8Array, body: string) {

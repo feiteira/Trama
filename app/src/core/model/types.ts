@@ -183,6 +183,7 @@ export const LOG_ACTIONS = [
   'case.create', 'case.edit', 'case.delete', 'attribute.edit',
   'group.create', 'group.edit', 'group.delete',
   'pseudonym.apply', 'export', 'backup',
+  'coder.add', 'coder.edit',
 ] as const;
 export type LogAction = (typeof LOG_ACTIONS)[number];
 

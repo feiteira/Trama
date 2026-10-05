@@ -95,6 +95,7 @@ export const pseudonyms: Messages['pseudonyms'] = {
     understand: 'Entiendo que el texto de los documentos va a cambiar',
     run: 'Sustituir {n}',
     running: 'Sustituyendo nombres en los documentos…',
+    runningN: 'Recorriendo los documentos… {n} de {total}',
     replacements: { one: '{n} sustitución', other: '{n} sustituciones' },
     doneTitle: 'Seudonimización aplicada',
     doneBody: 'Se han hecho {replacements} en {documents}.',

@@ -54,15 +54,35 @@ function isTextField(target: EventTarget | null): boolean {
   return target instanceof HTMLInputElement && !NOT_TEXT.has(target.type);
 }
 
+const arrowClaims = new Set<() => boolean>();
+
+/**
+ * Lets a screen take Alt+←/→ for itself while `active()` says so (the recording player while
+ * it plays or has the focus, where Alt+← skips back). Back then leaves the key alone, without
+ * cancelling it, for the screen's own handler. Returns the function that withdraws the claim.
+ */
+export function claimAltArrows(active: () => boolean): () => void {
+  const claim = () => active();
+  arrowClaims.add(claim);
+  return () => arrowClaims.delete(claim);
+}
+
+/** True while a screen has claimed Alt+←/→ (see claimAltArrows). */
+export function altArrowsClaimed(): boolean {
+  for (const c of arrowClaims) if (c()) return true;
+  return false;
+}
+
 /**
  * Calls `onBack` for Alt+Left and for the mouse's back button. Alt+Left is left alone while
- * the cursor is in a text field, where it moves between words on some systems. Neither goes
- * back while a modal is open: that would close a dialog and lose what was typed in it.
+ * the cursor is in a text field, where it moves between words on some systems, and while a
+ * screen has claimed it. Neither goes back while a modal is open: that would close a dialog
+ * and lose what was typed in it.
  */
 export function watchBack(onBack: () => void): () => void {
   const onKey = (e: KeyboardEvent) => {
     if (e.key !== 'ArrowLeft' || !e.altKey || e.ctrlKey || e.metaKey || e.shiftKey || e.repeat) return;
-    if (isTextField(e.target) || modalOpen()) return;
+    if (isTextField(e.target) || modalOpen() || altArrowsClaimed()) return;
     e.preventDefault();
     onBack();
   };

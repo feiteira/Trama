@@ -7,7 +7,7 @@ import { validate } from '../../model/validate';
 import type { ProjectBundle } from '../bundle';
 import { buildDocx } from '../office/docx';
 import { RefiError } from './common';
-import { importQdpx, type QdpxImportOptions } from './qdpx-import';
+import { importQdpx, QDPX_WARNING_CODES, type QdpxBundle, type QdpxImportOptions } from './qdpx-import';
 
 const NOW = () => new Date('2026-10-05T12:00:00Z');
 const OPTS: QdpxImportOptions = { defaultCoderName: 'Eu', now: NOW };
@@ -159,6 +159,14 @@ describe('the reference example project', async () => {
     expect(w).toMatch(/1 graph/);
     expect(w).toMatch(/1 code reference\(s\) on cases/);
     expect(w).toMatch(/1 memo\(s\) listed in sets/);
+  });
+
+  it('gives the same warnings as data: a code, a count and the item named', () => {
+    const issues = (b as QdpxBundle).issues;
+    expect(issues.map((i) => i.message)).toEqual(b.warnings);
+    expect(issues).toContainEqual(expect.objectContaining({ code: 'mediaSelection', count: 2 }));
+    expect(issues).toContainEqual(expect.objectContaining({ code: 'videoSkipped', count: 1, detail: 'Clip.mp4' }));
+    expect(issues.every((i) => (QDPX_WARNING_CODES as readonly string[]).includes(i.code) && i.count > 0)).toBe(true);
   });
 });
 

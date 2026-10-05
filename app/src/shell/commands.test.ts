@@ -52,6 +52,14 @@ describe('CommandRegistry', () => {
     expect(r.search('zzz')).toEqual([]);
   });
 
+  it('puts a higher priority first among equal matches, never above a better match', () => {
+    const r = new CommandRegistry();
+    r.register([cmd('nav', 'Go to Documents'), { ...cmd('screen', 'Go to document…'), priority: 1 }, cmd('exact', 'Documents')]);
+    expect(r.search('go to doc').map((c) => c.id)).toEqual(['screen', 'nav']);
+    expect(r.search('documents').map((c) => c.id)).toEqual(['exact', 'nav']);
+    expect(r.search('').map((c) => c.id)).toEqual(['screen', 'nav', 'exact']);
+  });
+
   it('limits results', () => {
     const r = new CommandRegistry();
     r.register(Array.from({ length: 500 }, (_, i) => cmd(String(i), `Command ${i}`)));

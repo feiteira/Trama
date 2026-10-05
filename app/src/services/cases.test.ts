@@ -2,10 +2,12 @@ import { describe, expect, it } from 'vitest';
 import {
   casesFromDocuments,
   coerceValue,
+  countLostOnTypeChange,
   createAttribute,
   createCase,
   deleteAttribute,
   deleteCase,
+  deleteCases,
   importAttributeTable,
   inferAttributeType,
   listAttributes,
@@ -112,6 +114,31 @@ describe('cases', () => {
     expect(await ctx.store.count('memo')).toBe(1);
   });
 
+  it('deletes several cases as one batch: one undo step, one log entry', async () => {
+    const ctx = await makeTestProject();
+    const p1 = (await createCase(ctx, { name: 'P01' })).case;
+    const p2 = (await createCase(ctx, { name: 'P02' })).case;
+    const keep = (await createCase(ctx, { name: 'P03' })).case;
+    const { document: d1 } = await createDocument(ctx, { name: 'E1', kind: 'text', text: 'x', case_id: p1.id });
+    const { document: d2 } = await createDocument(ctx, { name: 'E2', kind: 'text', text: 'x', case_id: p2.id });
+    await createMemo(ctx, { title: 'about P02', target: { kind: 'case', id: p2.id } });
+    await createMemo(ctx, { title: 'about P03', target: { kind: 'case', id: keep.id } });
+    const r = await deleteCases(ctx, [p1.id, p2.id, p2.id, 'gone']);
+    expect(r).toMatchObject({ cases: 2, documents: 2, memos: 1 });
+    expect((await ctx.store.list('case')).map((c) => c.name)).toEqual(['P03']);
+    expect((await ctx.store.get('document', d1.id))!.case_id).toBeNull();
+    expect(await ctx.store.count('memo')).toBe(1);
+    const logs = await listLog(ctx, { action: 'case.delete' });
+    expect(logs).toHaveLength(1);
+    expect(logs[0]!.summary).toBe('"P01", "P02" ×2');
+    await r.undo.undo();
+    expect(await ctx.store.count('case')).toBe(3);
+    expect((await ctx.store.get('document', d2.id))!.case_id).toBe(p2.id);
+    expect(await ctx.store.count('memo')).toBe(2);
+    expect((await deleteCases(ctx, ['gone'])).cases).toBe(0);
+    await expect(deleteCase(ctx, 'gone')).rejects.toMatchObject({ code: 'not_found' });
+  });
+
   it('makes one case per document', async () => {
     const ctx = await makeTestProject();
     const d1 = (await createDocument(ctx, { name: 'Ana', kind: 'text', text: '' })).document;
@@ -139,6 +166,15 @@ describe('attributes', () => {
     const c2 = (await createCase(ctx, { name: 'P2' })).case;
     await setCaseValue(ctx, c1.id, a.id, '34');
     await setCaseValue(ctx, c2.id, a.id, 'trinta');
+    // The dry run says what the change will clear, and writes nothing.
+    expect(await countLostOnTypeChange(ctx, a.id, 'number')).toBe(1);
+    expect(await countLostOnTypeChange(ctx, a.id, 'date')).toBe(2);
+    expect(await countLostOnTypeChange(ctx, a.id, 'choice')).toBe(0);
+    expect(await countLostOnTypeChange(ctx, a.id, 'text')).toBe(0);
+    // Turning into a choice keeps every value: they join the given options.
+    expect(await countLostOnTypeChange(ctx, a.id, 'choice', ['34'])).toBe(0);
+    expect((await ctx.store.get('case', c2.id))!.values[a.id]).toBe('trinta');
+    await expect(countLostOnTypeChange(ctx, 'nope', 'number')).rejects.toMatchObject({ code: 'not_found' });
     const r = await updateAttribute(ctx, a.id, { type: 'number' });
     expect(r.cleared).toBe(1);
     expect((await ctx.store.get('case', c1.id))!.values[a.id]).toBe(34);
@@ -150,6 +186,7 @@ describe('attributes', () => {
     expect(r2.attribute.options).toEqual(['34', 'trinta']);
     expect(r2.cleared).toBe(0);
     // Dropping an option clears the values using it.
+    expect(await countLostOnTypeChange(ctx, a.id, 'choice', ['34'])).toBe(1);
     const r3 = await updateAttribute(ctx, a.id, { options: ['34'] });
     expect(r3.cleared).toBe(1);
     expect((await listLog(ctx, { action: 'attribute.edit' })).some((l) => l.summary.includes('text → choice'))).toBe(true);

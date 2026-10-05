@@ -22,8 +22,10 @@ describe.each(UI_LOCALES.filter((l) => l !== 'en'))('%s catalog', (locale) => {
 
   it('keeps every {placeholder}', () => {
     for (const [k, v] of en) {
-      const want = [...new Set(v.match(/\{\w+\}/g) ?? [])].sort().join(',');
-      const got = [...new Set(other.get(k)?.match(/\{\w+\}/g) ?? [])].sort().join(',');
+      // A singular form may say "its document" instead of "its 1 document".
+      const drop = (ph: string[]) => (k.endsWith('.one') ? ph.filter((p) => p !== '{n}') : ph);
+      const want = [...new Set(drop(v.match(/\{\w+\}/g) ?? []))].sort().join(',');
+      const got = [...new Set(drop(other.get(k)?.match(/\{\w+\}/g) ?? []))].sort().join(',');
       expect(got, k).toBe(want);
     }
   });

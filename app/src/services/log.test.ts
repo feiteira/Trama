@@ -25,6 +25,48 @@ describe('listLog', () => {
     expect((await listLog(ctx, { coderId: ctx.me.id })).length).toBe(6);
     expect((await listLog(ctx, { coderId: 'other' })).length).toBe(0);
   });
+
+  it('bounds by time on both sides', async () => {
+    let t = Date.parse('2026-01-01T10:00:00Z');
+    const ctx = await makeTestProject({ now: () => new Date(t) });
+    for (let i = 0; i < 4; i++) {
+      t += 60_000;
+      await ctx.log('memo.edit', `"m${i}"`);
+    }
+    const all = await listLog(ctx);
+    // `after` with an empty stamp keeps the entry at that very second.
+    const from = await listLog(ctx, { after: { at: all[2]!.at, updated_at_hlc: '' } });
+    expect(from.map((e) => e.summary)).toEqual(['"m3"', '"m2"', '"m1"']);
+    expect((await listLog(ctx, { after: all[2]! })).map((e) => e.summary)).toEqual(['"m3"', '"m2"']);
+    const window = await listLog(ctx, { after: all[3]!, before: all[0]! });
+    expect(window.map((e) => e.summary)).toEqual(['"m2"', '"m1"']);
+  });
+
+  it('filters by text without case or accents, filling each page with matches', async () => {
+    let t = Date.parse('2026-01-01T10:00:00Z');
+    const ctx = await makeTestProject({ now: () => new Date(t) });
+    // Enough entries that the matches lie beyond the first rows read.
+    for (let i = 0; i < 1200; i++) {
+      t += 1000;
+      const name = i % 400 === 7 ? `"Confiança ${i}"` : `"item ${i}"`;
+      await ctx.log(i % 2 ? 'code.create' : 'code.rename', `${name} ×${i}`);
+    }
+    const hits = await listLog(ctx, { text: 'CONFIANCA' });
+    expect(hits.map((e) => e.summary)).toEqual(['"Confiança 807" ×807', '"Confiança 407" ×407', '"Confiança 7" ×7']);
+    expect(await listLog(ctx, { text: 'confiança', limit: 2 })).toHaveLength(2);
+    expect(await listLog(ctx, { text: 'confiança', before: hits[1]! })).toHaveLength(1);
+    // Every word must appear; the action counts as text too.
+    expect(await listLog(ctx, { text: 'confianca rename' })).toHaveLength(0);
+    expect(await listLog(ctx, { text: 'confianca create' })).toHaveLength(3);
+    // Numbers are looked for by the database.
+    expect((await listLog(ctx, { text: '×1199' }))[0]!.summary).toBe('"item 1199" ×1199');
+    // With `describe`, the sentence the screen shows is searched too.
+    const described = await listLog(ctx, { text: 'renomeou 807', describe: (e) => (e.action === 'code.rename' ? 'Mudou o nome… renomeou' : 'Criou') });
+    expect(described).toHaveLength(0);
+    const described2 = await listLog(ctx, { text: 'criou 807', describe: (e) => (e.action === 'code.rename' ? 'Renomeou' : 'Criou') });
+    expect(described2.map((e) => e.summary)).toEqual(['"Confiança 807" ×807']);
+    expect(await listLog(ctx, { text: '   ' })).toHaveLength(200);
+  });
 });
 
 describe('logAsRows', () => {

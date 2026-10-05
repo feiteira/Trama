@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, Plus, Trash2 } from 'lucide-react';
 import { ATTRIBUTE_TYPES, type Attribute, type AttributeType, type Case } from '../../core/model/types';
-import { createAttribute, deleteAttribute, reorderAttribute, updateAttribute } from '../../services/cases';
+import { countLostOnTypeChange, createAttribute, deleteAttribute, reorderAttribute, updateAttribute } from '../../services/cases';
 import { ServiceError } from '../../services/undo';
 import { useProject } from '../../shell/AppState';
 import { useUndo } from '../../shell/undo';
@@ -12,7 +12,7 @@ import { useConfirm } from '../../ui/components/Confirm';
 import { Dialog } from '../../ui/components/Dialog';
 import { Select, TextArea, TextField } from '../../ui/components/Field';
 import { useToast } from '../../ui/components/Toast';
-import { lostOnTypeChange, parseOptions } from './values';
+import { parseOptions } from './values';
 
 interface Props {
   attrs: Attribute[];
@@ -64,7 +64,13 @@ export function AttributeManager({ attrs, cases, onClose }: Props) {
 
   const changeType = async (a: Attribute, next: AttributeType) => {
     if (next === a.type) return;
-    const lost = lostOnTypeChange(a, next, cases);
+    let lost: number;
+    try {
+      lost = await countLostOnTypeChange(project, a.id, next);
+    } catch (e) {
+      toast.error(e);
+      return;
+    }
     if (lost > 0) {
       const ok = await confirm({
         title: t('cases.attributes.retypeTitle', { name: a.name, type: t(`cases.types.${next}`) }),

@@ -1284,6 +1284,21 @@
   overflow-wrap: anywhere;
 }
 
+.imp-proj__done {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-3);
+}
+
+.imp-proj__done p {
+  margin: 0;
+}
+
+.imp-proj__done-icon {
+  flex: none;
+  color: var(--success-text);
+}
+
 .imp-proj__contents {
   padding: var(--s-3) var(--s-4);
   border-radius: var(--r-md);

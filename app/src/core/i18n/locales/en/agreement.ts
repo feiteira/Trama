@@ -331,6 +331,7 @@ export const agreement = {
     done: '{added} new and {updated} newer records came in.',
     doneFiles: { one: '{n} file was added.', other: '{n} files were added.' },
     doneRejected: { one: '{n} record was left out because it was damaged.', other: '{n} records were left out because they were damaged.' },
+    previewRejected: { one: '{n} record in this copy is damaged and will be left out.', other: '{n} records in this copy are damaged and will be left out.' },
     compare: 'Compare coders',
     differentTitle: 'This copy is of a different project',
     different:

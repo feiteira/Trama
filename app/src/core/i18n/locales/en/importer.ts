@@ -326,7 +326,10 @@ export const importer = {
     merged: 'Merged into “{name}”: {added} new, {updated} updated.',
     mergedNothing: '“{name}” already had everything in this file.',
     errorTitle: 'This file cannot be imported',
-    imported: '“{name}” imported.',
+    importedTitle: '“{name}” is in your library',
+    importedBody: 'The project was imported. Open it now, or later from the project list.',
+    openNow: 'Open now',
+    later: 'Not now',
     defaultCoder: 'Researcher',
     errors: {
       notProject: 'This is not a Trama or REFI-QDA project file. Documents, transcripts and surveys are imported inside a project, on its Import screen.',

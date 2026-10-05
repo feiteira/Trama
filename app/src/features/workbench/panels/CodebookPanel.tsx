@@ -109,7 +109,7 @@ export function CodebookPanel({ activeCodeId, onActivate, onApply, canApply }: C
     <section className="cbpanel" aria-label={t('codes.panel.title')} data-testid="codebook-panel">
       <header className="wpanel__head">
         <h2 className="wpanel__title">
-          {t('codes.panel.title')}
+          <span className="wpanel__name">{t('codes.panel.title')}</span>
           {data ? <span className="wpanel__count">{data.items.length}</span> : null}
         </h2>
         <div className="wpanel__tools">

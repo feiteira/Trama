@@ -1,9 +1,11 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { ArrowRightLeft, FileOutput, GitMerge, Pencil, Plus, Send, UserCheck, Users } from 'lucide-react';
-import { PALETTE } from '../../core/model/types';
+import { addCoder, nextCoderColor, recolourCoder, renameCoder } from '../../services/coders';
 import { listCoders } from '../../services/queries';
+import { ServiceError } from '../../services/undo';
 import { useProject } from '../../shell/AppState';
 import { useLive } from '../../shell/useLive';
+import { useUndo } from '../../shell/undo';
 import { initial } from '../../shell/initial';
 import { inkOn } from '../../ui/color';
 import { Button, IconButton } from '../../ui/components/Button';
@@ -141,6 +143,7 @@ function CoderRow({ row, rows, onSetMe, onChanged }: { row: Row; rows: readonly 
   const { t, tp, meta } = useI18n();
   const project = useProject();
   const toast = useToast();
+  const { record } = useUndo();
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(row.coder.name);
   const [error, setError] = useState<string | null>(null);
@@ -153,26 +156,38 @@ function CoderRow({ row, rows, onSetMe, onChanged }: { row: Row; rows: readonly 
     if (!next) return setError(t('agreement.team.nameRequired'));
     if (rows.some((r) => r.coder.id !== coder.id && sameName(r.coder.name, next))) return setError(t('agreement.team.duplicate', { name: next }));
     try {
-      if (next !== coder.name) {
-        await project.store.update('coder', coder.id, { name: next });
-        if (row.isMe) await project.reloadMe();
-      }
+      if (next !== coder.name) record((await renameCoder(project, coder.id, next)).undo);
       setEditing(false);
       setError(null);
       onChanged();
     } catch (e) {
-      toast.error(e);
+      if (e instanceof ServiceError && e.code === 'duplicate') setError(t('agreement.team.duplicate', { name: next }));
+      else toast.error(e);
     }
   }
 
-  async function recolour(color: string) {
-    try {
-      await project.store.update('coder', coder.id, { color });
-      if (row.isMe) await project.reloadMe();
-    } catch (e) {
-      toast.error(e);
-    }
+  // A native colour picker reports every step of a drag: show each at once, but save (one undo
+  // step, one log entry) only once the colour settles.
+  const [preview, setPreview] = useState<string | null>(null);
+  const pending = useRef<{ color: string; timer: ReturnType<typeof setTimeout> } | null>(null);
+  const flush = useRef<() => void>(() => undefined);
+  flush.current = () => {
+    const p = pending.current;
+    if (!p) return;
+    clearTimeout(p.timer);
+    pending.current = null;
+    recolourCoder(project, coder.id, p.color)
+      .then((r) => record(r.undo))
+      .catch((e: unknown) => toast.error(e))
+      .finally(() => setPreview((c) => (c === p.color ? null : c)));
+  };
+  useEffect(() => () => flush.current(), []);
+  function recolour(color: string) {
+    setPreview(color);
+    if (pending.current) clearTimeout(pending.current.timer);
+    pending.current = { color, timer: setTimeout(() => flush.current(), 400) };
   }
+  const shown = preview ?? coder.color;
 
   return (
     <li className="agr-coders__item" data-testid="agreement-coder-row">
@@ -180,7 +195,7 @@ function CoderRow({ row, rows, onSetMe, onChanged }: { row: Row; rows: readonly 
         ref={swatch}
         type="button"
         className="agr-avatar"
-        style={{ background: coder.color, color: inkOn(coder.color) }}
+        style={{ background: shown, color: inkOn(shown) }}
         onClick={() => setColouring((o) => !o)}
         aria-label={t('agreement.team.recolour', { name: coder.name })}
         aria-haspopup="dialog"
@@ -190,10 +205,19 @@ function CoderRow({ row, rows, onSetMe, onChanged }: { row: Row; rows: readonly 
       >
         {initial(coder.name)}
       </button>
-      <Popover open={colouring} onClose={() => setColouring(false)} anchor={swatch} padded aria-label={t('agreement.team.recolour', { name: coder.name })}>
+      <Popover
+        open={colouring}
+        onClose={() => {
+          setColouring(false);
+          flush.current();
+        }}
+        anchor={swatch}
+        padded
+        aria-label={t('agreement.team.recolour', { name: coder.name })}
+      >
         <ColorPicker
-          value={coder.color}
-          onChange={(c) => void recolour(c)}
+          value={shown}
+          onChange={recolour}
           label={t('agreement.team.recolour', { name: coder.name })}
           data-testid="agreement-coder-colour-picker"
         />
@@ -269,8 +293,9 @@ function AddCoderDialog({ open, onClose, rows, onAdded }: { open: boolean; onClo
   const { t } = useI18n();
   const project = useProject();
   const toast = useToast();
+  const { record } = useUndo();
   const [name, setName] = useState('');
-  const [color, setColor] = useState<string>(PALETTE[0]);
+  const [color, setColor] = useState<string>(() => nextCoderColor([]));
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -278,8 +303,7 @@ function AddCoderDialog({ open, onClose, rows, onAdded }: { open: boolean; onClo
     if (!open) return;
     setName('');
     setError(null);
-    const used = new Set(rows.map((r) => r.coder.color));
-    setColor(PALETTE.find((c) => !used.has(c)) ?? PALETTE[rows.length % PALETTE.length]!);
+    setColor(nextCoderColor(rows.map((r) => r.coder)));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
@@ -289,12 +313,13 @@ function AddCoderDialog({ open, onClose, rows, onAdded }: { open: boolean; onClo
     if (rows.some((r) => sameName(r.coder.name, next))) return setError(t('agreement.team.duplicate', { name: next }));
     setBusy(true);
     try {
-      await project.addCoder(next, color);
+      record((await addCoder(project, { name: next, color })).undo);
       toast.show({ message: t('agreement.team.added', { name: next }), tone: 'success' });
       onAdded();
       onClose();
     } catch (e) {
-      toast.error(e);
+      if (e instanceof ServiceError && e.code === 'duplicate') setError(t('agreement.team.duplicate', { name: next }));
+      else toast.error(e);
     } finally {
       setBusy(false);
     }

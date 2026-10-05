@@ -38,7 +38,23 @@ export interface QdpxImportOptions {
 
 export { RefiError } from './common';
 
-export async function importQdpx(zip: Uint8Array, opts: QdpxImportOptions): Promise<ProjectBundle> {
+/** One kind of thing an import could not carry over, with how often it happened. */
+export interface QdpxWarning {
+  /** Stable, for the screens to word in the reader's language. */
+  code: QdpxWarningCode;
+  count: number;
+  /** The name it concerns (a document, a file), for warnings about one item. */
+  detail?: string;
+  /** The same in plain English (logs, tests, anything without a translation). */
+  message: string;
+}
+
+/** A REFI-QDA project read into a bundle, with its warnings as data (`warnings` holds their messages). */
+export interface QdpxBundle extends ProjectBundle {
+  issues: QdpxWarning[];
+}
+
+export async function importQdpx(zip: Uint8Array, opts: QdpxImportOptions): Promise<QdpxBundle> {
   const index = new ZipIndex(zip);
   const qde = findQde(index);
   if (!qde) throw new RefiError('No project.qde inside this file: it is not a REFI-QDA project.');
@@ -51,7 +67,7 @@ export async function importQdpx(zip: Uint8Array, opts: QdpxImportOptions): Prom
   }
   if (localName(root) !== 'Project') throw new RefiError('The project.qde inside this file is not a REFI-QDA project.');
   const reader = new ProjectReader(root, index, dirname(qde), opts);
-  for (const name of index.refused) reader.note(`A file with an unsafe path was ignored: ${name}`);
+  for (const name of index.refused) reader.note('unsafePath', name, `A file with an unsafe path was ignored: ${name}`);
   return reader.read();
 }
 
@@ -192,10 +208,17 @@ const COUNTED = {
   invalidRecord: (n: number) => `${n} item(s) could not be imported because their data was invalid.`,
 } as const;
 
+/** Warnings about one named item. */
+const NAMED_CODES = ['pdfSkipped', 'pdfNoText', 'videoSkipped', 'audioSkipped', 'tooLong', 'unsafePath'] as const;
+
+/** Every warning an import can give: the named ones, then the counted ones. */
+export const QDPX_WARNING_CODES = [...NAMED_CODES, ...(Object.keys(COUNTED) as (keyof typeof COUNTED)[])] as const;
+export type QdpxWarningCode = (typeof NAMED_CODES)[number] | keyof typeof COUNTED;
+
 class ProjectReader {
   private readonly now: () => Date;
   private readonly factory: RecordFactory;
-  private readonly notes: string[] = [];
+  private readonly notes: QdpxWarning[] = [];
   private readonly counts = new Map<keyof typeof COUNTED, number>();
   private readonly files: Map<string, Uint8Array>;
   private readonly blobs = new Map<string, Uint8Array>();
@@ -239,8 +262,8 @@ class ProjectReader {
     this.files = index.read(this.referencedFiles());
   }
 
-  note(msg: string): void {
-    this.notes.push(msg);
+  note(code: (typeof NAMED_CODES)[number], detail: string, message: string): void {
+    this.notes.push({ code, count: 1, detail, message });
   }
 
   private count(key: keyof typeof COUNTED, n = 1): void {
@@ -353,7 +376,7 @@ class ProjectReader {
 
   // --- reading -------------------------------------------------------------------------------
 
-  async read(): Promise<ProjectBundle> {
+  async read(): Promise<QdpxBundle> {
     const root = this.root;
     this.readUsers(child(root, 'Users'));
     for (const c of children(child(root, 'Cases') ?? root, 'Case')) {
@@ -648,10 +671,10 @@ class ProjectReader {
     const rep = child(s, 'Representation');
     const text = rep ? await this.readText(rep) : { raw: '', found: false, external: false };
     if (!pdfBytes && !text.found) {
-      this.note(`The PDF "${name || 'untitled'}" was skipped: neither the PDF nor its text was included.`);
+      this.note('pdfSkipped', name || 'untitled', `The PDF "${name || 'untitled'}" was skipped: neither the PDF nor its text was included.`);
       return;
     }
-    if (!text.found) this.note(`The PDF "${name || 'untitled'}" was imported without text: the file had no text representation.`);
+    if (!text.found) this.note('pdfNoText', name || 'untitled', `The PDF "${name || 'untitled'}" was imported without text: the file had no text representation.`);
     const doc = this.newDoc(name, 'pdf', s, { raw: text.raw, probes: [] });
     if (pdfBytes) doc.original = this.addBlob(pdfBytes, ensureExt(doc.name, 'pdf'), 'application/pdf');
     this.count('pdfSelection', children(s, 'PDFSelection').length);
@@ -705,7 +728,7 @@ class ProjectReader {
     }
     if (!first) {
       if (!bytes) {
-        this.note(`The ${video ? 'video' : 'audio'} "${name || 'untitled'}" was skipped: it had no transcript and its file was not included.`);
+        this.note(video ? 'videoSkipped' : 'audioSkipped', name || 'untitled', `The ${video ? 'video' : 'audio'} "${name || 'untitled'}" was skipped: it had no transcript and its file was not included.`);
         return;
       }
       // Media without a transcript: an empty transcript keeps the recording, ready to transcribe.
@@ -1143,7 +1166,7 @@ class ProjectReader {
 
   // --- records -------------------------------------------------------------------------------
 
-  private finish(memos: MemoDraft[]): ProjectBundle {
+  private finish(memos: MemoDraft[]): QdpxBundle {
     const f = this.factory;
     const nowIso = this.now().toISOString();
     const make = <T>(fn: () => T): T | null => {
@@ -1214,7 +1237,7 @@ class ProjectReader {
     for (const [i, d] of this.docs.entries()) {
       const text = d.unit.canon!.text;
       if (text.length > LIMITS.textMax) {
-        this.note(`The document "${d.name}" was skipped: its text is longer than Trama allows.`);
+        this.note('tooLong', d.name, `The document "${d.name}" was skipped: its text is longer than Trama allows.`);
         continue;
       }
       const ok = make(() => {
@@ -1273,7 +1296,7 @@ class ProjectReader {
       make(() => f.make('memo', { title: m.title, body, target, coder_id: m.coderId && okCoders.has(m.coderId) ? m.coderId : null, color: m.color }, m.created));
     }
 
-    const warnings = [...this.notes, ...[...this.counts].map(([k, n]) => COUNTED[k](n))];
+    const issues: QdpxWarning[] = [...this.notes, ...[...this.counts].map(([code, count]) => ({ code, count, message: COUNTED[code](count) }))];
     return {
       project: {
         id: null,
@@ -1283,7 +1306,8 @@ class ProjectReader {
       },
       records: f.records,
       blobs: this.blobs,
-      warnings,
+      warnings: issues.map((w) => w.message),
+      issues,
     };
   }
 }

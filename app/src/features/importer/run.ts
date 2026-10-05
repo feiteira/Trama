@@ -11,10 +11,10 @@ import { trimSpan } from '../../core/qda/ranges';
 import { createCase, importAttributeTable } from '../../services/cases';
 import { createCode } from '../../services/codes';
 import type { ProjectContext } from '../../services/context';
-import { canonicalise, createDocument } from '../../services/documents';
+import { canonicalise, createDocument, createDocuments, DocumentSlots, type NewDocument } from '../../services/documents';
 import { createGroup } from '../../services/groups';
 import { JobStopped } from '../../services/jobs';
-import { commit, Plan, q, type Undoable } from '../../services/undo';
+import { commit, type LogSpec, Plan, q, type Undoable } from '../../services/undo';
 import { type CaseChoice, coalesce, type GroupRef, nameKey, type ReviewRow, speakerPlan } from './model';
 import { makesCases, toSurveyOptions } from './survey';
 
@@ -51,6 +51,8 @@ export class ImportSession {
   private cases: Map<string, string> | null = null;
   private groups: Map<string, string> | null = null;
   private codes = new Map<string, string>();
+  /** Names and positions of new documents, read once for the whole batch. */
+  private slots: DocumentSlots | null = null;
 
   constructor(
     private readonly ctx: ProjectContext,
@@ -60,6 +62,11 @@ export class ImportSession {
 
   private check(): void {
     if (this.shouldStop()) throw new JobStopped();
+  }
+
+  private async docSlots(): Promise<DocumentSlots> {
+    this.slots ??= await DocumentSlots.load(this.ctx);
+    return this.slots;
   }
 
   private async caseMap(): Promise<Map<string, string>> {
@@ -135,36 +142,43 @@ export class ImportSession {
   }
 
   /**
-   * Codes spans of a document just created (no codings yet, so no merge rule to apply), in one
-   * write. Spans are offsets into the imported text and follow its canonicalisation.
+   * Codes spans of documents just created (no codings yet, so no merge rule to apply), in one
+   * write with one audit entry per document. Spans are offsets into the imported text and
+   * follow its canonicalisation.
    */
-  private async codeSpans(doc: Document, importedText: string, items: { codeId: string; spans: Span[] }[], summary: string): Promise<number> {
-    const canon = canonicalise(importedText);
-    const text = canon.text;
+  private async codeSpans(jobs: { doc: Document; importedText: string; items: { codeId: string; spans: Span[] }[] }[], summary: string): Promise<number> {
     const plan = new Plan();
-    let n = 0;
-    for (const { codeId, spans } of items) {
-      const mapped = coalesce(spans.map((s) => ({ start: canon.mapOffset(s.start, 'after'), end: canon.mapOffset(s.end, 'before') })));
-      for (const s of mapped) {
-        const span = trimSpan(text, s);
-        if (!span) continue;
-        plan.create('coding', {
-          document_id: doc.id,
-          code_id: codeId,
-          coder_id: this.ctx.me.id,
-          start: span.start,
-          end: span.end,
-          text: text.slice(span.start, span.end),
-          comment: '',
-        });
-        n++;
+    const logs: LogSpec[] = [];
+    let total = 0;
+    for (const { doc, importedText, items } of jobs) {
+      const canon = canonicalise(importedText);
+      const text = canon.text;
+      let n = 0;
+      for (const { codeId, spans } of items) {
+        const mapped = coalesce(spans.map((s) => ({ start: canon.mapOffset(s.start, 'after'), end: canon.mapOffset(s.end, 'before') })));
+        for (const s of mapped) {
+          const span = trimSpan(text, s);
+          if (!span) continue;
+          plan.create('coding', {
+            document_id: doc.id,
+            code_id: codeId,
+            coder_id: this.ctx.me.id,
+            start: span.start,
+            end: span.end,
+            text: text.slice(span.start, span.end),
+            comment: '',
+          });
+          n++;
+        }
       }
+      if (n) logs.push({ action: 'coding.autocode', summary: `${summary} → ${q(doc.name)} ×${n}`, target: { kind: 'document', id: doc.id } });
+      total += n;
     }
-    if (!n) return 0;
-    const detail = `${summary} → ${q(doc.name)} ×${n}`;
-    const { undo } = await commit(this.ctx, plan, { label: 'coding.autocode', detail, logs: [{ action: 'coding.autocode', summary: detail, target: { kind: 'document', id: doc.id } }] });
+    if (!total) return 0;
+    const detail = logs.length === 1 ? logs[0]!.summary : `${summary} ×${total}`;
+    const { undo } = await commit(this.ctx, plan, { label: 'coding.autocode', detail, logs });
     this.undos.push(undo);
-    return n;
+    return total;
   }
 
   /** Imports a document row (a file or pasted text). */
@@ -175,23 +189,28 @@ export class ImportSession {
     const caseId = await this.caseFor(resolveCase(row));
     const groupIds = await this.groupsFor(row.groups);
     this.check();
-    const { document, undo } = await createDocument(this.ctx, {
-      name: row.name,
-      kind: row.kind,
-      text: doc.text,
-      sync: doc.sync,
-      source: { filename: row.origin === 'paste' ? '' : doc.source.filename, format: row.origin === 'paste' ? 'paste' : doc.source.format },
-      ...(doc.original ? { original: { bytes: doc.original.bytes, filename: doc.source.filename, mime: doc.original.mime } } : {}),
-      ...(row.media && row.kind === 'transcript' ? { media: { bytes: row.media.bytes, filename: row.media.filename, mime: row.media.mime } } : {}),
-      case_id: caseId,
-      group_ids: groupIds,
-    });
+    const slots = await this.docSlots();
+    const { document, undo } = await createDocument(
+      this.ctx,
+      {
+        name: row.name,
+        kind: row.kind,
+        text: doc.text,
+        sync: doc.sync,
+        source: { filename: row.origin === 'paste' ? '' : doc.source.filename, format: row.origin === 'paste' ? 'paste' : doc.source.format },
+        ...(doc.original ? { original: { bytes: doc.original.bytes, filename: doc.source.filename, mime: doc.original.mime } } : {}),
+        ...(row.media && row.kind === 'transcript' ? { media: { bytes: row.media.bytes, filename: row.media.filename, mime: row.media.mime } } : {}),
+        case_id: caseId,
+        group_ids: groupIds,
+      },
+      { slots },
+    );
     this.undos.push(undo);
     if (row.kind === 'transcript' && row.autoCodeSpeakers) {
       const plans = speakerPlan(doc.speakers, LIMITS.codeNameMax);
       const items: { codeId: string; spans: Span[] }[] = [];
       for (const p of plans) items.push({ codeId: await this.codeUnder(this.labels.speakers, p.name), spans: p.spans });
-      await this.codeSpans(document, doc.text, items, q(this.labels.speakers));
+      await this.codeSpans([{ doc: document, importedText: doc.text, items }], q(this.labels.speakers));
     }
     return [{ id: document.id, name: document.name, kind: document.kind }];
   }
@@ -221,23 +240,24 @@ export class ImportSession {
     }
     const groupIds = await this.groupsFor(row.groups);
     const fixedCase = makesCases(mapping) ? null : await this.caseFor(resolveCase(row));
-    const out: CreatedDoc[] = [];
-    const total = result.documents.length;
-    for (let i = 0; i < total; i++) {
-      this.check();
-      const d = result.documents[i]!;
+    // Every answer document in one write (one undo step), then their auto-coding in another.
+    const inputs: NewDocument[] = result.documents.map((d, i) => {
       const caseName = result.caseNames[i];
-      const caseId = caseName ? caseIds.get(nameKey(caseName)) ?? null : fixedCase;
-      const { document, undo } = await createDocument(this.ctx, {
+      return {
         name: clip(this.labels.surveyDoc(row.name.trim() || table.name, d.name), LIMITS.nameMax),
         kind: 'survey',
         text: d.text,
         source: { filename: d.source.filename, format: d.source.format },
-        case_id: caseId,
+        case_id: caseName ? caseIds.get(nameKey(caseName)) ?? null : fixedCase,
         group_ids: groupIds,
-      });
-      this.undos.push(undo);
-      if (mapping.autoCode) {
+      };
+    });
+    const { documents, undo } = await createDocuments(this.ctx, inputs, { slots: await this.docSlots(), onProgress, shouldStop: this.shouldStop });
+    this.undos.push(undo);
+    if (mapping.autoCode) {
+      const jobs: { doc: Document; importedText: string; items: { codeId: string; spans: Span[] }[] }[] = [];
+      for (let i = 0; i < documents.length; i++) {
+        this.check();
         const byQuestion = new Map<number, { question: string; spans: Span[] }>();
         for (const s of result.questionSpans[i] ?? []) {
           const e = byQuestion.get(s.column) ?? { question: s.question, spans: [] };
@@ -246,12 +266,11 @@ export class ImportSession {
         }
         const items: { codeId: string; spans: Span[] }[] = [];
         for (const e of byQuestion.values()) items.push({ codeId: await this.codeUnder(this.labels.questions, e.question), spans: e.spans });
-        await this.codeSpans(document, d.text, items, q(this.labels.questions));
+        jobs.push({ doc: documents[i]!, importedText: result.documents[i]!.text, items });
       }
-      out.push({ id: document.id, name: document.name, kind: document.kind });
-      await onProgress?.(i + 1, total);
+      await this.codeSpans(jobs, q(this.labels.questions));
     }
-    return out;
+    return documents.map((document) => ({ id: document.id, name: document.name, kind: document.kind }));
   }
 
   import(row: ReviewRow, onProgress?: (done: number, total: number) => void | Promise<void>): Promise<CreatedDoc[]> {

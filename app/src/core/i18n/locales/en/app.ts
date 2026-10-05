@@ -13,7 +13,8 @@ export const app = {
     analysis: 'Analysis',
     agreement: 'Agreement',
     import: 'Import',
-    project: 'Export & backup',
+    project: 'Project',
+    projectKeywords: 'export, backup, report, delete project',
     pseudonyms: 'Pseudonymisation',
     log: 'Audit trail',
     settings: 'Settings',
@@ -42,6 +43,11 @@ export const app = {
     themeLight: 'Use the light theme',
     themeDark: 'Use the dark theme',
     themeSystem: 'Follow the system theme',
+    shortcuts: 'Keyboard shortcuts',
+    shortcutsKeywords: 'keys, hotkeys',
+  },
+  help: {
+    button: 'Help on this screen',
   },
   undo: {
     group: 'Undo and redo',

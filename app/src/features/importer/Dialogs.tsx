@@ -3,7 +3,7 @@ import { DateTime } from 'luxon';
 import { Folder, Tag } from 'lucide-react';
 import { importQdc, RefiError, type QdcImport } from '../../core/export/refi';
 import { LIMITS } from '../../core/model/types';
-import { createCode } from '../../services/codes';
+import { type CodeDraft, createCodes } from '../../services/codes';
 import { createDocument } from '../../services/documents';
 import { combineUndo, type Undoable } from '../../services/undo';
 import { usePlatform, useProject } from '../../shell/AppState';
@@ -193,21 +193,24 @@ export function CodebookDialog({ open, onClose }: { open: boolean; onClose: () =
 
   const fresh = pending ? freshCount(pending.plan) : 0;
 
+  // Every new code in one write: one undo step, one audit-trail entry.
   const apply = async () => {
     if (!pending || busy) return;
     setBusy(true);
-    const undos: Undoable[] = [];
-    const ids = new Map<string, string>();
     try {
+      const existing = new Map<string, string>();
+      const drafts: CodeDraft[] = [];
       for (const item of pending.plan) {
         if (item.existingId) {
-          ids.set(item.fileId, item.existingId);
+          existing.set(item.fileId, item.existingId);
           continue;
         }
         const d = item.draft;
-        const { code, undo } = await createCode(project, {
+        const parentId = item.parentFileId ? existing.get(item.parentFileId) : undefined;
+        drafts.push({
+          ref: item.fileId,
+          parent: parentId ? { id: parentId } : item.parentFileId ? { ref: item.parentFileId } : null,
           name: d.name,
-          parent_id: item.parentFileId ? ids.get(item.parentFileId) ?? null : null,
           color: d.color,
           description: d.description,
           inclusion: d.inclusion,
@@ -215,15 +218,14 @@ export function CodebookDialog({ open, onClose }: { open: boolean; onClose: () =
           example: d.example,
           codable: d.codable,
         });
-        undos.push(undo);
-        ids.set(item.fileId, code.id);
       }
-      toast.show({ message: tp('importer.codebook.added', undos.length), tone: 'success' });
+      const { codes, undo } = await createCodes(project, drafts, { source: pending.file });
+      if (codes.length) record(undo);
+      toast.show({ message: tp('importer.codebook.added', codes.length), tone: 'success' });
       onClose();
     } catch (e) {
       toast.error(e);
     } finally {
-      if (undos.length) record(combineUndo('code.create', `×${undos.length}`, undos));
       setBusy(false);
     }
   };
@@ -269,10 +271,10 @@ export function CodebookDialog({ open, onClose }: { open: boolean; onClose: () =
               </li>
             ))}
           </ul>
-          {pending.imported.warnings.map((w) => {
+          {pending.imported.issues.map((w) => {
             const n = classifyQdpxWarning(w);
             return (
-              <Notice key={w} tone="info" icon={Tag}>
+              <Notice key={w.code} tone="info" icon={Tag}>
                 {'plural' in n ? tp(n.plural, n.n) : 'key' in n ? t(n.key, n.vars) : n.raw}
               </Notice>
             );

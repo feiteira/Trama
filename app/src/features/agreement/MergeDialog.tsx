@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { CircleCheck, FileUp } from 'lucide-react';
 import type { TramaBundle } from '../../core/export/trama';
 import { UnlockRequiredError, type Unlock } from '../../core/export/trama';
-import { DataFileError, mergeTeammateCopy, type MergeResult, openProjectFile } from '../../services/datafile';
+import { DataFileError, mergeTeammateCopy, type MergePreview, type MergeResult, openProjectFile, previewMerge } from '../../services/datafile';
 import { useHold, useProject } from '../../shell/AppState';
 import { inkOn } from '../../ui/color';
 import { initial } from '../../shell/initial';
@@ -13,7 +13,7 @@ import { TextField } from '../../ui/components/Field';
 import { useI18n } from '../../ui/i18n';
 import { fmtInt } from './model';
 import { baseName } from './files';
-import { fileProblem, type FileProblem, type MergePreview, PREVIEW_KINDS, previewMerge, sameProject } from './team';
+import { fileProblem, type FileProblem, PREVIEW_KINDS, previewRows, sameProject } from './team';
 
 type Stage =
   | { name: 'pick' }
@@ -54,7 +54,7 @@ export function MergeDialog({ open, onClose, onCompare }: { open: boolean; onClo
         fail(new DataFileError('DIFFERENT_PROJECT', 'different project'), bundle.project.name);
         return;
       }
-      setStage({ name: 'preview', bundle, preview: await previewMerge(project.store, bundle) });
+      setStage({ name: 'preview', bundle, preview: await previewMerge(project, bundle) });
     } catch (e) {
       if (e instanceof UnlockRequiredError && e.protection === 'password') {
         setStage({ name: 'password', bytes, file, wrong: false });
@@ -151,6 +151,7 @@ export function MergeDialog({ open, onClose, onCompare }: { open: boolean; onClo
       break;
     case 'preview': {
       const p = stage.preview;
+      const rows = previewRows(p);
       const nothing = p.added === 0 && p.updated === 0;
       body = (
         <div className="agr-merge__preview" data-testid="agreement-merge-preview">
@@ -172,7 +173,7 @@ export function MergeDialog({ open, onClose, onCompare }: { open: boolean; onClo
               </thead>
               <tbody>
                 {[...PREVIEW_KINDS, 'other' as const].map((k) => {
-                  const c = p.byKind[k];
+                  const c = rows[k];
                   return (
                     <tr key={k} className={c.added + c.updated === 0 ? 'agr-merge__zero' : undefined}>
                       <th scope="row">{t(`agreement.merge.kinds.${k}`)}</th>
@@ -184,6 +185,7 @@ export function MergeDialog({ open, onClose, onCompare }: { open: boolean; onClo
               </tbody>
             </table>
           )}
+          {p.rejected ? <Notice tone="warning">{tp('agreement.merge.previewRejected', p.rejected)}</Notice> : null}
           {p.newCoders.length ? (
             <div className="agr-merge__coders">
               <span className="field__label">{t('agreement.merge.newCoders')}</span>

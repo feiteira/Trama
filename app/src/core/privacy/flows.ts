@@ -11,7 +11,9 @@ export interface FlowText {
   who: string;
 }
 
-export const FLOW_IDS = ['backup', 'trama', 'teammate', 'qdpx', 'codebook', 'tables', 'reports', 'pseudonyms', 'clipboard'] as const;
+export const FLOW_IDS = [
+  'backup', 'trama', 'teammate', 'qdpx', 'codebook', 'segments', 'memos', 'analysis', 'cases', 'audit', 'agreement', 'report', 'pseudonyms', 'clipboard',
+] as const;
 export type FlowId = (typeof FLOW_IDS)[number];
 
 export interface Flow {
@@ -150,51 +152,176 @@ export const FLOWS: readonly Flow[] = [
     },
   },
   {
-    id: 'tables',
+    id: 'segments',
     trigger: 'action',
     encrypted: 'never',
     text: {
       en: {
-        title: 'Tables (CSV, Excel)',
-        when: 'Only when you export a table: coded segments, cases and attributes, query results, agreement results or the audit trail.',
-        what: 'What the table shows — for coded segments, the coded text itself with its document and code. Not encrypted.',
+        title: 'Coded segments (CSV, Excel, Word, HTML)',
+        when: 'Only when you export coded segments (Coded segments → Export). Copying them to the clipboard is described below.',
+        what: 'The coded text itself, with its document, code, coder and comment and, if you choose, the text around it. Not encrypted.',
+        who: 'Anyone who has the file, and the program you open it in.',
+      },
+      pt: {
+        title: 'Segmentos codificados (CSV, Excel, Word, HTML)',
+        when: 'Só quando exporta segmentos codificados (Segmentos codificados → Exportar). A cópia para a área de transferência está descrita mais abaixo.',
+        what: 'O próprio texto codificado, com o documento, o código, o codificador e o comentário e, se escolher, o texto à volta. Sem cifra.',
+        who: 'Quem tiver o ficheiro e o programa onde o abrir.',
+      },
+      es: {
+        title: 'Segmentos codificados (CSV, Excel, Word, HTML)',
+        when: 'Solo cuando exporta segmentos codificados (Segmentos codificados → Exportar). La copia al portapapeles se describe más abajo.',
+        what: 'El propio texto codificado, con su documento, código, codificador y comentario y, si lo elige, el texto de alrededor. Sin cifrar.',
+        who: 'Quien tenga el archivo y el programa en que lo abra.',
+      },
+    },
+  },
+  {
+    id: 'memos',
+    trigger: 'action',
+    encrypted: 'never',
+    text: {
+      en: {
+        title: 'Memos (Word, Markdown)',
+        when: 'Only when you export memos (Memos → Export).',
+        what: 'The memos you export: their titles and text, what each is about (a document, code, coded segment or case, by name) and who wrote it when. Not encrypted.',
+        who: 'Anyone who has the file.',
+      },
+      pt: {
+        title: 'Memorandos (Word, Markdown)',
+        when: 'Só quando exporta memorandos (Memorandos → Exportar).',
+        what: 'Os memorandos que exportar: títulos e texto, a que se referem (um documento, código, segmento codificado ou caso, pelo nome) e quem os escreveu e quando. Sem cifra.',
+        who: 'Quem tiver o ficheiro.',
+      },
+      es: {
+        title: 'Memorandos (Word, Markdown)',
+        when: 'Solo cuando exporta memorandos (Memorandos → Exportar).',
+        what: 'Los memorandos que exporte: títulos y texto, a qué se refieren (un documento, código, segmento codificado o caso, por su nombre) y quién los escribió y cuándo. Sin cifrar.',
+        who: 'Quien tenga el archivo.',
+      },
+    },
+  },
+  {
+    id: 'analysis',
+    trigger: 'action',
+    encrypted: 'never',
+    text: {
+      en: {
+        title: 'Analysis results (CSV, Excel, SVG, PNG)',
+        when: 'Only when you export a result or a chart from Analysis.',
+        what: 'What the result shows: counts by code, document, document group, case or attribute, word frequencies, and — for a text search — every match with the words around it. Charts as pictures. Not encrypted.',
+        who: 'Anyone who has the file, and the program you open it in.',
+      },
+      pt: {
+        title: 'Resultados de análise (CSV, Excel, SVG, PNG)',
+        when: 'Só quando exporta um resultado ou um gráfico da Análise.',
+        what: 'O que o resultado mostra: contagens por código, documento, grupo de documentos, caso ou atributo, frequências de palavras e — numa pesquisa de texto — cada ocorrência com as palavras à volta. Gráficos como imagens. Sem cifra.',
+        who: 'Quem tiver o ficheiro e o programa onde o abrir.',
+      },
+      es: {
+        title: 'Resultados de análisis (CSV, Excel, SVG, PNG)',
+        when: 'Solo cuando exporta un resultado o un gráfico desde Análisis.',
+        what: 'Lo que muestra el resultado: recuentos por código, documento, grupo de documentos, caso o atributo, frecuencias de palabras y — en una búsqueda de texto — cada coincidencia con las palabras de alrededor. Gráficos como imágenes. Sin cifrar.',
+        who: 'Quien tenga el archivo y el programa en que lo abra.',
+      },
+    },
+  },
+  {
+    id: 'cases',
+    trigger: 'action',
+    encrypted: 'never',
+    text: {
+      en: {
+        title: 'Cases table (CSV, Excel)',
+        when: 'Only when you export the cases table (Cases → Export).',
+        what: 'Each case’s name and description, its documents’ names, its attribute values (age, role… which may describe a participant) and how many coded segments it has. Not encrypted.',
         who: 'Anyone who has the file, and the spreadsheet program you open it in.',
       },
       pt: {
-        title: 'Tabelas (CSV, Excel)',
-        when: 'Só quando exporta uma tabela: segmentos codificados, casos e atributos, resultados de consultas, resultados de concordância ou o registo de auditoria.',
-        what: 'O que a tabela mostra — nos segmentos codificados, o próprio texto codificado, com o documento e o código. Sem cifra.',
+        title: 'Tabela de casos (CSV, Excel)',
+        when: 'Só quando exporta a tabela de casos (Casos → Exportar).',
+        what: 'O nome e a descrição de cada caso, os nomes dos seus documentos, os valores dos atributos (idade, função… que podem descrever um participante) e quantos segmentos codificados tem. Sem cifra.',
         who: 'Quem tiver o ficheiro e a folha de cálculo onde o abrir.',
       },
       es: {
-        title: 'Tablas (CSV, Excel)',
-        when: 'Solo cuando exporta una tabla: segmentos codificados, casos y atributos, resultados de consultas, resultados de acuerdo o el registro de auditoría.',
-        what: 'Lo que muestra la tabla — en los segmentos codificados, el propio texto codificado, con su documento y su código. Sin cifrar.',
+        title: 'Tabla de casos (CSV, Excel)',
+        when: 'Solo cuando exporta la tabla de casos (Casos → Exportar).',
+        what: 'El nombre y la descripción de cada caso, los nombres de sus documentos, los valores de sus atributos (edad, función… que pueden describir a un participante) y cuántos segmentos codificados tiene. Sin cifrar.',
         who: 'Quien tenga el archivo y la hoja de cálculo en que lo abra.',
       },
     },
   },
   {
-    id: 'reports',
+    id: 'audit',
     trigger: 'action',
     encrypted: 'never',
     text: {
       en: {
-        title: 'Reports (Word, HTML)',
-        when: 'Only when you export a report: the project report, the codebook, coded segments or agreement results.',
-        what: 'What the report shows — the project report holds the overview, the codebook with definitions and counts, memos and the case table; a segment report holds coded text. Not encrypted.',
+        title: 'Audit trail (CSV)',
+        when: 'Only when you export the audit trail (Audit trail → Export CSV).',
+        what: 'The entries shown: when, which coder, what was done, and the names it concerns (documents, codes, cases…). Never the pseudonymisation key: the trail only counts replacements. Not encrypted.',
+        who: 'Anyone who has the file, and the spreadsheet program you open it in.',
+      },
+      pt: {
+        title: 'Registo de auditoria (CSV)',
+        when: 'Só quando exporta o registo de auditoria (Registo de auditoria → Exportar CSV).',
+        what: 'As entradas mostradas: quando, que codificador, o que foi feito e os nomes a que se refere (documentos, códigos, casos…). Nunca a chave de pseudonimização: o registo só conta as substituições. Sem cifra.',
+        who: 'Quem tiver o ficheiro e a folha de cálculo onde o abrir.',
+      },
+      es: {
+        title: 'Registro de auditoría (CSV)',
+        when: 'Solo cuando exporta el registro de auditoría (Registro de auditoría → Exportar CSV).',
+        what: 'Las entradas mostradas: cuándo, qué codificador, qué se hizo y los nombres a los que se refiere (documentos, códigos, casos…). Nunca la clave de seudonimización: el registro solo cuenta las sustituciones. Sin cifrar.',
+        who: 'Quien tenga el archivo y la hoja de cálculo en que lo abra.',
+      },
+    },
+  },
+  {
+    id: 'agreement',
+    trigger: 'action',
+    encrypted: 'never',
+    text: {
+      en: {
+        title: 'Agreement report (Word, HTML, Excel, CSV)',
+        when: 'Only when you export the results of comparing two coders (Agreement → Export).',
+        what: 'The coders’ names, agreement statistics by code and by document, and — in Word, HTML and Excel — the passages they disagree on, quoting the coded text. Not encrypted.',
         who: 'Anyone who has the file.',
       },
       pt: {
-        title: 'Relatórios (Word, HTML)',
-        when: 'Só quando exporta um relatório: o relatório do projeto, o livro de códigos, segmentos codificados ou resultados de concordância.',
-        what: 'O que o relatório mostra — o relatório do projeto tem a visão geral, o livro de códigos com definições e contagens, os memorandos e a tabela de casos; um relatório de segmentos tem texto codificado. Sem cifra.',
+        title: 'Relatório de concordância (Word, HTML, Excel, CSV)',
+        when: 'Só quando exporta os resultados da comparação de dois codificadores (Concordância → Exportar).',
+        what: 'Os nomes dos codificadores, as estatísticas de concordância por código e por documento e — em Word, HTML e Excel — as passagens em que discordam, citando o texto codificado. Sem cifra.',
         who: 'Quem tiver o ficheiro.',
       },
       es: {
-        title: 'Informes (Word, HTML)',
-        when: 'Solo cuando exporta un informe: el informe del proyecto, el libro de códigos, segmentos codificados o resultados de acuerdo.',
-        what: 'Lo que muestra el informe — el informe del proyecto incluye el resumen, el libro de códigos con definiciones y recuentos, los memorandos y la tabla de casos; un informe de segmentos incluye texto codificado. Sin cifrar.',
+        title: 'Informe de acuerdo (Word, HTML, Excel, CSV)',
+        when: 'Solo cuando exporta los resultados de comparar dos codificadores (Acuerdo → Exportar).',
+        what: 'Los nombres de los codificadores, las estadísticas de acuerdo por código y por documento y — en Word, HTML y Excel — los pasajes en que discrepan, citando el texto codificado. Sin cifrar.',
+        who: 'Quien tenga el archivo.',
+      },
+    },
+  },
+  {
+    id: 'report',
+    trigger: 'action',
+    encrypted: 'never',
+    text: {
+      en: {
+        title: 'Project report (Word, HTML)',
+        when: 'Only when you choose Export → Project report.',
+        what: 'An overview of the project (documents, coders, counts), the codebook with definitions and how often each code is used, the memos and the cases table with attribute values. No document text. Not encrypted.',
+        who: 'Anyone who has the file.',
+      },
+      pt: {
+        title: 'Relatório do projeto (Word, HTML)',
+        when: 'Só quando escolhe Exportar → Relatório do projeto.',
+        what: 'Uma visão geral do projeto (documentos, codificadores, contagens), o livro de códigos com definições e quantas vezes cada código é usado, os memorandos e a tabela de casos com os valores dos atributos. Sem o texto dos documentos. Sem cifra.',
+        who: 'Quem tiver o ficheiro.',
+      },
+      es: {
+        title: 'Informe del proyecto (Word, HTML)',
+        when: 'Solo cuando elige Exportar → Informe del proyecto.',
+        what: 'Un resumen del proyecto (documentos, codificadores, recuentos), el libro de códigos con definiciones y cuántas veces se usa cada código, los memorandos y la tabla de casos con los valores de los atributos. Sin el texto de los documentos. Sin cifrar.',
         who: 'Quien tenga el archivo.',
       },
     },
@@ -231,19 +358,19 @@ export const FLOWS: readonly Flow[] = [
     text: {
       en: {
         title: 'Copying to the clipboard',
-        when: 'Only when you copy something: coded segments with their sources, your recovery phrase while you write it down, or the details of an error.',
+        when: 'Only when you copy something: coded segments with their sources, your recovery phrase while you write it down, the details of an error, or where Trama keeps its data (Settings).',
         what: 'The text you copied, held in the computer’s clipboard until you copy something else.',
         who: 'Other programs on this computer, and your other devices if your system shares the clipboard with them.',
       },
       pt: {
         title: 'Copiar para a área de transferência',
-        when: 'Só quando copia algo: segmentos codificados com as suas fontes, a sua frase de recuperação enquanto a anota, ou os detalhes de um erro.',
+        when: 'Só quando copia algo: segmentos codificados com as suas fontes, a sua frase de recuperação enquanto a anota, os detalhes de um erro, ou onde o Trama guarda os dados (Definições).',
         what: 'O texto que copiou, guardado na área de transferência do computador até copiar outra coisa.',
         who: 'Outros programas deste computador, e os seus outros dispositivos se o sistema partilhar com eles a área de transferência.',
       },
       es: {
         title: 'Copiar al portapapeles',
-        when: 'Solo cuando copia algo: segmentos codificados con sus fuentes, su frase de recuperación mientras la anota, o los detalles de un error.',
+        when: 'Solo cuando copia algo: segmentos codificados con sus fuentes, su frase de recuperación mientras la anota, los detalles de un error, o dónde guarda Trama sus datos (Ajustes).',
         what: 'El texto que copió, guardado en el portapapeles del ordenador hasta que copie otra cosa.',
         who: 'Otros programas de este ordenador, y sus otros dispositivos si el sistema comparte con ellos el portapapeles.',
       },

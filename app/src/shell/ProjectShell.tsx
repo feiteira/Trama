@@ -1,5 +1,6 @@
 import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronsUpDown, FolderOpen, Library as LibraryIcon, Lock, Monitor, Moon, PanelLeftClose, PanelLeftOpen, Search, Sun } from 'lucide-react';
+import { ChevronsUpDown, CircleHelp, FolderOpen, Keyboard, Library as LibraryIcon, Lock, Monitor, Moon, PanelLeftClose, PanelLeftOpen, Search, Sun } from 'lucide-react';
+import { HELP_TOPICS } from '../features/help/manualModel';
 import { ScreenView } from '../features/registry';
 import { inkOn } from '../ui/color';
 import { cx } from '../ui/cx';
@@ -13,6 +14,7 @@ import { watchBack, watchShortcuts } from './activity.web';
 import { BackupScheduler } from './BackupScheduler';
 import { useAppState, useLibrary, useProject } from './AppState';
 import { CoderGate } from './CoderGate';
+import { currentHelpTopic } from './helpTopic';
 import { CommandPalette } from './CommandPalette';
 import { useKeyLabel } from './keys';
 import { LockingScreen } from './LockingScreen';
@@ -24,6 +26,8 @@ import { useCommands } from './useCommands';
 import './shell.css';
 
 const RAIL_KEY = 'trama.rail.collapsed';
+
+const splitKeywords = (s: string): string[] => s.split(',').map((w) => w.trim()).filter(Boolean);
 
 function readCollapsed(): boolean {
   try {
@@ -74,10 +78,28 @@ function Layout() {
 
   useEffect(() => watchBack(back), [back]);
   useEffect(() => watchShortcuts({ k: () => setPalette((p) => !p) }), []);
+  // F1: the manual at this screen's topic. Not over a dialog, which would be left behind.
+  const routeName = route.name;
+  const helpHere = () => {
+    const topic = currentHelpTopic(routeName);
+    if (topic) go({ name: 'help', topic });
+  };
+  const helpRef = useRef(helpHere);
+  helpRef.current = helpHere;
   useEffect(() => {
-    void platform.setTitle(example ? `${project.info.name} · ${t('app.example.badge')} · Trama` : `${project.info.name} · Trama`);
-    return () => void platform.setTitle('Trama');
-  }, [platform, project, example, t]);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'F1' || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey || e.defaultPrevented) return;
+      e.preventDefault();
+      if (!document.querySelector('[aria-modal="true"]')) helpRef.current();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+  const projectName = project.info.name;
+  useEffect(() => {
+    void platform.setTitle(example ? `${projectName} · ${t('app.example.badge')} · Trama` : `${projectName} · Trama`);
+  }, [platform, projectName, example, t]);
+  useEffect(() => () => void platform.setTitle('Trama'), [platform]);
 
   const toAllProjects = () => void closeProject().catch((e: unknown) => toast.error(e));
   const open = (id: string) => void openProject(id).catch((e: unknown) => toast.error(e));
@@ -88,11 +110,25 @@ function Layout() {
       ...NAV.map((n) => ({
         id: `nav.${n.name}`,
         label: t('app.commands.goTo', { screen: t(n.label) }),
-        keywords: [t(n.label)],
+        keywords: [t(n.label), ...(n.keywords ? splitKeywords(t(n.keywords)) : [])],
         group: t('app.commands.groupGo'),
         icon: n.icon,
         run: () => go({ name: n.name } as Route),
       })),
+      // Help registers its own while it shows.
+      ...(routeName !== 'help'
+        ? [
+            { id: 'app.helpHere', label: t('app.help.button'), group: t('app.commands.groupApp'), icon: CircleHelp, shortcut: 'F1', run: () => helpRef.current() },
+            {
+              id: 'app.shortcuts',
+              label: t('app.commands.shortcuts'),
+              keywords: splitKeywords(t('app.commands.shortcutsKeywords')),
+              group: t('app.commands.groupApp'),
+              icon: Keyboard,
+              run: () => go({ name: 'help', topic: HELP_TOPICS.shortcuts }),
+            },
+          ]
+        : []),
       { id: 'app.allProjects', label: t('app.switcher.allProjects'), group: t('app.commands.groupApp'), icon: LibraryIcon, run: toAllProjects },
       ...others.map((p) => ({ id: `app.open.${p.id}`, label: t('app.commands.openProject', { name: p.name }), group: t('app.commands.groupApp'), icon: FolderOpen, run: () => open(p.id) })),
       { id: 'app.toggleRail', label: collapsed ? t('app.nav.expand') : t('app.nav.collapse'), group: t('app.commands.groupApp'), icon: collapsed ? PanelLeftOpen : PanelLeftClose, run: toggleRail },
@@ -101,7 +137,7 @@ function Layout() {
       { id: 'app.theme.system', label: t('app.commands.themeSystem'), group: t('app.commands.groupApp'), icon: Monitor, run: () => void setPrefs({ theme: 'system' }) },
       { id: 'app.lock', label: t('common.lock'), group: t('app.commands.groupApp'), icon: Lock, shortcut: key('L'), run: () => void lock() },
     ],
-    [t, key, go, collapsed, others.map((p) => p.id + p.name).join('|'), prefs.theme],
+    [t, key, go, collapsed, others.map((p) => p.id + p.name).join('|'), prefs.theme, routeName],
   );
 
   const switcherItems: MenuEntry[] = useMemo(

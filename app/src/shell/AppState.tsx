@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import type { UiLocale } from '../core/i18n/languages';
 import { EXAMPLE_KDF } from '../demo/exampleConstants';
 import type { Platform } from '../platform/types';
@@ -67,6 +67,11 @@ export interface AppStateValue {
   runSavers: () => Promise<void>;
   /** Keeps the idle auto-lock away until the returned release is called. Prefer `useHold`. */
   hold: () => () => void;
+  /**
+   * Changes whenever the unlocked library reports a change (a project renamed, created,
+   * deleted…), so whatever shows its list or a project's name re-renders.
+   */
+  libraryRevision: number;
 }
 
 const Ctx = createContext<AppStateValue | null>(null);
@@ -285,6 +290,12 @@ export function AppStateProvider({ platform: basePlatform, children, initialPhas
     setPhase(state === 'none' ? { name: 'welcome' } : state === 'noKeyring' ? { name: 'locked', reason: 'noKeyring' } : { name: 'locked' });
   }, [basePlatform]);
 
+  // The library's project list and names, followed live: a rename shows in the rail and the
+  // window title at once.
+  const unlockedLibrary = phase.name === 'library' || phase.name === 'project' ? phase.library : null;
+  const subscribeLibrary = useCallback((fn: () => void) => (unlockedLibrary ? unlockedLibrary.subscribe(() => fn()) : () => undefined), [unlockedLibrary]);
+  const libraryRevision = useSyncExternalStore(subscribeLibrary, () => unlockedLibrary?.revision ?? 0);
+
   // Auto-lock after the chosen minutes without keyboard, mouse or touch, unless held (an
   // import running). Checked often, so waking from sleep locks promptly.
   const unlockedPhase = phase.name === 'library' || phase.name === 'project';
@@ -333,8 +344,9 @@ export function AppStateProvider({ platform: basePlatform, children, initialPhas
       registerSaver,
       runSavers,
       hold,
+      libraryRevision,
     }),
-    [platform, examplePlatform, exampleFlag, phase, prefs, setPrefs, libraryOptions, unlocked, openProject, enterProject, closeProject, lock, locking, erased, startExample, leaveExample, registerSaver, runSavers, hold],
+    [platform, examplePlatform, exampleFlag, phase, prefs, setPrefs, libraryOptions, unlocked, openProject, enterProject, closeProject, lock, locking, erased, startExample, leaveExample, registerSaver, runSavers, hold, libraryRevision],
   );
   // Nothing renders until the language is known, so no screen flashes in the wrong one.
   if (!prefsReady) return null;

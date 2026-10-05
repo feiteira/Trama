@@ -6,7 +6,9 @@ import {
   canonicalise,
   canonicalText,
   createDocument,
+  createDocuments,
   deleteDocuments,
+  DocumentSlots,
   detachMedia,
   documentStats,
   editDocumentText,
@@ -16,6 +18,7 @@ import {
   restoreDocuments,
   setDocumentCase,
   setDocumentGroups,
+  setDocumentKind,
   uniqueName,
 } from './documents';
 import { createMemo } from './memos';
@@ -23,6 +26,7 @@ import { createCase } from './cases';
 import { createGroup } from './groups';
 import { listLog } from './log';
 import { makeTestProject, sha256hex } from './testing';
+import { JobStopped } from './jobs';
 import { ServiceError } from './undo';
 
 const TEXT = 'Interviewer: How did you start?\nAna: I started in Porto, with Rui.\nInterviewer: And then?';
@@ -146,7 +150,79 @@ describe('createDocument', () => {
   });
 });
 
+describe('createDocuments', () => {
+  it('creates a batch in one write: unique names, positions in order, one undo step, one log entry each', async () => {
+    const ctx = await makeTestProject();
+    await createDocument(ctx, { name: 'Answer', kind: 'survey', text: 'x' });
+    const progress: number[] = [];
+    const { documents, undo } = await createDocuments(
+      ctx,
+      [
+        { name: 'Answer', kind: 'survey', text: 'one', original: { bytes: new Uint8Array([1]), filename: 'a.txt', mime: 'text/plain' } },
+        { name: 'answer', kind: 'survey', text: 'two' },
+        { name: 'Other', kind: 'survey', text: 'three\r\n' },
+      ],
+      { onProgress: (d) => void progress.push(d) },
+    );
+    expect(documents.map((d) => d.name)).toEqual(['Answer (2)', 'answer (3)', 'Other']);
+    expect(documents[0]!.order).toBeLessThan(documents[1]!.order);
+    expect(documents[1]!.order).toBeLessThan(documents[2]!.order);
+    expect((await getText(ctx, documents[2]!.id)).text).toBe('three\n');
+    expect(progress).toEqual([1, 2, 3]);
+    expect(undo.detail).toBe('×3');
+    expect(await listLog(ctx, { action: 'document.add' })).toHaveLength(4);
+    await undo.undo();
+    expect((await ctx.store.list('document')).map((d) => d.name)).toEqual(['Answer']);
+  });
+
+  it('writes nothing, and removes stored files, when one input is invalid or the batch stops', async () => {
+    const ctx = await makeTestProject();
+    await expect(createDocuments(ctx, [{ name: 'A', kind: 'text', text: 'a' }, { name: ' ', kind: 'text', text: 'b' }])).rejects.toMatchObject({ code: 'invalid_argument' });
+    await expect(createDocuments(ctx, [{ name: 'A', kind: 'text', text: 'a', case_id: 'nope' }])).rejects.toMatchObject({ code: 'not_found' });
+    let asked = 0;
+    const file = { bytes: new Uint8Array([1, 2]), filename: 'a.pdf', mime: 'application/pdf' };
+    await expect(
+      createDocuments(ctx, [{ name: 'A', kind: 'pdf', text: 'a', original: file }, { name: 'B', kind: 'pdf', text: 'b', original: file }], { shouldStop: () => ++asked > 1 }),
+    ).rejects.toBeInstanceOf(JobStopped);
+    expect(await ctx.store.list('document')).toHaveLength(0);
+    expect(ctx.blobs.size).toBe(0);
+  });
+
+  it('shares names and positions across calls through DocumentSlots, reading the documents once', async () => {
+    const ctx = await makeTestProject();
+    await createDocument(ctx, { name: 'Interview', kind: 'text', text: 'x' });
+    const slots = await DocumentSlots.load(ctx);
+    const list = ctx.store.list.bind(ctx.store);
+    let listed = 0;
+    ctx.store.list = ((kind: Parameters<typeof list>[0], o?: Parameters<typeof list>[1]) => {
+      if (kind === 'document') listed++;
+      return list(kind, o);
+    }) as typeof list;
+    const a = await createDocument(ctx, { name: 'Interview', kind: 'text', text: 'a' }, { slots });
+    const b = await createDocument(ctx, { name: 'Interview', kind: 'text', text: 'b' }, { slots });
+    expect([a.document.name, b.document.name]).toEqual(['Interview (2)', 'Interview (3)']);
+    expect(b.document.order).toBeGreaterThan(a.document.order);
+    expect(listed).toBe(0);
+    // A name given back is free again.
+    expect(slots.take('Fresh').name).toBe('Fresh');
+    slots.release('Fresh');
+    expect(slots.take('fresh').name).toBe('fresh');
+  });
+});
+
 describe('document properties', () => {
+  it('changes the kind of a document, logged and undoable', async () => {
+    const { ctx, doc } = await setup();
+    const same = await setDocumentKind(ctx, doc.id, doc.kind);
+    expect(same.undo.weight).toBe(0);
+    const r = await setDocumentKind(ctx, doc.id, 'note');
+    expect(r.document.kind).toBe('note');
+    expect((await listLog(ctx, { action: 'document.edit' }))[0]!.summary).toBe(`"${doc.name}": ${doc.kind} → note`);
+    await r.undo.undo();
+    expect((await ctx.store.get('document', doc.id))!.kind).toBe(doc.kind);
+    await expect(setDocumentKind(ctx, doc.id, 'video' as never)).rejects.toMatchObject({ code: 'invalid_argument' });
+  });
+
   it('renames, unique-ifying and logging', async () => {
     const { ctx, doc } = await setup();
     await createDocument(ctx, { name: 'Interview 2', kind: 'text', text: '' });

@@ -4,7 +4,7 @@ import { LOG_ACTIONS } from '../../core/model/types';
 import { log } from '../../core/i18n/locales/en/log';
 import { lookup } from '../../core/i18n/translate';
 import {
-  actionsOf, beforeBound, buildSentence, groupByDay, groupOf, matchesText, onOrAfter, parseSummary, sentenceText, splitTemplate, TEMPLATES, templateKey,
+  actionsOf, afterBound, beforeBound, buildSentence, groupByDay, groupOf, matchesText, onOrAfter, parseSummary, sentenceText, splitTemplate, TEMPLATES, templateKey,
 } from './sentence';
 
 const en = { log };
@@ -97,6 +97,9 @@ describe('groups and filters', () => {
       ]);
       expect(beforeBound('2026-10-04')).toEqual({ at: '2026-10-04T23:00:00Z', updated_at_hlc: '' });
       expect(beforeBound(null)).toBeUndefined();
+      expect(afterBound('2026-10-05')).toEqual({ at: '2026-10-04T23:00:00Z', updated_at_hlc: '' });
+      expect(afterBound(null)).toBeUndefined();
+      expect(afterBound('not a date')).toBeUndefined();
       expect(onOrAfter('2026-10-04T23:30:00Z', '2026-10-05')).toBe(true);
       expect(onOrAfter('2026-10-04T22:30:00Z', '2026-10-05')).toBe(false);
     } finally {
@@ -107,6 +110,16 @@ describe('groups and filters', () => {
   it('matches text without accents or case', () => {
     expect(matchesText('Criou o código “Confiança”', 'confianca codigo')).toBe(true);
     expect(matchesText('Created', 'deleted')).toBe(false);
+  });
+});
+
+describe('batches of codes', () => {
+  it('reads a codebook import and a batch of edits', () => {
+    expect(render('code.create', '×5 → "book.qdc" ~1')).toBe('Created 5 codes from “book.qdc” ~1');
+    expect(render('code.create', '~1 ×2')).toBe('Created 2 codes ~1');
+    expect(render('code.edit', '×3 → "book.csv"')).toBe('Edited 3 codes from “book.csv”');
+    expect(render('coder.edit', '"Rui" → "Rui Lopes"')).toBe('Renamed the coder “Rui” to “Rui Lopes”');
+    expect(render('coder.add', '"Rui"')).toBe('Added the coder “Rui”');
   });
 });
 

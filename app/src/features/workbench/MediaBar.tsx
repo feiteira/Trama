@@ -16,6 +16,8 @@ export interface MediaHandle {
   seek: (ms: number, play?: boolean) => void;
   toggle: () => void;
   skip: (deltaMs: number) => void;
+  /** Playing, or the focus is on the player: Alt+←/→ skip rather than go back. */
+  active: () => boolean;
 }
 
 export interface MediaBarProps {
@@ -33,6 +35,7 @@ export const MediaBar = forwardRef<MediaHandle, MediaBarProps>(function MediaBar
   const { t } = useI18n();
   const project = useProject();
   const el = useRef<HTMLMediaElement | null>(null);
+  const bar = useRef<HTMLDivElement>(null);
   const [url, setUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [playing, setPlaying] = useState(false);
@@ -87,7 +90,11 @@ export const MediaBar = forwardRef<MediaHandle, MediaBarProps>(function MediaBar
     if (!m) return;
     m.currentTime = Math.max(0, Math.min(m.duration || Infinity, m.currentTime + delta / 1000));
   }, []);
-  useImperativeHandle(ref, () => ({ seek, toggle, skip }), [seek, toggle, skip]);
+  const active = useCallback(() => {
+    const m = el.current;
+    return (!!m && !m.paused) || !!bar.current?.contains(document.activeElement);
+  }, []);
+  useImperativeHandle(ref, () => ({ seek, toggle, skip, active }), [seek, toggle, skip, active]);
 
   useEffect(() => {
     if (el.current) el.current.playbackRate = rate;
@@ -117,7 +124,7 @@ export const MediaBar = forwardRef<MediaHandle, MediaBarProps>(function MediaBar
 
   const name = media.filename;
   return (
-    <div className="wb-media" data-testid="media-bar">
+    <div ref={bar} className="wb-media" data-testid="media-bar">
       {video ? (
         <div className={showVideo && url ? 'wb-media__video' : 'wb-media__video is-hidden'}>
           <video {...bind} playsInline />

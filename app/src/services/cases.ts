@@ -193,18 +193,37 @@ export async function setCaseValue(
 
 /** Deletes a case (and memos about it); its documents stay, without a case. */
 export async function deleteCase(ctx: ProjectContext, id: string): Promise<{ batch: string; documents: number; undo: Undoable }> {
-  const c = await need(ctx, 'case', id);
+  await need(ctx, 'case', id);
+  const { batch, documents, undo } = await deleteCases(ctx, [id]);
+  return { batch, documents, undo };
+}
+
+/**
+ * Deletes cases (and the memos about them) as one batch: one undo step, one audit-trail entry.
+ * Their documents stay, without a case. Ids of cases that are gone already are skipped.
+ */
+export async function deleteCases(ctx: ProjectContext, ids: readonly string[]): Promise<{ batch: string; cases: number; documents: number; memos: number; undo: Undoable }> {
+  const cases: Case[] = [];
+  for (const id of new Set(ids)) {
+    const c = await ctx.store.get('case', id);
+    if (c && !c.deleted) cases.push(c);
+  }
+  if (!cases.length) return { batch: '', cases: 0, documents: 0, memos: 0, undo: noopUndo('case.delete') };
+  const caseIds = cases.map((c) => c.id);
   const plan = new Plan();
-  const docs = await ctx.store.list('document', { where: 'case_id = ?', params: [id] });
+  const docs = await listIn(ctx.store, 'document', 'case_id', caseIds);
   for (const d of docs) plan.change('document', d, { case_id: null });
-  for (const m of await listIn(ctx.store, 'memo', 'target_id', [id])) if (m.target.kind === 'case') plan.remove('memo', m);
-  plan.remove('case', c);
+  const memos = (await listIn(ctx.store, 'memo', 'target_id', caseIds)).filter((m) => m.target.kind === 'case');
+  for (const m of memos) plan.remove('memo', m);
+  for (const c of cases) plan.remove('case', c);
+  const names = cases.map((c) => q(c.name));
+  const summary = cases.length === 1 ? names[0]! : `${names.slice(0, 5).join(', ')}${cases.length > 5 ? ', …' : ''} ×${cases.length}`;
   const { batch, undo } = await commit(ctx, plan, {
     label: 'case.delete',
-    detail: q(c.name),
-    logs: [{ action: 'case.delete', summary: q(c.name), target: { kind: 'case', id } }],
+    detail: summary,
+    logs: [{ action: 'case.delete', summary, ...(cases.length === 1 ? { target: { kind: 'case', id: cases[0]!.id } } : {}) }],
   });
-  return { batch, documents: docs.length, undo };
+  return { batch, cases: cases.length, documents: docs.length, memos: memos.length, undo };
 }
 
 /**
@@ -268,23 +287,27 @@ export async function createAttribute(ctx: ProjectContext, input: NewAttribute):
   return { attribute: saved.get('attribute', id), undo };
 }
 
+interface Retyped {
+  /** The attribute's options afterwards (choice only), without repeats. */
+  options: string[];
+  /** Cases whose value changes, with their new values. */
+  changes: { record: Case; values: Record<string, AttributeValue> }[];
+  /** Values cleared because they do not convert (or are no longer an option). */
+  cleared: number;
+}
+
 /**
- * Edits an attribute. Changing its type converts every case's value; values that do not
- * convert (or, for a choice, are no longer an option) are cleared, and counted in `cleared`.
- * Turning an attribute into a choice makes its existing values the options.
+ * What giving an attribute a new type (and, for a choice, new options) does to every case's
+ * value, without writing anything: values are converted; those that do not convert, or are no
+ * longer one of the options, are cleared. Turning an attribute into a choice without options
+ * given makes the existing values its options.
  */
-export async function updateAttribute(
-  ctx: ProjectContext,
-  id: string,
-  patch: Partial<Pick<Attribute, 'name' | 'type' | 'options' | 'description'>>,
-): Promise<{ attribute: Attribute; cleared: number; undo: Undoable }> {
-  const attr = await need(ctx, 'attribute', id);
-  const type = patch.type ?? attr.type;
-  const plan = new Plan();
-  const cases = await ctx.store.list('case');
+function retype(attr: Attribute, type: AttributeType, givenOptions: readonly string[] | undefined, cases: readonly Case[]): Retyped {
+  const id = attr.id;
+  let options = type === 'choice' ? (givenOptions ?? attr.options).map(tidy).filter(Boolean) : [];
+  const changes: Retyped['changes'] = [];
   let cleared = 0;
-  let options = type === 'choice' ? (patch.options ?? attr.options).map(tidy).filter(Boolean) : [];
-  if (type !== attr.type || patch.options) {
+  if (type !== attr.type || givenOptions) {
     if (type === 'choice' && attr.type !== 'choice') {
       // Existing values become options, after any given ones.
       for (const c of cases) {
@@ -303,10 +326,39 @@ export async function updateAttribute(
         delete values[id];
         cleared++;
       } else values[id] = v;
-      plan.change('case', c, { values });
+      changes.push({ record: c, values });
     }
   }
   options = [...new Map(options.map((o) => [nameKey(o), o])).values()];
+  return { options, changes, cleared };
+}
+
+/**
+ * How many cases would lose their value if the attribute became `type` (with these options,
+ * for a choice). Changes nothing: the screen asks before an edit that clears values.
+ */
+export async function countLostOnTypeChange(ctx: ProjectContext, attributeId: string, type: AttributeType, options?: readonly string[]): Promise<number> {
+  const attr = await need(ctx, 'attribute', attributeId);
+  if (type === attr.type && !options) return 0;
+  return retype(attr, type, options, await ctx.store.list('case')).cleared;
+}
+
+/**
+ * Edits an attribute. Changing its type converts every case's value; values that do not
+ * convert (or, for a choice, are no longer an option) are cleared, and counted in `cleared`
+ * (`countLostOnTypeChange` tells beforehand). Turning an attribute into a choice makes its
+ * existing values the options.
+ */
+export async function updateAttribute(
+  ctx: ProjectContext,
+  id: string,
+  patch: Partial<Pick<Attribute, 'name' | 'type' | 'options' | 'description'>>,
+): Promise<{ attribute: Attribute; cleared: number; undo: Undoable }> {
+  const attr = await need(ctx, 'attribute', id);
+  const type = patch.type ?? attr.type;
+  const plan = new Plan();
+  const { options, changes, cleared } = retype(attr, type, patch.options, await ctx.store.list('case'));
+  for (const c of changes) plan.change('case', c.record, { values: c.values });
   const next: Partial<Attribute> = { type, options };
   if (patch.name !== undefined) next.name = requireName(patch.name);
   if (patch.description !== undefined) next.description = patch.description;

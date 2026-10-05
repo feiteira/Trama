@@ -187,23 +187,7 @@ export function safeFileName(name: string, fallback: string): string {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Attribute type changes
-
-/** How many cases hold a value that would be cleared by turning the attribute into `type`. */
-export function lostOnTypeChange(attr: Attribute, type: AttributeType, cases: readonly Case[], options?: readonly string[]): number {
-  if (type === attr.type) return 0;
-  let lost = 0;
-  const opts = options?.map((o) => fold(o));
-  for (const c of cases) {
-    const v = c.values[attr.id];
-    if (v === undefined || v === null) continue;
-    const r = coerceValue(type, v);
-    if (!r.ok || r.value === null) lost++;
-    // Turning into a choice keeps every value (they become options) unless options are given.
-    else if (type === 'choice' && opts && opts.length && typeof r.value === 'string' && !opts.includes(fold(r.value))) lost++;
-  }
-  return lost;
-}
+// Attributes
 
 /** Choice options typed one per line: trimmed, empty lines and repeats dropped. */
 export function parseOptions(text: string): string[] {

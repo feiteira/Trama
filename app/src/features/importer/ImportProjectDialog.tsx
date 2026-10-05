@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { FileArchive, FolderSync, GitMerge, KeyRound, Users } from 'lucide-react';
-import { importQdpx } from '../../core/export/refi';
+import { CircleCheck, FileArchive, FolderOpen, FolderSync, GitMerge, KeyRound, Users } from 'lucide-react';
+import { importQdpx, type QdpxWarning } from '../../core/export/refi';
 import type { ProjectBundle } from '../../core/export/bundle';
 import type { TramaBundle, Unlock } from '../../core/export/trama';
 import { LIMITS } from '../../core/model/types';
@@ -33,7 +33,10 @@ type Step =
       same: ProjectInfo | null;
       /** A backup of this library: its `me` is right here too. */
       ownMe: string | null;
+      /** What a REFI-QDA project could not carry over. */
+      issues: QdpxWarning[];
     }
+  | { name: 'imported'; info: ProjectInfo }
   | { name: 'error'; file: string; message: string };
 
 /**
@@ -59,13 +62,13 @@ export function ImportProjectDialog({ open, onClose }: { open: boolean; onClose:
   closeRef.current = onClose;
   useHold(working !== null);
 
-  const toSummary = (file: string, type: 'trama' | 'qdpx', bundle: ProjectBundle, ownMe: string | null) => {
+  const toSummary = (file: string, type: 'trama' | 'qdpx', bundle: ProjectBundle, ownMe: string | null, issues: QdpxWarning[] = []) => {
     const summary = summariseBundle(bundle);
     const same = sameProjectIn(bundle, library.projects);
     setName(same ? copyName(summary.name, library.projects.map((p) => p.name)) : summary.name || file.replace(/\.[^.]+$/, ''));
     setMode('merge');
     setError(null);
-    setStep({ name: 'summary', file, type, bundle, summary, same, ownMe });
+    setStep({ name: 'summary', file, type, bundle, summary, same, ownMe, issues });
   };
 
   const read = async (file: IncomingFile) => {
@@ -79,7 +82,7 @@ export function ImportProjectDialog({ open, onClose }: { open: boolean; onClose:
       }
       if (type === 'qdpx') {
         const bundle = await importQdpx(bytes, { defaultCoderName: prefs.coderName.trim() || t('importer.project.defaultCoder') });
-        toSummary(file.name, 'qdpx', bundle, null);
+        toSummary(file.name, 'qdpx', bundle, null, bundle.issues);
         return;
       }
       const opened = await openTrama(bytes, null, () => library.copyKeys(), platform.kdf);
@@ -162,9 +165,10 @@ export function ImportProjectDialog({ open, onClose }: { open: boolean; onClose:
         const id = step.bundle.project.id;
         const keepId = !!id && !step.same && !(await platform.projects.exists(id));
         const me = step.ownMe ?? meIn(step.summary.coders, prefs.coderName);
-        const project = await library.importBundle(step.bundle, { name: clean, keepId, me });
-        toast.show({ message: t('importer.project.imported', { name: project.info.name }), tone: 'success' });
-        enterProject(project);
+        // Added to the library without leaving the screen: the researcher chooses to open it.
+        const info = await library.importBundle(step.bundle, { name: clean, keepId, me, open: false });
+        setWorking(null);
+        setStep({ name: 'imported', info });
       }
     } catch (e) {
       console.error('importing a project file failed', e);
@@ -216,6 +220,45 @@ export function ImportProjectDialog({ open, onClose }: { open: boolean; onClose:
         <Notice tone="danger" data-testid="import-project-error">
           {step.message}
         </Notice>
+      </Dialog>
+    );
+  }
+
+  if (step.name === 'imported') {
+    const { info } = step;
+    const openNow = async () => {
+      setWorking('import');
+      try {
+        enterProject(await library.openProject(info.id));
+      } catch (e) {
+        setWorking(null);
+        toast.error(e);
+      }
+    };
+    return (
+      <Dialog
+        open={open}
+        onClose={onClose}
+        dismissible={dismissible}
+        title={t('importer.project.importedTitle', { name: info.name })}
+        size="sm"
+        onSubmit={() => void openNow()}
+        data-testid="import-project-dialog"
+        footer={
+          <>
+            <Button variant="ghost" onClick={onClose} disabled={!dismissible} data-testid="import-project-later">
+              {t('importer.project.later')}
+            </Button>
+            <Button type="submit" variant="primary" icon={FolderOpen} busy={working === 'import'} data-autofocus data-testid="import-project-open">
+              {t('importer.project.openNow')}
+            </Button>
+          </>
+        }
+      >
+        <div className="imp-proj__done" data-testid="import-project-done">
+          <CircleCheck size={20} strokeWidth={1.75} aria-hidden className="imp-proj__done-icon" />
+          <p>{t('importer.project.importedBody')}</p>
+        </div>
       </Dialog>
     );
   }
@@ -287,7 +330,7 @@ export function ImportProjectDialog({ open, onClose }: { open: boolean; onClose:
 
   const s = step.summary;
   const merging = step.same !== null && mode === 'merge';
-  const groups = step.type === 'qdpx' ? groupQdpxWarnings(step.bundle.warnings) : [];
+  const groups = step.type === 'qdpx' ? groupQdpxWarnings(step.issues) : [];
   // Documents always; the rest when the file has any.
   const counts = [
     tp('importer.project.counts.documents', s.counts.document),
@@ -374,7 +417,7 @@ export function ImportProjectDialog({ open, onClose }: { open: boolean; onClose:
           <section className="imp-proj__lost" aria-labelledby="imp-proj-lost" data-testid="import-project-warnings">
             <h3 id="imp-proj-lost" className="imp-proj__lost-title">
               {t('importer.project.lostTitle')}
-              <span className="imp-proj__lost-count">{tp('importer.project.lostCount', step.bundle.warnings.length)}</span>
+              <span className="imp-proj__lost-count">{tp('importer.project.lostCount', step.issues.length)}</span>
             </h3>
             {groups.map((g) => (
               <div key={g.group} className="imp-proj__group">

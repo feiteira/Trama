@@ -1,7 +1,8 @@
 // What a REFI-QDA project import could not carry over, grouped for the summary shown before the
-// project is created. The reader (core/export/refi/qdpx-import.ts) words its warnings in plain
-// English; the known ones are recognised here and translated, anything else is shown as it is.
+// project is created. The reader (core/export/refi/qdpx-import.ts) reports each warning with a
+// stable code, a count and the item it names; each code has its sentence in the catalogs.
 
+import type { QdpxWarning, QdpxWarningCode } from '../../core/export/refi';
 import type { Vars } from '../../core/i18n/translate';
 import type { MessageKey, PluralKey } from '../../ui/i18n';
 
@@ -13,72 +14,66 @@ export type QdpxNote =
   | { group: WarningGroup; key: MessageKey; vars: Vars; raw: string }
   | { group: WarningGroup; raw: string };
 
-type Counted = [RegExp, WarningGroup, PluralKey];
+/** Warnings about one named item ("The PDF “Report” was skipped…"); every other code is a count. */
+const NAMED: Partial<Record<QdpxWarningCode, true>> = { pdfSkipped: true, pdfNoText: true, videoSkipped: true, audioSkipped: true, tooLong: true, unsafePath: true };
 
-const P = 'importer.qdpx.counted.';
-// "<n> …" sentences (the COUNTED table of the reader), by their wording after the number.
-const COUNTED: Counted[] = [
-  [/^area selection\(s\) on PDF pages/, 'coding', `${P}pdfSelection` as PluralKey],
-  [/^picture source\(s\)/, 'sources', `${P}picture` as PluralKey],
-  [/^coded area\(s\) on pictures/, 'coding', `${P}pictureSelection` as PluralKey],
-  [/^coded audio\/video time range/, 'coding', `${P}mediaSelection` as PluralKey],
-  [/^audio\/video file\(s\) stored outside/, 'sources', `${P}externalMedia` as PluralKey],
-  [/^PDF file\(s\) stored outside/, 'sources', `${P}externalPdf` as PluralKey],
-  [/^source\(s\) whose text file is stored outside/, 'sources', `${P}externalText` as PluralKey],
-  [/^file\(s\) referenced by the project were missing/, 'sources', `${P}missingFile` as PluralKey],
-  [/^coding\(s\) pointing to a code that does not exist/, 'coding', `${P}missingCode` as PluralKey],
-  [/^coded segment\(s\) with positions outside/, 'coding', `${P}badSpan` as PluralKey],
-  [/^coded segment\(s\) ran past the end/, 'coding', `${P}clampedSpan` as PluralKey],
-  [/^duplicate coding\(s\)/, 'coding', `${P}duplicateCoding` as PluralKey],
-  [/^coding\(s\) to cases/, 'cases', `${P}caseCoding` as PluralKey],
-  [/^document\(s\) belonged to more than one case/, 'cases', `${P}twoCases` as PluralKey],
-  [/^case assignment\(s\) of a text selection/, 'cases', `${P}selectionCase` as PluralKey],
-  [/^code reference\(s\) on cases/, 'cases', `${P}caseCodeRef` as PluralKey],
-  [/^link\(s\) between objects/, 'other', `${P}link` as PluralKey],
-  [/^set\(s\) of codes/, 'other', `${P}codeSet` as PluralKey],
-  [/^memo\(s\) listed in sets/, 'other', `${P}noteMember` as PluralKey],
-  [/^graph\(s\)/, 'other', `${P}graph` as PluralKey],
-  [/^attribute value\(s\) did not match/, 'cases', `${P}badValue` as PluralKey],
-  [/^date-time value\(s\)/, 'cases', `${P}timeDropped` as PluralKey],
-  [/^document variable value\(s\) conflicted/, 'cases', `${P}conflictingValue` as PluralKey],
-  [/^document variable value\(s\) were stored on a case/, 'cases', `${P}sharedCaseValues` as PluralKey],
-  [/^code\(s\) marked as folders/, 'other', `${P}madeCodable` as PluralKey],
-  [/^long segment comment\(s\)/, 'coding', `${P}truncatedComment` as PluralKey],
-  [/^memo\(s\) were too long/, 'other', `${P}truncatedMemo` as PluralKey],
-  [/^document\(s\) had no text/, 'sources', `${P}noText` as PluralKey],
-  [/^memo reference\(s\)/, 'other', `${P}unresolvedNote` as PluralKey],
-  [/^transcript time stamp\(s\)/, 'sources', `${P}syncPoint` as PluralKey],
-  [/^text\(s\) were read from Word files/, 'sources', `${P}richTextOnly` as PluralKey],
-  [/^item\(s\) could not be imported/, 'other', `${P}invalidRecord` as PluralKey],
-];
+/** Where each warning is listed. A new code fails the typecheck until it is placed (and worded). */
+const GROUP: Record<QdpxWarningCode, WarningGroup> = {
+  pdfSkipped: 'sources',
+  pdfNoText: 'sources',
+  videoSkipped: 'sources',
+  audioSkipped: 'sources',
+  tooLong: 'sources',
+  unsafePath: 'other',
+  pdfSelection: 'coding',
+  picture: 'sources',
+  pictureSelection: 'coding',
+  mediaSelection: 'coding',
+  externalMedia: 'sources',
+  externalPdf: 'sources',
+  externalText: 'sources',
+  missingFile: 'sources',
+  missingCode: 'coding',
+  badSpan: 'coding',
+  clampedSpan: 'coding',
+  duplicateCoding: 'coding',
+  caseCoding: 'cases',
+  twoCases: 'cases',
+  selectionCase: 'cases',
+  caseCodeRef: 'cases',
+  link: 'other',
+  codeSet: 'other',
+  noteMember: 'other',
+  graph: 'other',
+  badValue: 'cases',
+  timeDropped: 'cases',
+  conflictingValue: 'cases',
+  sharedCaseValues: 'cases',
+  madeCodable: 'other',
+  truncatedComment: 'coding',
+  truncatedMemo: 'other',
+  noText: 'sources',
+  unresolvedNote: 'other',
+  syncPoint: 'sources',
+  richTextOnly: 'sources',
+  invalidRecord: 'other',
+};
 
-const NAMED: [RegExp, WarningGroup, MessageKey][] = [
-  [/^The PDF "(.*)" was skipped: neither the PDF nor its text was included\.$/, 'sources', 'importer.qdpx.named.pdfSkipped'],
-  [/^The PDF "(.*)" was imported without text/, 'sources', 'importer.qdpx.named.pdfNoText'],
-  [/^The video "(.*)" was skipped/, 'sources', 'importer.qdpx.named.videoSkipped'],
-  [/^The audio "(.*)" was skipped/, 'sources', 'importer.qdpx.named.audioSkipped'],
-  [/^The document "(.*)" was skipped: its text is longer/, 'sources', 'importer.qdpx.named.tooLong'],
-  [/^A file with an unsafe path was ignored: (.*)$/, 'other', 'importer.qdpx.named.unsafePath'],
-];
+const keyOf = (code: QdpxWarningCode): string => (NAMED[code] ? `importer.qdpx.named.${code}` : `importer.qdpx.counted.${code}`);
 
 /** Every catalog key used here (checked against the catalogs by a test). */
-export const QDPX_KEYS: readonly string[] = [...COUNTED.map((c) => c[2]), ...NAMED.map((n) => n[2])];
+export const QDPX_KEYS: readonly string[] = (Object.keys(GROUP) as QdpxWarningCode[]).map(keyOf);
 
-export function classifyQdpxWarning(raw: string): QdpxNote {
-  const counted = /^(\d+) (.*)$/.exec(raw);
-  if (counted) {
-    const rest = counted[2]!;
-    for (const [re, group, plural] of COUNTED) if (re.test(rest)) return { group, plural, n: Number(counted[1]), raw };
-  }
-  for (const [re, group, key] of NAMED) {
-    const m = re.exec(raw);
-    if (m) return { group, key, vars: { name: m[1] ?? '' }, raw };
-  }
-  return { group: 'other', raw };
+export function classifyQdpxWarning(w: QdpxWarning): QdpxNote {
+  const group = GROUP[w.code];
+  // A code this version does not know (a newer reader): shown as the reader worded it.
+  if (!group) return { group: 'other', raw: w.message };
+  if (NAMED[w.code]) return { group, key: keyOf(w.code) as MessageKey, vars: { name: w.detail ?? '' }, raw: w.message };
+  return { group, plural: keyOf(w.code) as PluralKey, n: w.count, raw: w.message };
 }
 
 /** The warnings by group, in display order; empty groups left out. */
-export function groupQdpxWarnings(warnings: readonly string[]): { group: WarningGroup; notes: QdpxNote[] }[] {
+export function groupQdpxWarnings(warnings: readonly QdpxWarning[]): { group: WarningGroup; notes: QdpxNote[] }[] {
   const by = new Map<WarningGroup, QdpxNote[]>();
   for (const w of warnings) {
     const n = classifyQdpxWarning(w);

@@ -55,12 +55,14 @@ export interface IconButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonEle
   /** Pressed state, for toggles (aria-pressed). */
   pressed?: boolean;
   tooltipSide?: 'top' | 'bottom' | 'left' | 'right';
+  /** Shows a spinner in place of the icon and ignores clicks. */
+  busy?: boolean;
   'data-testid'?: string;
 }
 
 /** A square button with only an icon: its label is its accessible name and its tooltip. */
 export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(function IconButton(
-  { icon: Icon, label, shortcut, variant = 'ghost', size = 'md', pressed, className, type = 'button', tooltipSide = 'bottom', ...rest },
+  { icon: Icon, label, shortcut, variant = 'ghost', size = 'md', pressed, className, type = 'button', tooltipSide = 'bottom', busy = false, onClick, ...rest },
   ref,
 ) {
   return (
@@ -70,10 +72,12 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(functio
         type={type}
         aria-label={label}
         aria-pressed={pressed}
-        className={cx('btn', `btn--${variant}`, `btn--${size}`, 'btn--icon-only', pressed && 'btn--pressed', className)}
+        aria-busy={busy || undefined}
+        className={cx('btn', `btn--${variant}`, `btn--${size}`, 'btn--icon-only', pressed && 'btn--pressed', busy && 'btn--busy', className)}
+        onClick={busy ? (e) => e.preventDefault() : onClick}
         {...rest}
       >
-        <Icon size={ICON_SIZE[size]} aria-hidden strokeWidth={1.75} />
+        {busy ? <Spinner size={ICON_SIZE[size]} /> : <Icon size={ICON_SIZE[size]} aria-hidden strokeWidth={1.75} />}
       </button>
     </Tooltip>
   );

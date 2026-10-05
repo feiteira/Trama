@@ -189,7 +189,8 @@ export const workbench: Messages['workbench'] = {
     remove: 'Remover a codificação selecionada',
     undo: 'Anular, refazer',
     playPause: 'Reproduzir ou pausar',
-    skip: 'Recuar ou avançar 5 segundos',
+    skip: 'Recuar ou avançar 5 segundos durante a reprodução',
+    skipAlways: 'Recuar ou avançar 5 segundos, a qualquer momento',
     playHere: 'Reproduzir a partir do parágrafo do cursor',
   },
   goto: {

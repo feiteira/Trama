@@ -219,7 +219,12 @@ export interface ApplyResult {
  * through `applyTextEdits`, so codings stay on their words (and their text shows the
  * replacement) and transcript timestamps move along.
  */
-export async function apply(ctx: ProjectContext, pseudonymIds?: string[]): Promise<ApplyResult> {
+export interface ApplyOptions {
+  /** Called with how many documents are done out of how many, before the first and after each; awaited. */
+  onProgress?: (done: number, total: number) => void | Promise<void>;
+}
+
+export async function apply(ctx: ProjectContext, pseudonymIds?: string[], opts: ApplyOptions = {}): Promise<ApplyResult> {
   const rules = await selected(ctx, pseudonymIds);
   if (!rules.length) return { replacements: 0, documents: 0, removedCodings: 0, undo: noopUndo('pseudonym.apply') };
   const counts = new Map<string, number>();
@@ -227,20 +232,25 @@ export async function apply(ctx: ProjectContext, pseudonymIds?: string[]): Promi
   const docNames: string[] = [];
   let replacements = 0;
   let removedCodings = 0;
-  for (const doc of await ctx.store.list('document', { order: 'sort, id' })) {
+  const docs = await ctx.store.list('document', { order: 'sort, id' });
+  await opts.onProgress?.(0, docs.length);
+  for (let i = 0; i < docs.length; i++) {
+    const doc = docs[i]!;
     const dt = await ctx.store.get('doctext', doc.id);
-    if (!dt || dt.deleted) continue;
-    const planned = planText(dt.text, rules);
-    if (!planned.matches.length) continue;
-    const { edits } = replaceAll(dt.text, planned.edits);
-    for (const [id, n] of planned.counts) counts.set(id, (counts.get(id) ?? 0) + n);
-    replacements += planned.matches.length;
-    if (edits.length) {
-      const r = await applyTextEdits(ctx, doc.id, edits, { log: false, current: dt });
-      parts.push(r.undo);
-      removedCodings += r.removedCodings;
+    const planned = dt && !dt.deleted ? planText(dt.text, rules) : null;
+    if (dt && planned?.matches.length) {
+      const { edits } = replaceAll(dt.text, planned.edits);
+      for (const [id, n] of planned.counts) counts.set(id, (counts.get(id) ?? 0) + n);
+      replacements += planned.matches.length;
+      if (edits.length) {
+        const r = await applyTextEdits(ctx, doc.id, edits, { log: false, current: dt });
+        parts.push(r.undo);
+        removedCodings += r.removedCodings;
+      }
+      docNames.push(doc.name);
     }
-    docNames.push(doc.name);
+    // The last step reports once the key's entries are marked applied too.
+    if (i + 1 < docs.length) await opts.onProgress?.(i + 1, docs.length);
   }
   const now = new Date().toISOString();
   const plan = new Plan();
@@ -249,14 +259,17 @@ export async function apply(ctx: ProjectContext, pseudonymIds?: string[]): Promi
   const summary = `×${replacements} → ${shown || '∅'}`;
   const { undo } = await commit(ctx, plan, { label: 'pseudonym.apply', detail: summary, logs: [{ action: 'pseudonym.apply', summary }] });
   parts.push(undo);
+  await opts.onProgress?.(docs.length, docs.length);
   return { replacements, documents: docNames.length, removedCodings, undo: combineUndo('pseudonym.apply', summary, parts) };
 }
 
 // ---------------------------------------------------------------------------------------------
 // Suggestions
 
-// Capitalised words that are rarely names, in the languages of the interface. A tiny list on
-// purpose: suggestions are a starting point the researcher reviews, not a detector.
+// Capitalised words that are rarely names, in the languages of the interface: function words,
+// the words people start spoken sentences with ("Now…", "Well…", "Então…", "Bueno…"), fillers,
+// days and months. A short list on purpose: suggestions are a starting point the researcher
+// reviews, not a detector, and a word that is also a name (Rosa, Will, Grace) stays out of it.
 const COMMON = new Set(
   [
     // en
@@ -265,16 +278,34 @@ const COMMON = new Set(
     'dr', 'what', 'when', 'where', 'why', 'how', 'who', 'if', 'in', 'on', 'at', 'of', 'for', 'with', 'to', 'is', 'was',
     'not', 'also', 'there', 'here', 'just', 'like', 'yeah', 'um', 'uh', 'god', 'monday', 'tuesday', 'wednesday',
     'thursday', 'friday', 'saturday', 'sunday', 'january', 'february', 'march', 'april', 'may', 'june', 'july', 'august',
-    'september', 'october', 'november', 'december', 'english', 'portuguese', 'spanish', 'interviewer', 'interviewee',
+    'september', 'october', 'november', 'december', 'mondays', 'tuesdays', 'wednesdays', 'thursdays', 'fridays', 'saturdays',
+    'sundays', 'english', 'portuguese', 'spanish', 'interviewer', 'interviewee',
     'respondent', 'participant', 'speaker', 'facilitator', 'moderator',
+    'now', 'maybe', 'actually', 'anyway', 'anyways', 'still', 'sure', 'right', 'alright', 'really', 'because', 'although',
+    'though', 'basically', 'honestly', 'obviously', 'perhaps', 'sometimes', 'usually', 'exactly', 'absolutely',
+    'definitely', 'probably', 'certainly', 'indeed', 'let', 'after', 'before', 'even', 'only', 'first', 'finally', 'yep',
+    'nope', 'nah', 'hmm', 'hm', 'mm', 'mhm', 'mm-hmm', 'uh-huh', 'ah', 'er', 'erm', 'eh', 'hi', 'hello', 'hey', 'thanks',
+    'please', 'sorry', 'nothing', 'everything', 'something', 'someone', 'everyone', 'nobody', 'all', 'some', 'every',
+    'do', 'did', 'does', 'are', 'were', 'be', 'have', 'had', 'can', 'could', 'would', 'should', 'ma’am', 'y’all',
     // pt
     'o', 'os', 'as', 'um', 'uma', 'e', 'mas', 'então', 'eu', 'ele', 'ela', 'nós', 'eles', 'elas', 'você', 'sim', 'não',
     'isso', 'isto', 'esse', 'essa', 'este', 'esta', 'aqui', 'ali', 'quando', 'onde', 'porque', 'como', 'que', 'se',
     'também', 'já', 'bem', 'pois', 'entrevistador', 'entrevistadora', 'entrevistado', 'entrevistada', 'participante',
-    'sr', 'sra', 'dra', 'deus', 'pronto', 'olha', 'portanto',
+    'sr', 'sra', 'dra', 'deus', 'pronto', 'olha', 'portanto', 'agora', 'talvez', 'claro', 'depois', 'antes', 'bom',
+    'exato', 'exatamente', 'enfim', 'aliás', 'hum', 'nada', 'mesmo', 'realmente', 'obrigado', 'obrigada', 'acho', 'ora',
+    'tipo', 'lá', 'cá', 'só', 'nem', 'ou', 'mais', 'muito', 'tudo', 'todos', 'ninguém', 'alguém', 'sempre', 'nunca',
+    'ainda', 'assim', 'primeiro', 'desculpe', 'olá', 'hoje', 'ontem', 'amanhã', 'pá', 'epá', 'quer', 'na', 'no', 'nas', 'nos',
+    'em', 'ao', 'aos', 'à', 'pelo', 'pela', 'meu', 'minha', 'seu', 'sua', 'foi', 'era', 'há', 'é', 'são', 'está', 'estava',
+    'tem', 'tinha', 'qual', 'quem', 'senhor', 'senhora', 'dona', 'moderador', 'moderadora', 'inglês', 'espanhol', 'português',
     // es
     'el', 'la', 'los', 'las', 'una', 'y', 'pero', 'entonces', 'yo', 'él', 'nosotros', 'ellos', 'ellas', 'usted', 'sí',
     'eso', 'esto', 'ese', 'aquí', 'allí', 'cuando', 'donde', 'si', 'ya', 'bueno', 'pues', 'dios', 'vale', 'mira',
+    'ahora', 'quizás', 'quizá', 'oye', 'vamos', 'bien', 'después', 'luego', 'además', 'también', 'hombre', 'venga',
+    'exacto', 'exactamente', 'vaya', 'gracias', 'hola', 'total', 'sea', 'digamos', 'igual', 'todo', 'todos', 'nadie',
+    'alguien', 'siempre', 'nunca', 'primero', 'todavía', 'aún', 'así', 'perdón', 'perdone', 'hoy', 'ayer', 'mañana',
+    'muy', 'más', 'ni', 'em', 'ehm', 'mi', 'mis', 'tu', 'su', 'sus', 'en', 'es', 'al', 'lo', 'le', 'les', 'por', 'para',
+    'con', 'sin', 'un', 'unos', 'unas', 'me', 'te', 'nos', 'fue', 'hay', 'ha', 'he', 'son', 'está', 'estaba', 'tan', 'qué',
+    'cómo', 'dónde', 'cuándo', 'quién', 'señor', 'señora', 'don', 'doña', 'inglés', 'español', 'portugués',
   ].map((w) => w.normalize('NFC')),
 );
 // Lower-case particles inside names: "Maria da Silva", "Juan de la Cruz", "Ludwig van Beethoven".
@@ -282,7 +313,18 @@ const PARTICLES = new Set(['da', 'de', 'do', 'das', 'dos', 'del', 'di', 'du', 'v
 
 const RE_WORD = /[\p{L}\p{M}][\p{L}\p{M}'’-]*/gu;
 const RE_CAPITALISED = /^[\p{Lu}\p{Lt}][\p{Ll}\p{M}'’-]/u;
-const isCommon = (w: string) => COMMON.has(w.normalize('NFC').toLocaleLowerCase());
+// English contractions are never names: I’m, I'll, We're, I've, She'd, Don't, Can't…
+const RE_CONTRACTION = /['’](?:m|ll|re|ve|d|t)$/iu;
+// A possessive (or "it's") counts as the word without it: Ana's → Ana, It's → It.
+const RE_POSSESSIVE = /^(.+?)['’]s$/iu;
+const isCommon = (w: string) => COMMON.has(w.normalize('NFC').replace(/'/g, '’').toLocaleLowerCase());
+
+/** A word as matched by RE_WORD: trailing marks dropped, a possessive taken off; null for a contraction. */
+function wordOf(raw: string): string | null {
+  const w = raw.replace(/['’-]+$/, '');
+  if (RE_CONTRACTION.test(w)) return null;
+  return RE_POSSESSIVE.exec(w)?.[1] ?? w;
+}
 
 export interface Candidate {
   text: string;
@@ -301,16 +343,27 @@ export function suggestCandidates(texts: readonly string[], opts: { exclude?: re
   const bump = (m: Map<string, number>, k: string) => m.set(k, (m.get(k) ?? 0) + 1);
   for (const text of texts) {
     for (const para of text.split('\n')) {
-      const words: { w: string; start: number; end: number }[] = [];
+      const words: { w: string; name: boolean; start: number; end: number }[] = [];
       let m: RegExpExecArray | null;
       const re = new RegExp(RE_WORD.source, 'gu');
-      while ((m = re.exec(para))) words.push({ w: m[0].replace(/['’-]+$/, ''), start: m.index, end: m.index + m[0].length });
+      while ((m = re.exec(para))) {
+        const w = wordOf(m[0]);
+        words.push({ w: w ?? m[0], name: w !== null, start: m.index, end: m.index + m[0].length });
+      }
       const sentenceStart = (i: number): boolean => {
         let j = words[i]!.start - 1;
-        while (j >= 0 && /[\s"'“”‘’«»„(\[¿¡—–-]/.test(para[j]!)) j--;
+        for (;;) {
+          while (j >= 0 && /[\s"'“”‘’«»„(\[¿¡—–-]/.test(para[j]!)) j--;
+          // A transcriber's note ("[laughs]", "(pausa)") does not end a sentence: look past it.
+          const close = para[j];
+          if (close !== ']' && close !== ')') break;
+          const open = para.lastIndexOf(close === ']' ? '[' : '(', j);
+          if (open < 0) break;
+          j = open - 1;
+        }
         return j < 0 || /[.!?…:;]/.test(para[j]!);
       };
-      const cap = (i: number) => !!words[i] && RE_CAPITALISED.test(words[i]!.w);
+      const cap = (i: number) => !!words[i] && words[i]!.name && RE_CAPITALISED.test(words[i]!.w);
       const gapOk = (i: number) => /^[ \u00A0]$/.test(para.slice(words[i - 1]!.end, words[i]!.start));
       for (let i = 0; i < words.length; ) {
         if (!cap(i)) {
@@ -339,6 +392,8 @@ export function suggestCandidates(texts: readonly string[], opts: { exclude?: re
           start = false;
         }
         const kept = run.slice(first);
+        // Nor start on one, once a leading common word is gone ("E das Amoreiras").
+        while (kept.length && PARTICLES.has(words[kept[0]!]!.w.toLowerCase())) kept.shift();
         // A run cannot end on a particle.
         while (kept.length && PARTICLES.has(words[kept[kept.length - 1]!]!.w.toLowerCase())) kept.pop();
         if (kept.length) {

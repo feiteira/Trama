@@ -35,7 +35,8 @@ export function ShortcutsDialog({ open, onClose }: { open: boolean; onClose: () 
       title: 'workbench.keys.groupMedia',
       rows: [
         [[key('Space')], 'workbench.keys.playPause'],
-        [['Alt+Shift+←', 'Alt+Shift+→'], 'workbench.keys.skip'],
+        [['Alt+←', 'Alt+→'], 'workbench.keys.skip'],
+        [['Alt+Shift+←', 'Alt+Shift+→'], 'workbench.keys.skipAlways'],
         [['Alt+Enter'], 'workbench.keys.playHere'],
       ],
     },

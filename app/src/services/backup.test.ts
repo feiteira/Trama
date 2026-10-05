@@ -6,7 +6,7 @@ import { createMemoryPlatform } from '../platform/memory';
 import { type Platform, PlatformError } from '../platform/types';
 import {
   BackupError, backupErrorCode, backupFileName, backupIsStale, backupStatus, backupsToPrune, listBackups, META,
-  parseBackupName, restoreBackup, runBackup, setBackupFolder, setBackupHistoryDays,
+  parseBackupName, restoreBackup, restoredProjectName, runBackup, setBackupFolder, setBackupHistoryDays,
 } from './backup';
 import { Library } from './library';
 import { FAST_KDF } from './testing';
@@ -77,6 +77,30 @@ describe('running backups', () => {
     expect((await restored.store.get('doctext', doc.id))!.text).toBe('Olá Maria');
     const original = await library.openProject(project.id);
     expect((await original.store.get('doctext', doc.id))!.text).toBe('Changed after the backup');
+  });
+
+  it('restores without leaving the open project, under a name in the reader’s language', async () => {
+    const { platform, library, project, doc } = await withFolder();
+    await runBackup(project, { now: new Date('2026-10-05T08:00:00Z') });
+    const [name] = await names(platform);
+    const info = await restoreBackup(library, await platform.files.read(`/usb/${name}`), undefined, undefined, {
+      open: false,
+      now: new Date('2026-10-06T10:00:00Z'),
+      restoredName: (n, d) => `${n} (restaurado em ${d.toISOString().slice(0, 10)})`,
+    });
+    expect(info.name).toBe('Estudo piloto (restaurado em 2026-10-06)');
+    expect(library.current).toBe(project);
+    expect((await project.store.get('doctext', doc.id))!.text).toBe('Olá Maria');
+    expect(library.projects.map((p) => p.name)).toEqual(['Estudo piloto', 'Estudo piloto (restaurado em 2026-10-06)']);
+  });
+
+  it('shortens a long name so the restored name fits', () => {
+    const date = new Date('2026-10-06T10:00:00Z');
+    expect(restoredProjectName('Hortas', date)).toBe('Hortas (restored 2026-10-06)');
+    expect(restoredProjectName('  ', date)).toBe('Project (restored 2026-10-06)');
+    const long = restoredProjectName('x'.repeat(300), date, (n) => `${n} — restaurado`, 50);
+    expect(long).toHaveLength(50);
+    expect(long.endsWith('x — restaurado')).toBe(true);
   });
 
   it('skips a project that has not changed, unless asked', async () => {

@@ -1,69 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import type { BundleRecord } from '../../core/export/bundle';
 import { NotTramaFileError, UnlockRequiredError } from '../../core/export/trama';
 import { DecryptError } from '../../core/crypto/frames';
 import { DataFileError } from '../../services/datafile';
-import { makeTestProject } from '../../services/testing';
-import { classifyMerge, copyFileName, fileProblem, localStamps, previewMerge, sameProject } from './team';
+import { copyFileName, fileProblem, PREVIEW_KINDS, previewRows, sameProject } from './team';
 
-const base = (id: string, hlc: string, deleted = false) => ({ id, created_at: '2026-01-01T00:00:00Z', updated_at_hlc: hlc, deleted });
-
-describe('merge preview', () => {
-  it('counts new, newer and unchanged records the way a merge decides', () => {
-    const local = new Map([
-      [
-        'coding',
-        new Map([
-          ['c1', 'h5'],
-          ['c2', 'h5'],
-        ]),
-      ],
-      ['coder', new Map([['ana', 'h1']])],
-    ]) as Parameters<typeof classifyMerge>[2];
-    const records = [
-      { kind: 'coder', record: { ...base('ana', 'h1'), name: 'Ana', color: '#000000' } },
-      { kind: 'coder', record: { ...base('rui', 'h2'), name: 'Rui', color: '#b5179e' } },
-      { kind: 'coder', record: { ...base('gone', 'h2', true), name: '', color: '#000000' } },
-      { kind: 'coding', record: { ...base('c1', 'h9') } },
-      { kind: 'coding', record: { ...base('c2', 'h1') } },
-      { kind: 'coding', record: { ...base('c3', 'h1') } },
-      { kind: 'memo', record: { ...base('m1', 'h1') } },
-      { kind: 'log', record: { ...base('l1', 'h1') } },
-    ] as unknown as BundleRecord[];
-    const p = classifyMerge('Gardens', records, local);
-    expect(p).toMatchObject({ projectName: 'Gardens', added: 5, updated: 1, unchanged: 2 });
-    expect(p.byKind.coding).toEqual({ added: 1, updated: 1 });
-    expect(p.byKind.memo).toEqual({ added: 1, updated: 0 });
-    // Coders and the audit trail are "other"; a record arriving deleted shows nowhere.
-    expect(p.byKind.other).toEqual({ added: 2, updated: 0 });
-    expect(p.newCoders).toEqual([{ id: 'rui', name: 'Rui', color: '#b5179e' }]);
-  });
-
-  it('reads the stamps of the project, deleted records included', async () => {
-    const project = await makeTestProject();
-    const code = await project.store.put('code', {
-      name: 'Trust',
-      parent_id: null,
-      color: '#e4572e',
-      description: '',
-      inclusion: '',
-      exclusion: '',
-      example: '',
-      order: 1,
-      codable: true,
-      shortcut: null,
-    });
-    await project.store.remove('code', [code.id]);
-    const stamps = await localStamps(project.store);
-    expect(stamps.get('code')?.has(code.id)).toBe(true);
-    expect(stamps.get('coder')?.get(project.me.id)).toBe(project.me.updated_at_hlc);
-    const preview = await previewMerge(project.store, {
-      project: { id: project.id, name: 'Copy', description: '', origin: null },
-      records: [{ kind: 'coder', record: project.me }],
-      blobs: new Map(),
-      warnings: [],
-    });
-    expect(preview).toMatchObject({ added: 0, updated: 0, unchanged: 1, newCoders: [] });
+describe('merge preview rows', () => {
+  it('lists documents, codes, codings, memos and cases, and sums the rest as other', () => {
+    const rows = previewRows({ byKind: { coding: { added: 2, updated: 1 }, coder: { added: 1, updated: 0 }, log: { added: 3, updated: 0 }, memo: { added: 0, updated: 4 } } });
+    expect(rows.coding).toEqual({ added: 2, updated: 1 });
+    expect(rows.memo).toEqual({ added: 0, updated: 4 });
+    expect(rows.document).toEqual({ added: 0, updated: 0 });
+    expect(rows.other).toEqual({ added: 4, updated: 0 });
+    expect(Object.keys(rows)).toEqual([...PREVIEW_KINDS, 'other']);
   });
 
   it('accepts only copies of the same project', () => {

@@ -14,6 +14,11 @@ export interface ProjectContext {
   addBlob(bytes: Uint8Array, filename: string, mime: string): Promise<MediaRef>;
   readBlob(ref: MediaRef): Promise<Uint8Array>;
   removeBlob(ref: MediaRef): Promise<void>;
+  /**
+   * Re-reads the cached `me` after its record changed (a rename, a new colour, an undo of
+   * either). Optional: test contexts read `me` from the store each time.
+   */
+  reloadMe?(): Promise<void>;
   /** Appends an entry to the audit trail. */
   log(action: LogAction, summary: string, target?: { kind: string; id: string }): Promise<void>;
 }

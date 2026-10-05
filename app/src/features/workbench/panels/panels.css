@@ -36,7 +36,15 @@
   overflow: hidden;
 }
 
+/* The name gives way (ellipsis) before the count does. */
+.wpanel__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .wpanel__count {
+  flex: none;
   color: var(--ink-3);
   font-weight: 500;
   font-size: var(--fs-sm);

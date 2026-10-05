@@ -32,7 +32,8 @@ export type ServiceErrorCode =
   | 'cycle'
   | 'invalid_value'
   | 'invalid_argument'
-  | 'too_large';
+  | 'too_large'
+  | 'duplicate';
 
 /** A refused domain operation. `code` is stable, for the UI to explain in the reader's language. */
 export class ServiceError extends Error {

@@ -6,8 +6,6 @@ import { buildDocx, buildXlsx, csvBytes } from '../../core/export/office';
 import { parseCsv } from '../../core/import/csv';
 import { readXlsx } from '../../core/import/xlsx';
 import * as codesService from '../../services/codes';
-import { commit, Plan, q } from '../../services/undo';
-import { orderAfterLast } from '../../core/qda/tree';
 import { usePlatform, useProject } from '../../shell/AppState';
 import { useUndo } from '../../shell/undo';
 import { useI18n } from '../../ui/i18n';
@@ -167,44 +165,27 @@ export function useCodebookFiles(data: CodeData | undefined): { exportAs: (f: Ex
   const applyPlan = async () => {
     if (!plan || !pending) return;
     try {
-      const stored = await project.store.list('code');
-      const byId = new Map(stored.map((c) => [c.id, c]));
-      const ids = new Map(existing.map((e) => [pathKey(e.path), e.id]));
-      const nextOrder = new Map<string | null, number>();
-      const orderUnder = (parentId: string | null) => {
-        const o = nextOrder.get(parentId) ?? orderAfterLast(stored.filter((c) => c.parent_id === parentId));
-        nextOrder.set(parentId, o + 1);
-        return o;
-      };
-      let colours = stored.length;
-      const batch = new Plan();
+      const existingIds = new Map(existing.map((e) => [pathKey(e.path), e.id]));
+      const planned = new Set<string>();
+      const drafts: codesService.CodeDraft[] = [];
+      const updates: { id: string; patch: codesService.CodePatch }[] = [];
       for (const it of plan.items) {
         if (it.status === 'new') {
-          const parentId = it.path.length > 1 ? ids.get(pathKey(it.path.slice(0, -1))) ?? null : null;
-          const id = batch.create('code', {
-            name: it.path[it.path.length - 1]!,
-            parent_id: parentId,
-            color: it.fields.color ?? codesService.nextColor(colours++),
-            description: it.fields.description ?? '',
-            inclusion: it.fields.inclusion ?? '',
-            exclusion: it.fields.exclusion ?? '',
-            example: it.fields.example ?? '',
-            order: orderUnder(parentId),
-            codable: it.fields.codable ?? true,
-            shortcut: null,
-          });
-          ids.set(pathKey(it.path), id);
+          const key = pathKey(it.path);
+          const parentKey = it.path.length > 1 ? pathKey(it.path.slice(0, -1)) : null;
+          const parentId = parentKey === null ? undefined : existingIds.get(parentKey);
+          const parent = parentId ? { id: parentId } : parentKey !== null && planned.has(parentKey) ? { ref: parentKey } : null;
+          drafts.push({ ref: key, parent, name: it.path[it.path.length - 1]!, ...it.fields });
+          planned.add(key);
         } else if (it.status === 'update' && it.existingId) {
-          const rec = byId.get(it.existingId);
-          if (rec) batch.change('code', rec, it.fields);
+          updates.push({ id: it.existingId, patch: it.fields });
         }
       }
-      if (!batch.isEmpty) {
-        const summary = `${q(pending.fileName)}: +${plan.created} ~${plan.updated}`;
-        const { undo: entry } = await commit(project, batch, { label: 'code.create', detail: summary, logs: [{ action: 'code.create', summary }] });
+      const { codes, updated, undo: entry } = await codesService.createCodes(project, drafts, { updates, source: pending.fileName });
+      if (codes.length || updated) {
         record(entry);
         toast.show({
-          message: t('codes.import.done', { created: plan.created, updated: plan.updated }),
+          message: t('codes.import.done', { created: codes.length, updated }),
           tone: 'success',
           action: { label: t('common.undo'), run: () => undo(), testId: 'toast-undo' },
         });

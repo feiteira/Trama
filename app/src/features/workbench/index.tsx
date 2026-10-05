@@ -60,7 +60,7 @@ export default function WorkbenchScreen({ route }: ScreenProps<'workbench'>) {
 
   useCommands(
     () => [
-      { id: 'workbench.goto', label: t('workbench.commands.goto'), group: t('workbench.commands.group'), icon: FileSearch, run: () => setPicker(true) },
+      { id: 'workbench.goto', label: t('workbench.commands.goto'), group: t('workbench.commands.group'), icon: FileSearch, priority: 1, run: () => setPicker(true) },
       {
         id: 'workbench.leftPanel',
         label: leftOpen ? t('workbench.panels.hideDocuments') : t('workbench.panels.showDocuments'),

@@ -33,6 +33,10 @@ export async function makeTestProject(opts: { now?: () => Date; coderName?: stri
     actAs(coder) {
       me = coder;
     },
+    async reloadMe() {
+      const fresh = await store.get('coder', me.id);
+      if (fresh && !fresh.deleted) me = fresh;
+    },
     async addBlob(bytes, filename, mime): Promise<MediaRef> {
       const blob_id = uuid();
       blobs.set(blob_id, bytes.slice());

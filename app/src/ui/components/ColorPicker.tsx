@@ -6,8 +6,12 @@ import { cx } from '../cx';
 import { useI18n } from '../i18n';
 import './colorpicker.css';
 
+/** Where the system picker opens while no colour is chosen. */
+const NO_COLOUR = '#7a7f87';
+
 export interface ColorPickerProps {
-  value: string;
+  /** The colour, or null for none chosen yet (no swatch selected). */
+  value: string | null;
   onChange: (hex: string) => void;
   label: string;
   /** Offer a custom colour beside the palette (default true). */
@@ -18,15 +22,17 @@ export interface ColorPickerProps {
 
 /**
  * The palette as a radio group of swatches (arrow keys move between them), plus a custom
- * #rrggbb typed or picked with the system picker. Always reports lower-case #rrggbb.
+ * #rrggbb typed or picked with the system picker. Always reports lower-case #rrggbb. With a
+ * null value nothing is selected until the researcher picks a colour.
  */
 export function ColorPicker({ value, onChange, label, custom = true, className, ...rest }: ColorPickerProps) {
   const { t } = useI18n();
   const name = useId();
-  const current = normalizeHex(value) ?? PALETTE[0];
-  const inPalette = (PALETTE as readonly string[]).includes(current);
-  const [text, setText] = useState(current);
-  useEffect(() => setText(current), [current]);
+  // An unreadable colour shows as the first swatch; null shows none selected.
+  const current = value === null ? null : (normalizeHex(value) ?? PALETTE[0]);
+  const inPalette = current !== null && (PALETTE as readonly string[]).includes(current);
+  const [text, setText] = useState(current ?? '');
+  useEffect(() => setText(current ?? ''), [current]);
   const testId = rest['data-testid'];
 
   return (
@@ -51,8 +57,12 @@ export function ColorPicker({ value, onChange, label, custom = true, className, 
       </div>
       {custom ? (
         <div className="colorpicker__custom">
-          <label className={cx('colorpicker__native', !inPalette && 'colorpicker__native--on')} style={{ background: current }} title={t('common.customColour')}>
-            <input type="color" value={current} onChange={(e) => onChange(e.target.value.toLowerCase())} aria-label={t('common.customColour')} />
+          <label
+            className={cx('colorpicker__native', current !== null && !inPalette && 'colorpicker__native--on', current === null && 'colorpicker__native--none')}
+            style={current !== null ? { background: current } : undefined}
+            title={t('common.customColour')}
+          >
+            <input type="color" value={current ?? NO_COLOUR} onChange={(e) => onChange(e.target.value.toLowerCase())} aria-label={t('common.customColour')} />
           </label>
           <input
             className="colorpicker__hex"
@@ -60,7 +70,8 @@ export function ColorPicker({ value, onChange, label, custom = true, className, 
             spellCheck={false}
             maxLength={7}
             aria-label={t('common.hexColour')}
-            aria-invalid={normalizeHex(text) === null || undefined}
+            placeholder="#rrggbb"
+            aria-invalid={(text !== '' && normalizeHex(text) === null) || undefined}
             onChange={(e) => {
               setText(e.target.value);
               const n = normalizeHex(e.target.value);
@@ -70,7 +81,7 @@ export function ColorPicker({ value, onChange, label, custom = true, className, 
             onBlur={() => {
               const n = normalizeHex(text);
               if (n) onChange(n);
-              else setText(current);
+              else setText(current ?? '');
             }}
             data-testid={testId ? `${testId}-hex` : undefined}
           />

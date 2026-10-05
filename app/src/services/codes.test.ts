@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { PALETTE } from '../core/model/types';
-import { codeUsage, createCode, deleteCode, mergeCodes, moveCode, restoreCodes, setShortcut, splitCode, updateCode } from './codes';
+import { codeUsage, createCode, createCodes, deleteCode, mergeCodes, moveCode, restoreCodes, setShortcut, splitCode, updateCode } from './codes';
 import { applyCode, setComment } from './codings';
 import { createDocument } from './documents';
 import { createMemo } from './memos';
@@ -16,6 +16,65 @@ async function setup() {
 }
 
 const span = (word: string) => ({ start: TEXT.indexOf(word), end: TEXT.indexOf(word) + word.length });
+
+describe('createCodes', () => {
+  it('creates a nested batch with edits in one write, one undo step and one log entry', async () => {
+    const { ctx } = await setup();
+    const { code: trust } = await createCode(ctx, { name: 'Trust' });
+    const { code: kept } = await createCode(ctx, { name: 'Kept', description: 'old' });
+    const r = await createCodes(
+      ctx,
+      [
+        { ref: 'feel', name: 'Feelings', codable: false },
+        { ref: 'fear', parent: { ref: 'feel' }, name: 'Fear', description: 'Being afraid' },
+        { parent: { ref: 'feel' }, name: 'Joy', color: '#29a37a' },
+        { parent: { id: trust.id }, name: 'Neighbours' },
+        { parent: null, name: '  Place  ' },
+      ],
+      { updates: [{ id: kept.id, patch: { description: 'new' } }, { id: trust.id, patch: { name: 'Trust' } }], source: 'book.qdc' },
+    );
+    expect(r.codes.map((c) => c.name)).toEqual(['Feelings', 'Fear', 'Joy', 'Neighbours', 'Place']);
+    expect(r.updated).toBe(1);
+    const [feel, fear, joy, neigh, place] = r.codes;
+    expect(feel!.codable).toBe(false);
+    expect(fear!.parent_id).toBe(feel!.id);
+    expect(joy).toMatchObject({ parent_id: feel!.id, color: '#29a37a' });
+    expect(fear!.order).toBeLessThan(joy!.order);
+    expect(neigh!.parent_id).toBe(trust.id);
+    expect(place!.parent_id).toBeNull();
+    expect(place!.order).toBeGreaterThan(kept.order);
+    // Colours continue the palette after the 2 codes there were (Joy brought its own).
+    expect(feel!.color).toBe(PALETTE[2]);
+    expect(fear!.color).toBe(PALETTE[3]);
+    expect((await ctx.store.get('code', kept.id))!.description).toBe('new');
+    const logs = await listLog(ctx, { action: 'code.create' });
+    expect(logs).toHaveLength(3);
+    expect(logs[0]!.summary).toBe('×5 → "book.qdc" ~1');
+    await r.undo.undo();
+    expect((await ctx.store.list('code')).map((c) => c.name).sort()).toEqual(['Kept', 'Trust']);
+    expect((await ctx.store.get('code', kept.id))!.description).toBe('old');
+  });
+
+  it('refuses unknown parents, later references and repeated refs, writing nothing', async () => {
+    const { ctx } = await setup();
+    await expect(createCodes(ctx, [{ name: 'A', parent: { ref: 'b' } }, { ref: 'b', name: 'B' }])).rejects.toMatchObject({ code: 'invalid_argument' });
+    await expect(createCodes(ctx, [{ name: 'A', parent: { id: 'nope' } }])).rejects.toMatchObject({ code: 'not_found' });
+    await expect(createCodes(ctx, [{ ref: 'a', name: 'A' }, { ref: 'a', name: 'B' }])).rejects.toMatchObject({ code: 'invalid_argument' });
+    await expect(createCodes(ctx, [{ name: '' }])).rejects.toMatchObject({ code: 'invalid_argument' });
+    expect(await ctx.store.list('code')).toHaveLength(0);
+    expect((await createCodes(ctx, [])).undo.weight).toBe(0);
+  });
+
+  it('logs edits alone as edits, and a batch without a source by its counts', async () => {
+    const { ctx } = await setup();
+    const { code } = await createCode(ctx, { name: 'Trust' });
+    const r = await createCodes(ctx, [], { updates: [{ id: code.id, patch: { description: 'new' } }], source: 'book.csv' });
+    expect(r.undo.label).toBe('code.edit');
+    expect((await listLog(ctx, { action: 'code.edit' }))[0]!.summary).toBe('×1 → "book.csv"');
+    await createCodes(ctx, [{ name: 'A' }, { name: 'B' }], { updates: [{ id: code.id, patch: { description: 'newer' } }] });
+    expect((await listLog(ctx, { action: 'code.create' }))[0]!.summary).toBe('~1 ×2');
+  });
+});
 
 describe('createCode / updateCode', () => {
   it('creates codes in order with cycling colours and trimmed names', async () => {

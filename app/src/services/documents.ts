@@ -4,10 +4,11 @@
 import { sha256 } from '@noble/hashes/sha2.js';
 import { toHex } from '../core/bytes';
 import type { Coding, DocKind, DocSource, DocText, Document, MediaRef, SyncPoint } from '../core/model/types';
-import { LIMITS } from '../core/model/types';
+import { DOC_KINDS, LIMITS } from '../core/model/types';
 import { applyEdits, computeEdits, mapOffset, mapRange, normalizeEdits, splitsPair, type Assoc, type TextEdit } from '../core/qda/ranges';
 import { orderAfterLast, placeBefore } from '../core/qda/tree';
 import type { ProjectContext } from './context';
+import { stopper } from './jobs';
 import {
   commit,
   listIn,
@@ -107,8 +108,12 @@ const nameKey = (s: string) => tidyName(s).normalize('NFC').toLocaleLowerCase();
  * already ends in a number in brackets counts on from it. Stays within `max` characters.
  */
 export function uniqueName(name: string, taken: Iterable<string>, max: number = LIMITS.nameMax): string {
+  return uniqueAmong(name, new Set([...taken].map(nameKey)), max);
+}
+
+/** `uniqueName` against name keys (`nameKey`) already collected. */
+function uniqueAmong(name: string, keys: ReadonlySet<string>, max: number = LIMITS.nameMax): string {
   const clean = tidyName(name).slice(0, max).trim();
-  const keys = new Set([...taken].map(nameKey));
   if (!keys.has(nameKey(clean))) return clean;
   const m = /^(.*?) \((\d{1,6})\)$/.exec(clean);
   const base = m ? m[1]! : clean;
@@ -148,61 +153,157 @@ export interface NewDocument {
   color?: string | null;
 }
 
-export async function createDocument(ctx: ProjectContext, input: NewDocument): Promise<{ document: Document; undo: Undoable }> {
-  const name = requireName(input.name);
-  const canon = canonicalise(input.text);
-  const text = canon.text;
-  if (text.length > LIMITS.textMax) throw new ServiceError('too_large', 'the text is too long');
-  for (const f of [input.original, input.media]) {
-    if (f && f.bytes.length > LIMITS.mediaMaxBytes) throw new ServiceError('too_large', 'the file is too large');
+/**
+ * Names and list positions for new documents. Creating a document needs every name already
+ * taken and the last position; a batch (an import of many files or survey answers) reads them
+ * once and hands them out from here, instead of listing every document for each new one.
+ */
+export class DocumentSlots {
+  private constructor(
+    private readonly keys: Set<string>,
+    private next: number,
+  ) {}
+
+  /** The names and positions of the project's documents now. */
+  static async load(ctx: ProjectContext): Promise<DocumentSlots> {
+    const docs = await ctx.store.list('document');
+    return new DocumentSlots(new Set(docs.map((d) => nameKey(d.name))), orderAfterLast(docs));
   }
-  if (input.case_id) await need(ctx, 'case', input.case_id);
-  for (const g of input.group_ids ?? []) await need(ctx, 'docgroup', g);
 
-  const docs = await ctx.store.list('document');
-  const sync = (input.sync ?? [])
-    .filter((s) => Number.isFinite(s.pos) && Number.isFinite(s.ms))
-    .map((s) => ({ pos: canon.mapOffset(Math.max(0, Math.floor(s.pos))), ms: Math.max(0, Math.round(s.ms)) }));
-  const source: DocSource = {
-    filename: input.source?.filename ?? '',
-    format: (input.source?.format ?? 'new').toLowerCase(),
-    imported_at: input.source?.imported_at ?? new Date().toISOString(),
-    text_sha256: textSha256(text),
+  /** Reserves a unique name for `name` (adding " (2)"… when taken) and the next position. */
+  take(name: string): { name: string; order: number } {
+    const unique = uniqueAmong(name, this.keys);
+    this.keys.add(nameKey(unique));
+    return { name: unique, order: this.next++ };
+  }
+
+  /** Gives back a name that was not used after all (its document was not created). */
+  release(name: string): void {
+    this.keys.delete(nameKey(name));
+  }
+}
+
+export interface CreateOptions {
+  /** Names and positions shared by a batch; read from the project when not given. */
+  slots?: DocumentSlots;
+}
+
+export interface CreateManyOptions extends CreateOptions {
+  /** Called after each document is prepared (canonical text, files stored); awaited. */
+  onProgress?: (done: number, total: number) => void | Promise<void>;
+  /** Asked before each document; once it says yes, nothing is written and `JobStopped` is thrown. */
+  shouldStop?: () => boolean;
+}
+
+export async function createDocument(ctx: ProjectContext, input: NewDocument, opts: CreateOptions = {}): Promise<{ document: Document; undo: Undoable }> {
+  const { documents, undo } = await createDocuments(ctx, [input], opts);
+  return { document: documents[0]!, undo };
+}
+
+/**
+ * Creates several documents with their texts (and files) in one write: one undo step, one
+ * audit-trail entry per document. Either every document is created or none is: files already
+ * stored for a batch that fails or stops are removed again.
+ */
+export async function createDocuments(
+  ctx: ProjectContext,
+  inputs: readonly NewDocument[],
+  opts: CreateManyOptions = {},
+): Promise<{ documents: Document[]; undo: Undoable }> {
+  if (!inputs.length) return { documents: [], undo: noopUndo('document.add') };
+  const check = stopper(opts.shouldStop);
+  // Validated before anything is stored.
+  const prepared = inputs.map((input) => {
+    const name = requireName(input.name);
+    const canon = canonicalise(input.text);
+    if (canon.text.length > LIMITS.textMax) throw new ServiceError('too_large', 'the text is too long');
+    for (const f of [input.original, input.media]) {
+      if (f && f.bytes.length > LIMITS.mediaMaxBytes) throw new ServiceError('too_large', 'the file is too large');
+    }
+    return { input, name, canon };
+  });
+  const known = new Set<string>();
+  const exists = async (kind: 'case' | 'docgroup', id: string) => {
+    if (known.has(`${kind}:${id}`)) return;
+    await need(ctx, kind, id);
+    known.add(`${kind}:${id}`);
   };
+  for (const { input } of prepared) {
+    if (input.case_id) await exists('case', input.case_id);
+    for (const g of input.group_ids ?? []) await exists('docgroup', g);
+  }
 
+  const slots = opts.slots ?? (await DocumentSlots.load(ctx));
   const blobs: MediaRef[] = [];
+  const taken: string[] = [];
   try {
-    const original = input.original ? await ctx.addBlob(input.original.bytes, input.original.filename, input.original.mime) : null;
-    if (original) blobs.push(original);
-    const media = input.media ? await ctx.addBlob(input.media.bytes, input.media.filename, input.media.mime) : null;
-    if (media) blobs.push(media);
-
     const plan = new Plan();
-    const docName = uniqueName(name, docs.map((d) => d.name));
-    const id = plan.create('document', {
-      name: docName,
-      kind: input.kind,
-      group_ids: [...new Set(input.group_ids ?? [])],
-      case_id: input.case_id ?? null,
-      source,
-      original,
-      media,
-      chars: text.length,
-      order: orderAfterLast(docs),
-      color: input.color ?? null,
-    });
-    plan.create('doctext', { id, text, sync });
+    const created: { id: string; name: string }[] = [];
+    for (let i = 0; i < prepared.length; i++) {
+      check();
+      const { input, name, canon } = prepared[i]!;
+      const text = canon.text;
+      const sync = (input.sync ?? [])
+        .filter((s) => Number.isFinite(s.pos) && Number.isFinite(s.ms))
+        .map((s) => ({ pos: canon.mapOffset(Math.max(0, Math.floor(s.pos))), ms: Math.max(0, Math.round(s.ms)) }));
+      const source: DocSource = {
+        filename: input.source?.filename ?? '',
+        format: (input.source?.format ?? 'new').toLowerCase(),
+        imported_at: input.source?.imported_at ?? new Date().toISOString(),
+        text_sha256: textSha256(text),
+      };
+      const original = input.original ? await ctx.addBlob(input.original.bytes, input.original.filename, input.original.mime) : null;
+      if (original) blobs.push(original);
+      const media = input.media ? await ctx.addBlob(input.media.bytes, input.media.filename, input.media.mime) : null;
+      if (media) blobs.push(media);
+      const slot = slots.take(name);
+      taken.push(slot.name);
+      const id = plan.create('document', {
+        name: slot.name,
+        kind: input.kind,
+        group_ids: [...new Set(input.group_ids ?? [])],
+        case_id: input.case_id ?? null,
+        source,
+        original,
+        media,
+        chars: text.length,
+        order: slot.order,
+        color: input.color ?? null,
+      });
+      plan.create('doctext', { id, text, sync });
+      created.push({ id, name: slot.name });
+      await opts.onProgress?.(i + 1, prepared.length);
+    }
+    check();
+    const detail = created.length === 1 ? q(created[0]!.name) : `×${created.length}`;
     const { saved, undo } = await commit(ctx, plan, {
       label: 'document.add',
-      detail: q(docName),
-      logs: [{ action: 'document.add', summary: q(docName), target: { kind: 'document', id } }],
+      detail,
+      logs: created.map((d) => ({ action: 'document.add', summary: q(d.name), target: { kind: 'document', id: d.id } })),
     });
-    return { document: saved.get('document', id), undo };
+    return { documents: created.map((d) => saved.get('document', d.id)), undo };
   } catch (e) {
     // Nothing points to the files: do not leave them behind.
     for (const b of blobs) await ctx.removeBlob(b).catch(() => undefined);
+    for (const n of taken) slots.release(n);
     throw e;
   }
+}
+
+/** Changes what kind of document this is (text, transcript, note…). */
+export async function setDocumentKind(ctx: ProjectContext, id: string, kind: DocKind): Promise<{ document: Document; undo: Undoable }> {
+  if (!(DOC_KINDS as readonly string[]).includes(kind)) throw new ServiceError('invalid_argument', `unknown document kind: ${kind}`);
+  const doc = await need(ctx, 'document', id);
+  if (doc.kind === kind) return { document: doc, undo: noopUndo('document.edit', q(doc.name)) };
+  const plan = new Plan();
+  plan.change('document', doc, { kind });
+  const summary = `${q(doc.name)}: ${doc.kind} → ${kind}`;
+  const { saved, undo } = await commit(ctx, plan, {
+    label: 'document.edit',
+    detail: summary,
+    logs: [{ action: 'document.edit', summary, target: { kind: 'document', id } }],
+  });
+  return { document: saved.get('document', id), undo };
 }
 
 /** A document's text and sync points. */

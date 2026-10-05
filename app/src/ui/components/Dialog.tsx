@@ -27,8 +27,8 @@ export interface DialogProps {
 }
 
 /**
- * A modal dialog: focus moves in (to `[data-autofocus]`, else the first field, else the first
- * button), Tab stays inside, Escape closes, and the focus returns to the control that opened it.
+ * A modal dialog: focus moves in (to `[data-autofocus]`, else the first field, else the close
+ * button, else the first button), Tab stays inside, Escape closes, and the focus returns to the control that opened it.
  * The page behind is inert, so screen readers and the keyboard cannot wander there.
  */
 export function Dialog({ open, onClose, title, description, children, footer, size = 'md', dismissible = true, onSubmit, className, ...rest }: DialogProps) {
@@ -51,10 +51,14 @@ export function Dialog({ open, onClose, title, description, children, footer, si
     if (madeInert) root.setAttribute('inert', '');
     const el = box.current;
     if (el) {
+      // A dialog without fields starts on its close button: focusing an action could confirm
+      // it with a stray Enter, and focusing the box itself draws a ring around the whole dialog.
+      const all = focusables(el);
       const target =
         el.querySelector<HTMLElement>('[data-autofocus]') ??
-        focusables(el).find((x) => x.matches('input, textarea, select')) ??
-        focusables(el).find((x) => !x.closest('.dialog__close')) ??
+        all.find((x) => x.matches('input, textarea, select')) ??
+        all.find((x) => !!x.closest('.dialog__close')) ??
+        all[0] ??
         el;
       target.focus({ preventScroll: true });
     }

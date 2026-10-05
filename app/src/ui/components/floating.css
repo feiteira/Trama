@@ -111,6 +111,13 @@
 }
 
 .menu__check {
+  flex: none;
   width: 16px;
   display: inline-flex;
+}
+
+/* Room for an icon on items without one, so every label starts in the same column. */
+.menu__icon {
+  flex: none;
+  width: 15px;
 }

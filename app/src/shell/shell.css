@@ -308,12 +308,23 @@
 .screen-header {
   flex: none;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: var(--s-3);
+  column-gap: var(--s-3);
+  row-gap: var(--s-1);
   min-height: var(--header-h);
   padding: var(--s-2) var(--s-3) var(--s-2) var(--s-6);
   border-bottom: 1px solid var(--rule);
   background: var(--paper);
+}
+
+/* The title gives up width first (ellipsis), down to this basis; then the tools wrap below. */
+.screen-header__start {
+  flex: 1 1 15rem;
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-width: 0;
 }
 
 .screen-header__titles {
@@ -325,6 +336,9 @@
 }
 
 .screen-header__title {
+  flex: 0 0 auto;
+  max-width: 100%;
+  min-width: 0;
   font-size: var(--fs-xl);
   font-weight: 640;
   letter-spacing: -0.015em;
@@ -333,7 +347,10 @@
   text-overflow: ellipsis;
 }
 
+/* The subtitle gives way before the title does. */
 .screen-header__subtitle {
+  flex: 0 1 auto;
+  min-width: 0;
   color: var(--ink-3);
   font-size: var(--fs-sm);
   white-space: nowrap;
@@ -341,21 +358,43 @@
   text-overflow: ellipsis;
 }
 
-.screen-header__actions {
-  flex: 1;
+.screen-header__end {
+  flex: 0 1 auto;
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--s-2);
+  min-width: 0;
+  max-width: 100%;
+  margin-left: auto;
+}
+
+.screen-header__actions {
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: flex-end;
   gap: var(--s-2);
   min-width: 0;
 }
 
-.screen-header__undo {
+.screen-header__app {
+  flex: none;
   display: flex;
+  align-items: center;
   gap: 2px;
+}
+
+.screen-header__actions + .screen-header__app {
   padding-left: var(--s-2);
   margin-left: var(--s-1);
   border-left: 1px solid var(--rule);
+}
+
+.screen-header__undo {
+  display: flex;
+  gap: 2px;
 }
 
 /* ── Coder gate ──────────────────────────────────────────────────────────────────────── */

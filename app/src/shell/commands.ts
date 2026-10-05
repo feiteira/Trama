@@ -19,6 +19,11 @@ export interface Command {
   shortcut?: string;
   icon?: LucideIcon;
   disabled?: boolean;
+  /**
+   * Breaks ties between equally good matches (default 0, higher first): a screen's own
+   * command can come before the shell's navigation that matches the same words.
+   */
+  priority?: number;
 }
 
 export interface ScoredCommand {
@@ -74,12 +79,12 @@ export class CommandRegistry {
     return this.items;
   }
 
-  /** Matching enabled commands, best first; registration order breaks ties. */
+  /** Matching enabled commands, best first; then higher priority, then registration order. */
   search(query: string, limit = 50): Command[] {
     return this.items
       .map((command, i) => ({ command, i, score: command.disabled ? 0 : scoreCommand(command, query) }))
       .filter((x) => x.score > 0)
-      .sort((a, b) => b.score - a.score || a.i - b.i)
+      .sort((a, b) => b.score - a.score || (b.command.priority ?? 0) - (a.command.priority ?? 0) || a.i - b.i)
       .slice(0, limit)
       .map((x) => x.command);
   }

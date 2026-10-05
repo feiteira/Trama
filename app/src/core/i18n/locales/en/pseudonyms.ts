@@ -94,6 +94,7 @@ export const pseudonyms = {
     understand: 'I understand that the document text will change',
     run: 'Replace {n}',
     running: 'Replacing names in the documents…',
+    runningN: 'Going through the documents… {n} of {total}',
     replacements: { one: '{n} replacement', other: '{n} replacements' },
     doneTitle: 'Pseudonymisation applied',
     doneBody: '{replacements} made in {documents}.',

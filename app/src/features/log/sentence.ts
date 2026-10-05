@@ -141,9 +141,9 @@ export const TEMPLATES: Record<LogAction, readonly Shape[]> = {
   'document.edit': ['plain', 'one', 'two', 'oneN'],
   'document.delete': ['plain', 'one'],
   'document.restore': ['plain', 'one'],
-  'code.create': ['plain', 'one'],
+  'code.create': ['plain', 'one', 'n', 'nB'],
   'code.rename': ['plain', 'two'],
-  'code.edit': ['plain', 'one'],
+  'code.edit': ['plain', 'one', 'n', 'nB'],
   'code.move': ['plain', 'one', 'two'],
   'code.merge': ['plain', 'twoN'],
   'code.split': ['plain', 'twoN'],
@@ -166,6 +166,8 @@ export const TEMPLATES: Record<LogAction, readonly Shape[]> = {
   'pseudonym.apply': ['plain', 'n', 'nB'],
   export: ['plain', 'one'],
   backup: ['plain', 'one'],
+  'coder.add': ['plain', 'one'],
+  'coder.edit': ['plain', 'one', 'two'],
 };
 
 /** The message key of a template: `export` → log.actions.project.export.plain. */
@@ -312,6 +314,15 @@ export function beforeBound(to: string | null): { at: string; updated_at_hlc: st
   // Log times are whole seconds (isoSeconds). No hlc sorts below '', so an entry at exactly
   // this instant is left out too.
   return { at: d.plus({ days: 1 }).startOf('day').toUTC().toISO({ suppressMilliseconds: true })!, updated_at_hlc: '' };
+}
+
+/** The lower bound for entries on or after the `from` day (yyyy-mm-dd, local time), for `listLog`. */
+export function afterBound(from: string | null): { at: string; updated_at_hlc: string } | undefined {
+  if (!from) return undefined;
+  const d = DateTime.fromISO(from);
+  if (!d.isValid) return undefined;
+  // No hlc sorts below '': an entry at exactly midnight is kept.
+  return { at: d.startOf('day').toUTC().toISO({ suppressMilliseconds: true })!, updated_at_hlc: '' };
 }
 
 /** Whether an entry is on or after the `from` day. */

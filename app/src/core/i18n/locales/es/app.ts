@@ -14,7 +14,8 @@ export const app: Messages['app'] = {
     analysis: 'Análisis',
     agreement: 'Acuerdo',
     import: 'Importar',
-    project: 'Exportar y copias',
+    project: 'Proyecto',
+    projectKeywords: 'exportar, copias de seguridad, informe, eliminar proyecto',
     pseudonyms: 'Seudonimización',
     log: 'Registro de auditoría',
     settings: 'Ajustes',
@@ -43,6 +44,11 @@ export const app: Messages['app'] = {
     themeLight: 'Usar el tema claro',
     themeDark: 'Usar el tema oscuro',
     themeSystem: 'Seguir el tema del sistema',
+    shortcuts: 'Atajos de teclado',
+    shortcutsKeywords: 'teclas, teclado',
+  },
+  help: {
+    button: 'Ayuda sobre esta pantalla',
   },
   undo: {
     group: 'Deshacer y rehacer',

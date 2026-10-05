@@ -2,13 +2,36 @@ import { useLayoutEffect, useState, type CSSProperties, type RefObject } from 'r
 import { type Align, place, type Placement, type Rect, type Side } from '../position';
 
 /**
- * Positions `floating` next to `anchor` (an element or a fixed rectangle such as a right-click
- * point) while `open`, and again when the window resizes or anything scrolls. Before the first
- * measurement the box is placed off-screen, so it never flashes at 0,0.
+ * What a floating box hangs from:
+ * - an element (a ref), followed as it moves;
+ * - a fixed rectangle in viewport coordinates (a right-click point), which stays put;
+ * - a function returning the rectangle now (a point inside scrolling content), asked again on
+ *   every scroll and resize so the box moves with it. Keep its identity stable (useCallback)
+ *   while the point is the same; a new function re-measures.
+ */
+export type Anchor = RefObject<HTMLElement | null> | Rect | (() => Rect | null) | null;
+
+/** The anchor's element, when it is one. */
+export function anchorElement(anchor: Anchor): HTMLElement | null {
+  return anchor && typeof anchor !== 'function' && 'current' in anchor ? anchor.current : null;
+}
+
+/** The anchor's rectangle in viewport coordinates now, or null when it is not on the page. */
+export function anchorRect(anchor: Anchor): Rect | null {
+  if (!anchor) return null;
+  if (typeof anchor === 'function') return anchor();
+  if ('current' in anchor) return anchor.current?.getBoundingClientRect() ?? null;
+  return anchor;
+}
+
+/**
+ * Positions `floating` next to `anchor` while `open`, and again when the window resizes or
+ * anything scrolls. Before the first measurement the box is placed off-screen, so it never
+ * flashes at 0,0.
  */
 export function useFloating(
   open: boolean,
-  anchor: RefObject<HTMLElement | null> | Rect | null,
+  anchor: Anchor,
   floating: RefObject<HTMLElement | null>,
   side: Side = 'bottom',
   align: Align = 'start',
@@ -22,7 +45,7 @@ export function useFloating(
     }
     const update = () => {
       const el = floating.current;
-      const a = anchor && 'current' in anchor ? anchor.current?.getBoundingClientRect() : anchor;
+      const a = anchorRect(anchor);
       if (!el || !a) return;
       // Measure at natural size: a previous maxHeight must not shrink what we measure.
       const prevMax = el.style.maxHeight;
@@ -51,7 +74,7 @@ export function useFloating(
     };
     // A rectangle anchor is compared by value, so a new object for the same point does not loop.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, anchor && 'current' in anchor ? anchor : JSON.stringify(anchor), floating, side, align, gap]);
+  }, [open, anchor && (typeof anchor === 'function' || 'current' in anchor) ? anchor : JSON.stringify(anchor), floating, side, align, gap]);
   return pos;
 }
 

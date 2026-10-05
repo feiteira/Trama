@@ -99,6 +99,38 @@ describe('suggestCandidates', () => {
     expect(suggestCandidates([])).toEqual([]);
     expect(suggestCandidates([''])).toEqual([]);
   });
+
+  it('never suggests contractions, and takes possessives as the name', () => {
+    const c = suggestCandidates([
+      'Rui: Well, I’m not sure. I\'ll ask, and I\'ve told Ana\'s mother. Then I’d go, but I don\'t know. Don’t worry, We\'re fine, You\'ll see.',
+      'Rui: Ana’s garden is big, and Rui\'s too. It\'s Ana. Can\'t say more, That\'s all, said O\'Brien, and D\'Angelo.',
+    ]);
+    const names = c.map((x) => x.text);
+    for (const w of ['I’m', "I'll", "I've", 'I’d', "Don't", 'Don’t', "We're", "You'll", "Can't", "It's", 'It', "That's", 'That']) expect(names).not.toContain(w);
+    expect(names).toEqual(expect.arrayContaining(['Ana', 'Rui', "O'Brien", "D'Angelo"]));
+    expect(names).not.toContain('Ana’s');
+    expect(c.find((x) => x.text === 'Ana')!.count).toBe(3);
+  });
+
+  it('leaves out the words spoken sentences start with, in English, Portuguese and Spanish', () => {
+    const lines = [
+      'Rui: Now, Maria said yes. Well, Maria knew. Yes, and Maybe, Okay, So, But, And, Then, Also, Actually Maria.',
+      'Ana: Então, a Maria disse. Bem, Sim, Pois, Mas, Agora, Olha, Pronto, Talvez, Claro — a Maria sabia.',
+      'Eva: Bueno, Pues, Entonces, Ahora, Vale, Oye, Vamos, Hombre — la Maria lo sabía.',
+      // Mid-sentence after a comma too, where a capital usually means a name.
+      'Rui: and then, Now Maria, Agora Maria, Ahora Maria, Bueno Maria.',
+      // A transcriber's note between sentences does not hide where the next one starts.
+      'Rui: Terrifying. [laughs] Sounds daft. (pausa) Parece parvo, e a Maria. [ri-se] Durante anos. Mi casa.',
+      // Spanish and Portuguese function words, plural days, and a leading particle once "E" is gone.
+      'Eva: lo vi el lunes, En casa y Al final. On Saturdays Maria came. E das Amoreiras, Maria.',
+    ];
+    const names = suggestCandidates([lines.join('\n')]).map((x) => x.text);
+    for (const w of ['Sounds', 'Parece', 'Durante', 'Mi', 'En', 'Al', 'Saturdays', 'das Amoreiras', 'Now', 'Well', 'Yes', 'Maybe', 'Okay', 'So', 'But', 'And', 'Then', 'Also', 'Actually', 'Então', 'Bem', 'Sim', 'Pois', 'Mas', 'Agora', 'Olha', 'Pronto', 'Talvez', 'Claro', 'Bueno', 'Pues', 'Entonces', 'Ahora', 'Vale', 'Oye', 'Vamos', 'Hombre']) {
+      expect(names, w).not.toContain(w);
+      expect(names.some((n) => n.startsWith(`${w} `)), w).toBe(false);
+    }
+    expect(names).toEqual(expect.arrayContaining(['Maria', 'Rui', 'Ana', 'Eva', 'Amoreiras']));
+  });
 });
 
 describe('preview and apply', () => {
@@ -161,6 +193,21 @@ describe('preview and apply', () => {
     expect((await ctx.store.get('pseudonym', full.id))!.applied_count).toBe(0);
     await r.undo.redo();
     expect((await getText(ctx, d2.id)).text).toBe(t2);
+  });
+
+  it('reports progress document by document', async () => {
+    const { ctx } = await setup();
+    await createDocument(ctx, { name: 'Entrevista 3', kind: 'text', text: 'Sem nomes.' });
+    await createPseudonym(ctx, { original: 'Rui', replacement: 'P2' });
+    const steps: [number, number][] = [];
+    const r = await apply(ctx, undefined, { onProgress: (d, t) => void steps.push([d, t]) });
+    expect(r.documents).toBe(2);
+    expect(steps).toEqual([
+      [0, 3],
+      [1, 3],
+      [2, 3],
+      [3, 3],
+    ]);
   });
 
   it('applies only the chosen entries and handles no matches', async () => {

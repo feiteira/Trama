@@ -30,6 +30,12 @@
   animation: dialog-in var(--dur-3) var(--ease);
 }
 
+/* The box takes the focus only when it holds nothing focusable; it is not a control. */
+.dialog:focus,
+.dialog:focus-visible {
+  outline: none;
+}
+
 @keyframes dialog-in {
   from {
     opacity: 0;

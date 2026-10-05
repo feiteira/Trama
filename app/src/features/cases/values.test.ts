@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Attribute, Case } from '../../core/model/types';
 import {
-  buildRows, editText, exportTable, filterRows, formatValue, lostOnTypeChange, nextName, nextSort, parseInput, parseOptions, safeFileName, sortRows,
+  buildRows, editText, exportTable, filterRows, formatValue, nextName, nextSort, parseInput, parseOptions, safeFileName, sortRows,
   type CaseRow,
 } from './values';
 
@@ -96,15 +96,6 @@ describe('rows', () => {
 });
 
 describe('attribute helpers', () => {
-  it('counts the values a type change would clear', () => {
-    const a = attr('x', 'text');
-    const cases = [kase('1', 'A', { x: '12' }), kase('2', 'B', { x: 'twelve' }), kase('3', 'C', {})];
-    expect(lostOnTypeChange(a, 'number', cases)).toBe(1);
-    expect(lostOnTypeChange(a, 'date', cases)).toBe(2);
-    expect(lostOnTypeChange(a, 'choice', cases)).toBe(0);
-    expect(lostOnTypeChange(a, 'text', cases)).toBe(0);
-  });
-
   it('reads options one per line', () => {
     expect(parseOptions(' Nurse \n\ndoctor\nNURSE\n  Porter  ')).toEqual(['Nurse', 'doctor', 'Porter']);
   });

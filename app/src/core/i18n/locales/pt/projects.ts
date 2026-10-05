@@ -5,7 +5,6 @@ export const projects: Messages['projects'] = {
   count: { one: '{n} projeto nesta biblioteca', other: '{n} projetos nesta biblioteca' },
   new: 'Novo projeto',
   import: 'Importar um ficheiro de projeto',
-  importSoon: 'Será possível importar um ficheiro de projeto a partir das ferramentas de exportação.',
   addExample: 'Adicionar o projeto de exemplo',
   addingExample: 'A adicionar o projeto de exemplo…',
   search: 'Procurar um projeto',

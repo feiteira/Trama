@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=Trama (example)
+Name[pt]=Trama (exemplo)
+Name[es]=Trama (ejemplo)
+Comment=Try Trama with a fictional research project that resets every time it opens
+Comment[pt]=Experimente o Trama com um projeto de investigação fictício que recomeça sempre que o abre
+Comment[es]=Pruebe Trama con un proyecto de investigación ficticio que se reinicia cada vez que lo abre
+Exec=trama-desktop --example
+Icon=trama-desktop
+StartupWMClass=trama-desktop
+Categories=Education;Science;
+Terminal=false

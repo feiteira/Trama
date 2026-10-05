@@ -1,0 +1,97 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Trama",
+  "version": "0.1.0",
+  "identifier": "eu.thehumanloop.trama",
+  "build": {
+    "frontendDist": "../../app/dist",
+    "devUrl": "http://localhost:1420",
+    "beforeDevCommand": "npm run dev --workspace @trama/app",
+    "beforeBuildCommand": "npm run build --workspace @trama/app"
+  },
+  "app": {
+    "withGlobalTauri": false,
+    "windows": [
+      {
+        "title": "Trama",
+        "width": 1360,
+        "height": 860,
+        "minWidth": 1000,
+        "minHeight": 660,
+        "center": true
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: asset:; font-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost blob: data:; media-src 'self' blob:",
+      "freezePrototype": false,
+      "dangerousDisableAssetCspModification": [
+        "style-src"
+      ]
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": [
+      "appimage",
+      "deb",
+      "rpm",
+      "nsis",
+      "msi"
+    ],
+    "category": "Education",
+    "shortDescription": "Free, offline, encrypted qualitative data analysis",
+    "longDescription": "Trama is qualitative data analysis software for researchers: code interview transcripts, field notes and documents with a hierarchical codebook, write memos, describe cases, run queries, check inter-coder agreement and exchange projects with other tools through REFI-QDA. Everything stays encrypted on your own computer, with no account and no network connection.",
+    "copyright": "© Trama contributors",
+    "license": "MPL-2.0",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "windows": {
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper"
+      },
+      "nsis": {
+        "languages": [
+          "English",
+          "Portuguese",
+          "Spanish"
+        ],
+        "displayLanguageSelector": true,
+        "installerHooks": "windows/installer-hooks.nsh"
+      },
+      "wix": {
+        "language": [
+          "en-US",
+          "pt-PT",
+          "es-ES"
+        ],
+        "fragmentPaths": [
+          "windows/example-shortcut.wxs"
+        ],
+        "componentGroupRefs": [
+          "ExampleShortcuts"
+        ]
+      }
+    },
+    "linux": {
+      "deb": {
+        "depends": [],
+        "files": {
+          "/usr/share/applications/trama-example.desktop": "linux/trama-example.desktop"
+        }
+      },
+      "appimage": {
+        "bundleMediaFramework": false
+      },
+      "rpm": {
+        "files": {
+          "/usr/share/applications/trama-example.desktop": "linux/trama-example.desktop"
+        }
+      }
+    }
+  }
+}

@@ -1,11 +1,12 @@
+import { toHex } from '../core/bytes';
 import { jsKdf } from '../core/crypto/kdf';
-import { APP_VERSION } from '../loop/buildInfo';
 import type { Db } from '../core/store/db';
 import { SqlJsDb } from './sqljs';
-import { type FileEntry, type Platform, PlatformError } from './types';
+import { type AppInfo, type FileEntry, type Platform, PlatformError } from './types';
 
 // A platform that keeps everything in memory: for tests, the browser demo and the
-// screenshot pipeline. Nothing persists and nothing is encrypted at rest.
+// screenshot pipeline. Nothing persists and nothing is encrypted at rest — the database "key"
+// is only remembered, so a wrong one fails the way SQLCipher would.
 
 export interface MemoryPlatformOptions {
   locateFile?: (file: string) => string;
@@ -15,19 +16,27 @@ export interface MemoryPlatformOptions {
   dialogAnswers?: (string | string[] | null)[];
   /** What "choose a folder" returns once the queued answers run out. */
   defaultFolder?: string;
-  /** A stand-in for The Human Loop (tests and the demo). */
-  http?: Platform['http'];
-  /** Where "open a web page" goes (the demo opens a browser tab); links are also recorded. */
-  openLink?: (url: string) => void;
+  /** Behave like the example library (`--example`): backups are refused. */
+  example?: boolean;
 }
 
 export interface MemoryPlatform extends Platform {
   fileStore: Map<string, Uint8Array>;
   queueAnswer: (a: string | string[] | null) => void;
-  openedLinks: string[];
   /** Makes an empty folder exist (folders holding files exist anyway). */
   addDir: (path: string) => void;
+  /** Raw (sealed) blob bytes of a project, for tests that look at what is stored. */
+  blobStore: (project: string) => Map<string, Uint8Array>;
 }
+
+interface MemoryProject {
+  db: SqlJsDb;
+  keyHex: string;
+  blobs: Map<string, Uint8Array>;
+}
+
+// The same rule the desktop shell applies to project and blob ids (they become file names).
+const SAFE_ID = /^[a-z0-9][a-z0-9._-]*$/;
 
 export function createMemoryPlatform(opts: MemoryPlatformOptions = {}): MemoryPlatform {
   const fileStore = opts.files ?? new Map<string, Uint8Array>();
@@ -37,23 +46,35 @@ export function createMemoryPlatform(opts: MemoryPlatformOptions = {}): MemoryPl
   const dirs = new Set<string>();
   const trim = (p: string) => (p.length > 1 ? p.replace(/\/$/, '') : p);
   if (opts.defaultFolder) dirs.add(trim(opts.defaultFolder));
-  const openedLinks: string[] = [];
-  const blobs = new Map<string, Uint8Array>();
   const answers = [...(opts.dialogAnswers ?? [])];
+  const projects = new Map<string, MemoryProject>();
+  // Blobs written before (or without) a database: the desktop shell creates the folder on write.
+  const looseBlobs = new Map<string, Map<string, Uint8Array>>();
   let prefs: Record<string, string> = {};
   let keyring: string | null = null;
-  let db: SqlJsDb | null = null;
-  let dbKey: string | null = null;
+  let libraryFile: string | null = null;
 
   const next = () => (answers.length ? answers.shift()! : null);
   const notFound = (p: string) => new PlatformError('NOT_FOUND', `not found: ${p}`);
+  const checkId = (what: string, id: string) => {
+    if (!SAFE_ID.test(id)) throw new PlatformError('INVALID', `invalid ${what} id: ${id}`);
+  };
+  const blobsOf = (project: string, create: boolean): Map<string, Uint8Array> | null => {
+    const p = projects.get(project);
+    if (p) return p.blobs;
+    let loose = looseBlobs.get(project);
+    if (!loose && create) looseBlobs.set(project, (loose = new Map()));
+    return loose ?? null;
+  };
+  const version = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '0.0.0-test';
 
   return {
     kind: 'demo',
     fileStore,
     queueAnswer: (a) => void answers.push(a),
     addDir: (path) => void dirs.add(trim(path)),
-    info: async () => ({ version: APP_VERSION, os: 'demo', data_dir: '/demo', example: false }),
+    blobStore: (project) => blobsOf(project, true)!,
+    info: async (): Promise<AppInfo> => ({ version, os: 'web', data_dir: '/demo', example: !!opts.example }),
     prefs: {
       get: async () => ({ ...prefs }),
       set: async (v) => void (prefs = { ...prefs, ...v }),
@@ -62,49 +83,65 @@ export function createMemoryPlatform(opts: MemoryPlatformOptions = {}): MemoryPl
       read: async () => keyring,
       write: async (json) => void (keyring = json),
     },
-    practice: {
-      exists: async () => db !== null,
-      async open(key, create): Promise<Db> {
-        const hex = Array.from(key, (b) => b.toString(16).padStart(2, '0')).join('');
-        if (!db) {
-          if (!create) throw notFound('practice');
-          db = await SqlJsDb.create({ locateFile: opts.locateFile });
-          dbKey = hex;
-        } else if (hex !== dbKey) {
+    libraryFile: {
+      read: async () => libraryFile,
+      write: async (text) => void (libraryFile = text),
+    },
+    eraseAll: async () => {
+      keyring = null;
+      libraryFile = null;
+      projects.clear();
+      looseBlobs.clear();
+    },
+    projects: {
+      list: async () => [...projects.keys()].sort(),
+      exists: async (id) => projects.has(id),
+      async open(id, key, create): Promise<Db> {
+        checkId('project', id);
+        const hex = toHex(key);
+        let p = projects.get(id);
+        if (!p) {
+          if (!create) throw notFound(`project ${id}`);
+          p = { db: await SqlJsDb.create({ locateFile: opts.locateFile }), keyHex: hex, blobs: looseBlobs.get(id) ?? new Map() };
+          looseBlobs.delete(id);
+          projects.set(id, p);
+        } else if (hex !== p.keyHex) {
           throw new PlatformError('WRONG_KEY', 'wrong key');
         }
-        const inner = db;
+        const inner = p.db;
+        let closed = false;
+        const live = () => {
+          // A handle used after close (or after the project was erased) fails like the shell does.
+          if (closed || projects.get(id)?.db !== inner) throw new PlatformError('NOT_OPEN', `project ${id} is not open`);
+          return inner;
+        };
         // Closing the handle must not destroy the in-memory database (it models a file).
         return {
-          exec: (s, p) => inner.exec(s, p),
-          query: (s, p) => inner.query(s, p),
-          batch: (s) => inner.batch(s),
-          script: (s) => inner.script(s),
-          close: async () => {},
+          exec: async (s, prm) => live().exec(s, prm),
+          query: async (s, prm) => live().query(s, prm),
+          batch: async (s) => live().batch(s),
+          script: async (s) => live().script(s),
+          close: async () => void (closed = true),
         } as Db;
       },
-      erase: async () => {
-        db = null;
-        dbKey = null;
-        keyring = null;
-        blobs.clear();
+      erase: async (id) => {
+        projects.delete(id);
+        looseBlobs.delete(id);
       },
     },
     kdf: jsKdf,
-    http: opts.http ?? null,
-    openedLinks,
-    openLink: async (url) => {
-      openedLinks.push(url);
-      opts.openLink?.(url);
-    },
     blobs: {
-      write: async (id, bytes) => void blobs.set(id, bytes.slice()),
-      read: async (id) => {
-        const b = blobs.get(id);
-        if (!b) throw notFound(id);
+      write: async (project, id, bytes) => {
+        checkId('project', project);
+        checkId('blob', id);
+        blobsOf(project, true)!.set(id, bytes.slice());
+      },
+      read: async (project, id) => {
+        const b = blobsOf(project, false)?.get(id);
+        if (!b) throw notFound(`blob ${id}`);
         return b.slice();
       },
-      remove: async (id) => void blobs.delete(id),
+      remove: async (project, id) => void blobsOf(project, false)?.delete(id),
     },
     files: {
       read: async (path) => {
@@ -115,6 +152,8 @@ export function createMemoryPlatform(opts: MemoryPlatformOptions = {}): MemoryPl
       write: async (path, bytes) => {
         fileStore.set(path, bytes.slice());
         mtimes.set(path, Date.now());
+        // The folders above it exist from now on, also once the file is removed again.
+        for (let i = path.indexOf('/', 1); i > 0; i = path.indexOf('/', i + 1)) dirs.add(path.slice(0, i));
       },
       list: async (dir, recursive) => {
         const prefix = dir.endsWith('/') ? dir : `${dir}/`;
@@ -133,6 +172,7 @@ export function createMemoryPlatform(opts: MemoryPlatformOptions = {}): MemoryPl
           }
           entries.set(path, { path, name: parts[parts.length - 1]!, is_dir: false, size: bytes.length, modified_ms: mtimes.get(path) ?? 0, depth: parts.length });
         }
+        if (!entries.size && !dirs.has(trim(dir))) throw notFound(dir);
         return [...entries.values()].sort((a, b) => a.path.localeCompare(b.path));
       },
       remove: async (path) => {
@@ -154,8 +194,8 @@ export function createMemoryPlatform(opts: MemoryPlatformOptions = {}): MemoryPl
         return a === null ? [] : Array.isArray(a) ? a : [a];
       },
       saveFile: async (_t, name) => {
-        const a = next();
-        return typeof a === 'string' ? a : `/demo/exports/${name}`;
+        const a = answers.length ? next() : `/demo/exports/${name}`;
+        return typeof a === 'string' ? a : null;
       },
     },
     setTitle: async () => {},

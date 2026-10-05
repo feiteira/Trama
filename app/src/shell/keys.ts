@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useAppState } from './AppState';
+import { usePlatform } from './AppState';
 
 /** How a Ctrl shortcut is written on this computer: "Ctrl+K", or "⌘K" on a Mac. */
-export function useKeyLabel(): (key: string) => string {
-  const { platform } = useAppState();
+export function useKeyLabel(): (key: string, opts?: { shift?: boolean; alt?: boolean }) => string {
+  const platform = usePlatform();
   const [mac, setMac] = useState(false);
   useEffect(() => {
     let live = true;
@@ -15,5 +15,9 @@ export function useKeyLabel(): (key: string) => string {
       live = false;
     };
   }, [platform]);
-  return useCallback((key: string) => (mac ? `⌘${key}` : `Ctrl+${key}`), [mac]);
+  return useCallback(
+    (key: string, opts: { shift?: boolean; alt?: boolean } = {}) =>
+      mac ? `${opts.alt ? '⌥' : ''}${opts.shift ? '⇧' : ''}⌘${key}` : `Ctrl+${opts.alt ? 'Alt+' : ''}${opts.shift ? 'Shift+' : ''}${key}`,
+    [mac],
+  );
 }

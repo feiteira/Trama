@@ -1,5 +1,6 @@
-// Window-level listeners run in the capture phase: react-native-web's TextInput stops the
-// propagation of every keydown, so bubble-phase listeners never hear typing in a field.
+// Window-level listeners run in the capture phase: a component that stops a keydown's
+// propagation (a menu, a field handling Escape) must not hide typing from the idle timer or
+// the global shortcuts.
 
 const CAPTURE = { capture: true } as const;
 

@@ -2,5 +2,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    sala_desktop_lib::run()
+    trama_desktop_lib::run()
 }

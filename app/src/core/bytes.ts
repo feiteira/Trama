@@ -120,7 +120,8 @@ export function readU32be(b: Uint8Array, offset: number): number {
 
 export function randomBytes(n: number): Uint8Array {
   const out = new Uint8Array(n);
-  globalThis.crypto.getRandomValues(out);
+  // getRandomValues refuses more than 65536 bytes per call.
+  for (let i = 0; i < n; i += 65536) globalThis.crypto.getRandomValues(out.subarray(i, Math.min(n, i + 65536)));
   return out;
 }
 

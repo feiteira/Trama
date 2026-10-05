@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CodeBook xmlns="urn:QDA-XML:codebook:1.0" origin="Sala 0.1">
+  <Codes>
+    <Code guid="a0000000-0000-4000-8000-000000000001" name="Emotions" isCodable="false">
+      <Description>Folder for emotion codes</Description>
+      <Code guid="a0000000-0000-4000-8000-000000000002" name="Joy" isCodable="true" color="#F5A623">
+        <Description>Expressions of happiness</Description>
+      </Code>
+    </Code>
+    <Code guid="a0000000-0000-4000-8000-000000000003" name="Work" isCodable="true" color="#4A90E2"/>
+  </Codes>
+  <Sets>
+    <Set guid="40000000-0000-4000-8000-000000000001" name="Core">
+      <MemberCode guid="a0000000-0000-4000-8000-000000000002"/>
+      <MemberCode guid="a0000000-0000-4000-8000-000000000003"/>
+    </Set>
+  </Sets>
+</CodeBook>

@@ -1,0 +1,9 @@
+/* Self-hosted type (never a font CDN: Trama makes no network connections). SIL Open Font
+   License 1.1, shipped inside the @fontsource-variable packages.
+   - Instrument Sans: the interface. The weight axis only.
+   - Literata: document text. The optical-size axis keeps it sturdy at reading sizes and
+     refined at headings; italics are needed for quotations inside transcripts. */
+@import '@fontsource-variable/instrument-sans/wght.css';
+@import '@fontsource-variable/instrument-sans/wght-italic.css';
+@import '@fontsource-variable/literata/opsz.css';
+@import '@fontsource-variable/literata/opsz-italic.css';

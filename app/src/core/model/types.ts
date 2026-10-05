@@ -181,6 +181,7 @@ export const LOG_ACTIONS = [
   'coding.add', 'coding.remove', 'coding.edit', 'coding.autocode',
   'memo.create', 'memo.edit', 'memo.delete',
   'case.create', 'case.edit', 'case.delete', 'attribute.edit',
+  'group.create', 'group.edit', 'group.delete',
   'pseudonym.apply', 'export', 'backup',
 ] as const;
 export type LogAction = (typeof LOG_ACTIONS)[number];

@@ -1,0 +1,173 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Project xmlns="urn:QDA-XML:project:1.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="urn:QDA-XML:project:1.0 http://schema.qdasoftware.org/versions/Project/v1.0/Project.xsd"
+         name="Demo project" origin="Sala 0.1"
+         creatingUserGUID="5c94bc9e-db8c-4f1d-9cd6-e900c7440860"
+         creationDateTime="2026-10-05T12:00:00Z"
+         modifyingUserGUID="5c94bc9e-db8c-4f1d-9cd6-e900c7440860"
+         modifiedDateTime="2026-10-05T12:30:00Z">
+  <Users>
+    <User guid="5c94bc9e-db8c-4f1d-9cd6-e900c7440860" name="Ana"/>
+  </Users>
+  <CodeBook>
+    <Codes>
+      <Code guid="a0000000-0000-4000-8000-000000000001" name="Emotions" isCodable="false">
+        <Code guid="a0000000-0000-4000-8000-000000000002" name="Joy" isCodable="true" color="#F5A623">
+          <Description>Expressions of happiness</Description>
+          <NoteRef targetGUID="d0000000-0000-4000-8000-000000000002"/>
+        </Code>
+      </Code>
+      <Code guid="a0000000-0000-4000-8000-000000000003" name="Work" isCodable="true" color="#4A90E2"/>
+    </Codes>
+  </CodeBook>
+  <Variables>
+    <Variable guid="e0000000-0000-4000-8000-000000000001" name="Age" typeOfVariable="Integer">
+      <Description>Age in years</Description>
+    </Variable>
+    <Variable guid="e0000000-0000-4000-8000-000000000002" name="Gender" typeOfVariable="Text"/>
+  </Variables>
+  <Cases>
+    <Case guid="c0000000-0000-4000-8000-000000000001" name="Participant 1">
+      <Description>First interviewee</Description>
+      <CodeRef targetGUID="a0000000-0000-4000-8000-000000000003"/>
+      <VariableValue>
+        <VariableRef targetGUID="e0000000-0000-4000-8000-000000000001"/>
+        <IntegerValue>34</IntegerValue>
+      </VariableValue>
+      <VariableValue>
+        <VariableRef targetGUID="e0000000-0000-4000-8000-000000000002"/>
+        <TextValue>female</TextValue>
+      </VariableValue>
+      <SourceRef targetGUID="b0000000-0000-4000-8000-000000000001"/>
+      <SelectionRef targetGUID="f0000000-0000-4000-8000-000000000001"/>
+    </Case>
+  </Cases>
+  <Sources>
+    <TextSource guid="b0000000-0000-4000-8000-000000000001" name="Interview 1.txt"
+                plainTextPath="internal://b0000000-0000-4000-8000-000000000001.txt"
+                creatingUser="5c94bc9e-db8c-4f1d-9cd6-e900c7440860"
+                creationDateTime="2026-10-05T12:00:00Z">
+      <Description>Transcript of interview 1</Description>
+      <PlainTextSelection guid="f0000000-0000-4000-8000-000000000001" name="I love my job"
+                          startPosition="10" endPosition="23"
+                          creatingUser="5c94bc9e-db8c-4f1d-9cd6-e900c7440860"
+                          creationDateTime="2026-10-05T12:10:00Z">
+        <Description>Strong positive statement</Description>
+        <Coding guid="10000000-0000-4000-8000-000000000001"
+                creatingUser="5c94bc9e-db8c-4f1d-9cd6-e900c7440860"
+                creationDateTime="2026-10-05T12:10:00Z">
+          <CodeRef targetGUID="a0000000-0000-4000-8000-000000000002"/>
+        </Coding>
+        <Coding guid="10000000-0000-4000-8000-000000000002">
+          <CodeRef targetGUID="a0000000-0000-4000-8000-000000000003"/>
+        </Coding>
+        <NoteRef targetGUID="d0000000-0000-4000-8000-000000000003"/>
+      </PlainTextSelection>
+      <Coding guid="10000000-0000-4000-8000-000000000003">
+        <CodeRef targetGUID="a0000000-0000-4000-8000-000000000003"/>
+      </Coding>
+      <NoteRef targetGUID="d0000000-0000-4000-8000-000000000001"/>
+      <VariableValue>
+        <VariableRef targetGUID="e0000000-0000-4000-8000-000000000002"/>
+        <TextValue>female</TextValue>
+      </VariableValue>
+    </TextSource>
+    <TextSource guid="b0000000-0000-4000-8000-000000000002" name="Inline note-like text">
+      <PlainTextContent>Short text stored inline.</PlainTextContent>
+    </TextSource>
+    <PDFSource guid="b0000000-0000-4000-8000-000000000003" name="Report.pdf"
+               path="internal://b0000000-0000-4000-8000-000000000003.pdf">
+      <PDFSelection guid="f0000000-0000-4000-8000-000000000002" page="0"
+                    firstX="72" firstY="700" secondX="300" secondY="650">
+        <Coding guid="10000000-0000-4000-8000-000000000004">
+          <CodeRef targetGUID="a0000000-0000-4000-8000-000000000003"/>
+        </Coding>
+      </PDFSelection>
+      <Representation guid="b0000000-0000-4000-8000-000000000004" name="Report.pdf"
+                      plainTextPath="internal://b0000000-0000-4000-8000-000000000004.txt">
+        <PlainTextSelection guid="f0000000-0000-4000-8000-000000000003" startPosition="0" endPosition="12">
+          <Coding guid="10000000-0000-4000-8000-000000000005">
+            <CodeRef targetGUID="a0000000-0000-4000-8000-000000000002"/>
+          </Coding>
+        </PlainTextSelection>
+      </Representation>
+    </PDFSource>
+    <PictureSource guid="b0000000-0000-4000-8000-000000000005" name="Photo.jpg"
+                   path="internal://b0000000-0000-4000-8000-000000000005.jpg">
+      <PictureSelection guid="f0000000-0000-4000-8000-000000000004"
+                        firstX="10" firstY="20" secondX="200" secondY="180">
+        <Coding guid="10000000-0000-4000-8000-000000000006">
+          <CodeRef targetGUID="a0000000-0000-4000-8000-000000000002"/>
+        </Coding>
+      </PictureSelection>
+    </PictureSource>
+    <AudioSource guid="b0000000-0000-4000-8000-000000000006" name="Interview 1.m4a"
+                 path="internal://b0000000-0000-4000-8000-000000000006.m4a">
+      <Transcript guid="b0000000-0000-4000-8000-000000000007" name="Interview 1 transcript"
+                  plainTextPath="internal://b0000000-0000-4000-8000-000000000007.txt">
+        <SyncPoint guid="20000000-0000-4000-8000-000000000001" position="0" timeStamp="0"/>
+        <SyncPoint guid="20000000-0000-4000-8000-000000000002" position="42" timeStamp="5300"/>
+        <TranscriptSelection guid="f0000000-0000-4000-8000-000000000005" name="Intro"
+                             fromSyncPoint="20000000-0000-4000-8000-000000000001"
+                             toSyncPoint="20000000-0000-4000-8000-000000000002">
+          <Coding guid="10000000-0000-4000-8000-000000000007">
+            <CodeRef targetGUID="a0000000-0000-4000-8000-000000000003"/>
+          </Coding>
+        </TranscriptSelection>
+      </Transcript>
+      <AudioSelection guid="f0000000-0000-4000-8000-000000000006" name="00:01.00 - 00:04.50"
+                      begin="1000" end="4500">
+        <Coding guid="10000000-0000-4000-8000-000000000008">
+          <CodeRef targetGUID="a0000000-0000-4000-8000-000000000002"/>
+        </Coding>
+      </AudioSelection>
+    </AudioSource>
+    <VideoSource guid="b0000000-0000-4000-8000-000000000008" name="Clip.mp4"
+                 path="relative:///media/Clip.mp4"
+                 currentPath="absolute:///home/ana/media/Clip.mp4">
+      <VideoSelection guid="f0000000-0000-4000-8000-000000000007" begin="0" end="2500"/>
+    </VideoSource>
+  </Sources>
+  <Notes>
+    <Note guid="d0000000-0000-4000-8000-000000000001" name="Memo on interview 1"
+          creatingUser="5c94bc9e-db8c-4f1d-9cd6-e900c7440860"
+          creationDateTime="2026-10-05T12:20:00Z">
+      <PlainTextContent>Participant seemed relaxed.</PlainTextContent>
+    </Note>
+    <Note guid="d0000000-0000-4000-8000-000000000002" name="Code memo: Joy"
+          plainTextPath="internal://d0000000-0000-4000-8000-000000000002.txt"/>
+    <Note guid="d0000000-0000-4000-8000-000000000003" name="Comment">
+      <PlainTextContent>Key quote.</PlainTextContent>
+    </Note>
+  </Notes>
+  <Links>
+    <Link guid="30000000-0000-4000-8000-000000000001" name="explains" direction="OneWay"
+          color="#000000"
+          originGUID="d0000000-0000-4000-8000-000000000001"
+          targetGUID="f0000000-0000-4000-8000-000000000001"/>
+  </Links>
+  <Sets>
+    <Set guid="40000000-0000-4000-8000-000000000001" name="Interviews">
+      <Description>All interview material</Description>
+      <MemberCode targetGUID="a0000000-0000-4000-8000-000000000002"/>
+      <MemberSource targetGUID="b0000000-0000-4000-8000-000000000001"/>
+      <MemberSource targetGUID="b0000000-0000-4000-8000-000000000006"/>
+      <MemberNote targetGUID="d0000000-0000-4000-8000-000000000001"/>
+    </Set>
+  </Sets>
+  <Graphs>
+    <Graph guid="50000000-0000-4000-8000-000000000001" name="Map">
+      <Vertex guid="50000000-0000-4000-8000-000000000002" representedGUID="a0000000-0000-4000-8000-000000000002"
+              name="Joy" firstX="10" firstY="10" secondX="110" secondY="50" shape="RoundedRectangle" color="#F5A623"/>
+      <Vertex guid="50000000-0000-4000-8000-000000000003" representedGUID="a0000000-0000-4000-8000-000000000003"
+              name="Work" firstX="200" firstY="10" secondX="300" secondY="50" shape="Rectangle"/>
+      <Edge guid="50000000-0000-4000-8000-000000000004" name="relates to"
+            sourceVertex="50000000-0000-4000-8000-000000000002"
+            targetVertex="50000000-0000-4000-8000-000000000003"
+            direction="Associative" lineStyle="solid"/>
+    </Graph>
+  </Graphs>
+  <Description>Project-level description</Description>
+  <NoteRef targetGUID="d0000000-0000-4000-8000-000000000001"/>
+</Project>

@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- "Trama (example)" in the Start menu, next to Trama: the same program started in example mode,
+     which opens a fictional research project that resets at every start. One shortcut per
+     installer language. -->
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Fragment>
+    <DirectoryRef Id="ApplicationProgramsFolder">
+      <Component Id="ExampleShortcutPt" Guid="7A78DD1C-10F2-4EC9-88C2-DA8C3CBCFD3A">
+        <Condition><![CDATA[ProductLanguage = 2070]]></Condition>
+        <Shortcut Id="ExampleShortcutPt" Name="Trama (exemplo)" Target="[!Path]" Arguments="--example" Icon="ProductIcon" WorkingDirectory="INSTALLDIR" />
+        <RegistryValue Root="HKCU" Key="Software\[Manufacturer]\[ProductName]" Name="Example Shortcut pt" Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+      <Component Id="ExampleShortcutEs" Guid="D59CA471-EBED-4E22-ADFD-D32D969CF763">
+        <Condition><![CDATA[ProductLanguage = 3082 OR ProductLanguage = 1034]]></Condition>
+        <Shortcut Id="ExampleShortcutEs" Name="Trama (ejemplo)" Target="[!Path]" Arguments="--example" Icon="ProductIcon" WorkingDirectory="INSTALLDIR" />
+        <RegistryValue Root="HKCU" Key="Software\[Manufacturer]\[ProductName]" Name="Example Shortcut es" Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+      <Component Id="ExampleShortcutEn" Guid="627656BD-5303-49D3-92D0-FD6004B0865B">
+        <Condition><![CDATA[ProductLanguage <> 2070 AND ProductLanguage <> 3082 AND ProductLanguage <> 1034]]></Condition>
+        <Shortcut Id="ExampleShortcutEn" Name="Trama (example)" Target="[!Path]" Arguments="--example" Icon="ProductIcon" WorkingDirectory="INSTALLDIR" />
+        <RegistryValue Root="HKCU" Key="Software\[Manufacturer]\[ProductName]" Name="Example Shortcut en" Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+    </DirectoryRef>
+    <ComponentGroup Id="ExampleShortcuts">
+      <ComponentRef Id="ExampleShortcutPt" />
+      <ComponentRef Id="ExampleShortcutEs" />
+      <ComponentRef Id="ExampleShortcutEn" />
+    </ComponentGroup>
+  </Fragment>
+</Wix>

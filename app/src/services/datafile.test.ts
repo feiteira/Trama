@@ -1,0 +1,206 @@
+import { strFromU8, unzipSync } from 'fflate';
+import { describe, expect, it } from 'vitest';
+import { fromUtf8, utf8 } from '../core/bytes';
+import { DecryptError } from '../core/crypto/frames';
+import { newRecoveryPhrase } from '../core/crypto/keyring';
+import { protectionOf, readTramaZip, UnlockRequiredError } from '../core/export/trama';
+import type { Draft } from '../core/model/types';
+import { createMemoryPlatform } from '../platform/memory';
+import {
+  DataFileError, exportProjectFile, importProjectFile, mergeTeammateCopy, openProjectFile, projectToBundle, withoutContent,
+} from './datafile';
+import { Library } from './library';
+import type { Project } from './project';
+import { FAST_KDF } from './testing';
+
+/** A clock the test moves by hand, shared by a library and its projects. */
+function clock(start = '2026-10-05T12:00:00Z') {
+  let t = new Date(start).getTime();
+  return { now: () => new Date(t), advance: (ms: number) => void (t += ms) };
+}
+
+async function newLibrary(c = clock()) {
+  const platform = createMemoryPlatform();
+  const library = await Library.create(platform, { passphrase: 'pass word', recoveryPhrase: newRecoveryPhrase() }, { params: FAST_KDF, now: c.now });
+  return { platform, library, clock: c };
+}
+
+const code = (name: string): Draft<'code'> => ({
+  name, parent_id: null, color: '#e4572e', description: '', inclusion: '', exclusion: '', example: '', order: 1, codable: true, shortcut: null,
+});
+
+async function seeded(project: Project) {
+  const s = project.store;
+  const original = await project.addBlob(utf8('%PDF-1.7 interview'), 'entrevista.pdf', 'application/pdf');
+  const doc = await s.put('document', {
+    name: 'Entrevista Inês', kind: 'text', group_ids: [], case_id: null, source: null, original, media: null, chars: 24, order: 1, color: null,
+  });
+  await s.put('doctext', { id: doc.id, text: 'A Maria Silva disse olá.', sync: [] });
+  const trust = await s.put('code', code('Confiança'));
+  const coding = await s.put('coding', { document_id: doc.id, code_id: trust.id, coder_id: project.me.id, start: 2, end: 13, text: 'Maria Silva', comment: '' });
+  await s.put('pseudonym', { original: 'Maria Silva', replacement: 'P1', note: '', whole_word: true, case_sensitive: false, applied_at: null, applied_count: 0 });
+  return { doc, trust, coding, original };
+}
+
+describe('exporting and importing a .trama file', () => {
+  it('round-trips a project into another library, without the pseudonymisation key by default', async () => {
+    const a = await newLibrary();
+    const p = await a.library.createProject({ name: 'Estudo 🌱', description: 'Piloto', coderName: 'Ana' });
+    const { doc, coding } = await seeded(p);
+    const bytes = await exportProjectFile(p, { includePseudonyms: false });
+    expect(protectionOf(bytes)).toBe('none');
+    const files = unzipSync(bytes);
+    expect(strFromU8(files['data/pseudonym.jsonl']!)).toBe('');
+    expect((await p.store.list('log')).some((l) => l.action === 'export')).toBe(true);
+
+    const b = await newLibrary();
+    const imported = await importProjectFile(b.library, bytes, { kind: 'none' }, { coderName: 'Rui' });
+    expect(imported.id).not.toBe(p.id);
+    expect(imported.info.name).toBe('Estudo 🌱');
+    expect(imported.me.name).toBe('Rui');
+    expect((await imported.store.get('coding', coding.id))!.text).toBe('Maria Silva');
+    expect(await imported.store.count('pseudonym')).toBe(0);
+    const d = (await imported.store.get('document', doc.id))!;
+    expect(fromUtf8(await imported.readBlob(d.original!))).toBe('%PDF-1.7 interview');
+  });
+
+  it('includes the pseudonymisation key when asked, and protects with a password', async () => {
+    const a = await newLibrary();
+    const p = await a.library.createProject({ name: 'Estudo', coderName: 'Ana' });
+    await seeded(p);
+    const bytes = await exportProjectFile(p, { includePseudonyms: true, password: 'segredo' });
+    expect(protectionOf(bytes)).toBe('password');
+    expect(fromUtf8(bytes)).not.toContain('Maria');
+    await expect(openProjectFile(a.platform, bytes, { kind: 'none' })).rejects.toBeInstanceOf(UnlockRequiredError);
+    await expect(openProjectFile(a.platform, bytes, { kind: 'password', password: 'errado' })).rejects.toBeInstanceOf(DecryptError);
+    const { bundle } = await openProjectFile(a.platform, bytes, { kind: 'password', password: 'segredo' });
+    expect(bundle.records.filter((r) => r.kind === 'pseudonym')).toHaveLength(1);
+    expect(bundle.manifest.include_pseudonyms).toBe(true);
+  });
+
+  it('carries deleted records without their content, so a file never holds what was deleted', async () => {
+    const a = await newLibrary();
+    const p = await a.library.createProject({ name: 'Estudo', coderName: 'Ana' });
+    const { doc } = await seeded(p);
+    await p.store.remove('doctext', [doc.id]);
+    await p.store.remove('document', [doc.id]);
+    const bytes = await exportProjectFile(p, { includePseudonyms: false });
+    const bundle = readTramaZip(bytes);
+    const tomb = bundle.records.find((r) => r.kind === 'doctext' && r.record.id === doc.id)!.record as { text: string; scrubbed?: boolean; content_omitted?: boolean; deleted: boolean };
+    expect(tomb).toMatchObject({ text: '', deleted: true, scrubbed: true, content_omitted: true });
+    expect(bundle.blobs.size).toBe(0); // the deleted document's file stays home
+    const text = Object.values(unzipSync(bytes)).map((f) => strFromU8(f)).join('\n');
+    expect(text).not.toContain('Entrevista Inês');
+    expect(text).not.toContain('disse olá');
+  });
+
+  it('leaves out a file that is missing and says so, but stops when the project closes', async () => {
+    const a = await newLibrary();
+    const p = await a.library.createProject({ name: 'Estudo', coderName: 'Ana' });
+    const { original } = await seeded(p);
+    await p.removeBlob(original);
+    const bundle = await projectToBundle(p, { includeDeleted: false, includePseudonyms: false });
+    expect(bundle.blobs.size).toBe(0);
+    expect(bundle.warnings).toEqual(['Entrevista Inês: entrevista.pdf']);
+    await expect(projectToBundle(p, { includeDeleted: false, includePseudonyms: false, shouldStop: () => true })).rejects.toThrow(/locking/);
+  });
+
+  it('blanks content but keeps what the database indexes', () => {
+    const memo = { id: 'm', created_at: 'x', updated_at_hlc: 'h', deleted: true, title: 'Secret', body: 'Secret', target: { kind: 'code' as const, id: 'c' }, coder_id: null, color: null, deleted_batch: 'b' };
+    expect(withoutContent('memo', memo)).toMatchObject({ title: '', body: '', target: { kind: 'code', id: 'c' }, deleted_batch: 'b', scrubbed: true, content_omitted: true });
+  });
+});
+
+describe('merging a teammate\'s copy', () => {
+  /** Ana's project, and Rui's copy of it in his own library, both with the same record ids. */
+  async function twoCopies() {
+    const c = clock();
+    const ana = await newLibrary(c);
+    const pa = await ana.library.createProject({ name: 'Estudo partilhado', coderName: 'Ana' });
+    const seed = await seeded(pa);
+    const file = await exportProjectFile(pa, { includePseudonyms: false });
+    const rui = await newLibrary(c);
+    const pr = await importProjectFile(rui.library, file, { kind: 'none' }, { asCopyOfSameProject: true });
+    expect(pr.id).toBe(pa.id);
+    expect(pr.needsCoder).toBe(true);
+    await pr.setMe((await pr.addCoder('Rui')).id);
+    return { c, ana, pa, rui, pr, seed };
+  }
+
+  it('brings each side the other\'s work, the newer edit winning, in either order', async () => {
+    const { c, pa, pr, seed } = await twoCopies();
+    // Both edit the same code; Rui later. Each adds their own coding.
+    c.advance(1000);
+    await pa.store.update('code', seed.trust.id, { description: 'Ana\'s definition' });
+    const anaCoding = await pa.store.put('coding', { document_id: seed.doc.id, code_id: seed.trust.id, coder_id: pa.me.id, start: 0, end: 1, text: 'A', comment: '' });
+    c.advance(1000);
+    await pr.store.update('code', seed.trust.id, { description: 'Rui\'s definition' });
+    const ruiCoding = await pr.store.put('coding', { document_id: seed.doc.id, code_id: seed.trust.id, coder_id: pr.me.id, start: 2, end: 7, text: 'Maria', comment: '' });
+    c.advance(1000);
+    await pa.store.remove('coding', [seed.coding.id]); // Ana deletes the first coding
+
+    const fromRui = readTramaZip(await exportProjectFile(pr, { includePseudonyms: false }));
+    const fromAna = readTramaZip(await exportProjectFile(pa, { includePseudonyms: false }));
+    const intoAna = await mergeTeammateCopy(pa, fromRui);
+    const intoRui = await mergeTeammateCopy(pr, fromAna);
+    expect(intoAna.added).toBeGreaterThanOrEqual(2); // Rui's coder and coding (and his logs)
+    expect(intoAna.updated).toBeGreaterThanOrEqual(1);
+    expect(intoRui.updated).toBeGreaterThanOrEqual(1);
+
+    for (const p of [pa, pr]) {
+      expect((await p.store.get('code', seed.trust.id))!.description).toBe('Rui\'s definition');
+      expect((await p.store.get('coding', seed.coding.id))!.deleted).toBe(true);
+      expect(await p.store.get('coding', anaCoding.id)).not.toBeNull();
+      expect(await p.store.get('coding', ruiCoding.id)).not.toBeNull();
+      // Both coders are there: agreement between them can be measured.
+      expect((await p.coders()).map((x) => x.name)).toEqual(['Ana', 'Rui']);
+    }
+    // Each kept who "me" is.
+    expect(pa.me.name).toBe('Ana');
+    expect(pr.me.name).toBe('Rui');
+
+    // Merging the same copy again changes nothing.
+    const again = await mergeTeammateCopy(pa, fromRui);
+    expect(again.added + again.updated).toBe(0);
+    expect((await pa.store.list('log')).filter((l) => l.action === 'project.merge')).toHaveLength(2);
+  });
+
+  it('keeps the content of a record here that the copy deleted, so it can still be restored', async () => {
+    const { c, pa, pr, seed } = await twoCopies();
+    c.advance(1000);
+    await pr.store.remove('doctext', [seed.doc.id]);
+    const fromRui = readTramaZip(await exportProjectFile(pr, { includePseudonyms: false }));
+    await mergeTeammateCopy(pa, fromRui);
+    const here = (await pa.store.get('doctext', seed.doc.id))!;
+    expect(here.deleted).toBe(true);
+    expect(here.text).toBe('A Maria Silva disse olá.');
+    expect((await pa.store.restore('doctext', [seed.doc.id]))[0]!.text).toBe('A Maria Silva disse olá.');
+  });
+
+  it('stores files the copy has and this project lacks', async () => {
+    const { pa, pr, seed } = await twoCopies();
+    await pa.removeBlob(seed.original);
+    const result = await mergeTeammateCopy(pa, readTramaZip(await exportProjectFile(pr, { includePseudonyms: false })));
+    expect(result.blobs).toBe(1);
+    expect(fromUtf8(await pa.readBlob(seed.original))).toBe('%PDF-1.7 interview');
+  });
+
+  it('never keeps a pseudonymisation key from being left out of a copy', async () => {
+    const { pa, pr } = await twoCopies();
+    await mergeTeammateCopy(pa, readTramaZip(await exportProjectFile(pr, { includePseudonyms: false })));
+    expect(await pa.store.count('pseudonym')).toBe(1);
+  });
+
+  it('refuses a different project, and forgets the last backup so the next one is made', async () => {
+    const { ana, pa } = await twoCopies();
+    const other = await ana.library.createProject({ name: 'Outro', coderName: 'Ana' });
+    const otherFile = readTramaZip(await exportProjectFile(other, { includePseudonyms: false }));
+    const back = await ana.library.openProject(pa.id);
+    await expect(mergeTeammateCopy(back, otherFile)).rejects.toBeInstanceOf(DataFileError);
+    await expect(mergeTeammateCopy(back, { ...otherFile, project: { ...otherFile.project, id: null } })).rejects.toMatchObject({ code: 'DIFFERENT_PROJECT' });
+    await back.store.setMeta('backup.last_hlc', 'x');
+    const self = readTramaZip(await exportProjectFile(back, { includePseudonyms: false }));
+    await mergeTeammateCopy(back, self);
+    expect(await back.store.getMeta('backup.last_hlc')).toBeNull();
+  });
+});

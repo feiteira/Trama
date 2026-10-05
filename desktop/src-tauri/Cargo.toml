@@ -1,13 +1,14 @@
 [package]
-name = "sala-desktop"
-version = "0.2.1"
-description = "Sala — the offline-first practice app for therapists (desktop shell)"
+name = "trama-desktop"
+version = "0.1.0"
+description = "Trama — free, offline, encrypted qualitative data analysis (desktop shell)"
 license = "MPL-2.0"
 edition = "2021"
 rust-version = "1.80"
 
 [lib]
-name = "sala_desktop_lib"
+name = "trama_desktop_lib"
+# staticlib and cdylib are what `tauri android/ios` link against; keep them for the mobile builds.
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
@@ -15,9 +16,9 @@ tauri-build = { version = "2.7", features = [] }
 
 [dependencies]
 tauri = { version = "2.12", features = [] }
+# The only plugin: native open/save dialogs. Trama makes no network connections, so there is
+# deliberately no http or opener plugin.
 tauri-plugin-dialog = "2.8"
-tauri-plugin-http = "~2.7"
-tauri-plugin-opener = "~2.5"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 rusqlite = { version = "0.40", features = ["bundled-sqlcipher-vendored-openssl"] }

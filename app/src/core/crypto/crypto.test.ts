@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import vectors from '../../../../test-vectors/argon2id.json';
-import { fromHex, randomBytes, toHex, utf8 } from '../bytes';
-import { DecryptError, open, seal } from './frames';
+import { fromHex, fromUtf8, randomBytes, toHex, utf8 } from '../bytes';
+import { DecryptError, isSealed, open, seal } from './frames';
 import { jsKdf, type KdfParams } from './kdf';
 import {
   createKeyring, isValidRecoveryPhrase, newLibraryKey, newRecoveryPhrase, parseKeyring,
-  replaceSlot, unlockKeyring, WrongSecretError,
+  replaceSlot, subkey, unlockKeyring, WrongSecretError,
 } from './keyring';
 
 const FAST: KdfParams = { algo: 'argon2id', m: 64, t: 1, p: 1, key_len: 32 };
@@ -32,7 +32,7 @@ describe('keyring', () => {
     await expect(unlockKeyring(ring, 'passphrase', 'wrong', jsKdf)).rejects.toBeInstanceOf(WrongSecretError);
   });
 
-  it('changes the passphrase without changing the practice key', async () => {
+  it('changes the passphrase without changing the library key', async () => {
     const key = newLibraryKey();
     const ring = await createKeyring(key, { passphrase: 'old one', recoveryPhrase: newRecoveryPhrase() }, jsKdf, { params: FAST });
     const next = await replaceSlot(ring, 'passphrase', 'new one', key, jsKdf, { params: FAST });
@@ -40,10 +40,33 @@ describe('keyring', () => {
     await expect(unlockKeyring(next, 'passphrase', 'old one', jsKdf)).rejects.toBeInstanceOf(WrongSecretError);
     expect(next.slots).toHaveLength(2);
   });
+
+  it('is a Trama keyring and refuses anything else', async () => {
+    const ring = await createKeyring(newLibraryKey(), { passphrase: 'p', recoveryPhrase: newRecoveryPhrase() }, jsKdf, { params: FAST });
+    expect(ring.format).toBe('trama-keyring');
+    expect(parseKeyring(JSON.stringify(ring)).slots).toHaveLength(2);
+    expect(() => parseKeyring(JSON.stringify({ ...ring, format: 'sala-keyring' }))).toThrow();
+    expect(() => parseKeyring(JSON.stringify({ ...ring, v: 2 }))).toThrow();
+  });
+
+  it('derives independent subkeys per purpose and salt', () => {
+    const key = newLibraryKey();
+    const a = toHex(subkey(key, 'trama.project.v1', utf8('a')));
+    expect(toHex(subkey(key, 'trama.project.v1', utf8('a')))).toBe(a);
+    expect(toHex(subkey(key, 'trama.project.v1', utf8('b')))).not.toBe(a);
+    expect(toHex(subkey(key, 'trama.library.v1'))).not.toBe(a);
+  });
 });
 
 describe('frames', () => {
   const key = randomBytes(32);
+
+  it('starts with the TRAMF1 magic', () => {
+    const sealed = seal(key, utf8('x'), 'test');
+    expect(fromUtf8(sealed.subarray(0, 6))).toBe('TRAMF1');
+    expect(isSealed(sealed)).toBe(true);
+    expect(isSealed(utf8('SALAF1xxxxxxxxxx'))).toBe(false);
+  });
 
   it('round-trips empty, small and multi-frame data', () => {
     for (const size of [0, 1, 99, 100, 101, 1000]) {

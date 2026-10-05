@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- Trama ("weft"): two weft threads and two warp threads in plain weave, forming a T. -->
+  <defs>
+    <linearGradient id="ink" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#202844"/>
+      <stop offset="1" stop-color="#131829"/>
+    </linearGradient>
+  </defs>
+  <rect width="1024" height="1024" rx="224" fill="url(#ink)"/>
+  <g stroke="#161B2E" stroke-width="18" paint-order="stroke">
+    <!-- Weft: the crossbar. -->
+    <rect x="196" y="236" width="632" height="104" rx="52" fill="#F5AE3D"/>
+    <rect x="196" y="372" width="632" height="104" rx="52" fill="#D9573E"/>
+    <!-- Warp: the stem. -->
+    <rect x="400" y="196" width="104" height="632" rx="52" fill="#F4E7CF"/>
+    <rect x="536" y="196" width="104" height="632" rx="52" fill="#EE8E5F"/>
+  </g>
+  <!-- Plain weave: where a weft passes over a warp, it is drawn again on top. -->
+  <g stroke="#161B2E" stroke-width="18">
+    <path d="M536 236h104M536 340h104"/>
+    <path d="M400 372h104M400 476h104"/>
+  </g>
+  <rect x="527" y="236" width="122" height="104" fill="#F5AE3D"/>
+  <rect x="391" y="372" width="122" height="104" fill="#D9573E"/>
+</svg>

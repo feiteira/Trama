@@ -4,7 +4,14 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost blob: data:; media-src 'self' blob:" />
+    <meta name="color-scheme" content="light dark" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'%3E%3Crect width='28' height='28' rx='7' fill='%231d2130'/%3E%3Cpath d='M5 8h17M5 14h18M5 20h18' stroke='%23f3f1eb' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E" />
     <title>Trama</title>
+    <!-- The paper colour before the styles load, so the window never flashes white (or black). -->
+    <style>
+      html { background: #f3f1eb; }
+      @media (prefers-color-scheme: dark) { html { background: #1e1d1b; } }
+    </style>
   </head>
   <body>
     <div id="root"></div>

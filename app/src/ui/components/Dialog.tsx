@@ -1,0 +1,131 @@
+import React, { useEffect, useId, useRef, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
+import { X } from 'lucide-react';
+import { cx } from '../cx';
+import { focusBackTo, focusables, pushLayer, trapTab } from '../focus';
+import { useI18n } from '../i18n';
+import { IconButton } from './Button';
+import './dialog.css';
+
+export interface DialogProps {
+  open: boolean;
+  /** Escape, the close button and a click on the backdrop (when `dismissible`). */
+  onClose: () => void;
+  title: ReactNode;
+  /** A line under the title. */
+  description?: ReactNode;
+  children?: ReactNode;
+  /** Buttons, right-aligned at the bottom; the primary action last. */
+  footer?: ReactNode;
+  size?: 'sm' | 'md' | 'lg' | 'xl';
+  /** False while something must not be interrupted (a save running): Esc and the backdrop do nothing. */
+  dismissible?: boolean;
+  /** Submitting the dialog's form (Enter in a field) calls this. */
+  onSubmit?: () => void;
+  className?: string;
+  'data-testid'?: string;
+}
+
+/**
+ * A modal dialog: focus moves in (to `[data-autofocus]`, else the first field, else the first
+ * button), Tab stays inside, Escape closes, and the focus returns to the control that opened it.
+ * The page behind is inert, so screen readers and the keyboard cannot wander there.
+ */
+export function Dialog({ open, onClose, title, description, children, footer, size = 'md', dismissible = true, onSubmit, className, ...rest }: DialogProps) {
+  const { t } = useI18n();
+  const box = useRef<HTMLDivElement>(null);
+  const titleId = useId();
+  const descId = useId();
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+  const dismissRef = useRef(dismissible);
+  dismissRef.current = dismissible;
+
+  useEffect(() => {
+    if (!open) return;
+    const opener = document.activeElement;
+    const layer = pushLayer();
+    const root = document.getElementById('root');
+    // Only the first dialog marks the page inert; nested ones live in the body beside it.
+    const madeInert = root && !root.hasAttribute('inert');
+    if (madeInert) root.setAttribute('inert', '');
+    const el = box.current;
+    if (el) {
+      const target =
+        el.querySelector<HTMLElement>('[data-autofocus]') ??
+        focusables(el).find((x) => x.matches('input, textarea, select')) ??
+        focusables(el).find((x) => !x.closest('.dialog__close')) ??
+        el;
+      target.focus({ preventScroll: true });
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (!layer.isTop()) return;
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        if (dismissRef.current) closeRef.current();
+      } else if (e.key === 'Tab' && box.current) {
+        trapTab(e, box.current);
+      }
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => {
+      layer.pop();
+      window.removeEventListener('keydown', onKey, true);
+      if (madeInert) root.removeAttribute('inert');
+      setTimeout(() => focusBackTo(opener), 0);
+    };
+  }, [open]);
+
+  if (!open) return null;
+  const body = (
+    <>
+      <header className="dialog__header">
+        <div className="dialog__titles">
+          <h2 id={titleId} className="dialog__title">{title}</h2>
+          {description ? <p id={descId} className="dialog__description">{description}</p> : null}
+        </div>
+        {dismissible ? (
+          <IconButton className="dialog__close" icon={X} label={t('common.close')} size="sm" onClick={onClose} data-testid="dialog-close" />
+        ) : null}
+      </header>
+      {children ? <div className="dialog__body">{children}</div> : null}
+      {footer ? <footer className="dialog__footer">{footer}</footer> : null}
+    </>
+  );
+  return createPortal(
+    <div
+      className="dialog-backdrop"
+      onPointerDown={(e) => {
+        if (e.target === e.currentTarget && dismissRef.current) closeRef.current();
+      }}
+    >
+      <div
+        ref={box}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        aria-describedby={description ? descId : undefined}
+        tabIndex={-1}
+        className={cx('dialog', `dialog--${size}`, className)}
+        data-testid={rest['data-testid']}
+      >
+        {onSubmit ? (
+          <form
+            className="dialog__form"
+            noValidate
+            onSubmit={(e) => {
+              e.preventDefault();
+              onSubmit();
+            }}
+          >
+            {body}
+          </form>
+        ) : (
+          body
+        )}
+      </div>
+    </div>,
+    document.body,
+  );
+}

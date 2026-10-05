@@ -1,0 +1,336 @@
+/* Trama's design tokens. Every colour, size and shadow a component uses comes from here, so
+   the light and dark themes are one set of custom properties each.
+
+   The rule of the palette: surfaces are paper and text is ink. The colours of codes are the only
+   saturated colour on screen; interface accents stay in the ink family so a code's colour
+   always reads as meaning, never as decoration.
+
+   Theme selection: `data-theme="light" | "dark"` on <html> when the researcher chose one;
+   no attribute follows the system. */
+
+:root {
+  color-scheme: light;
+
+  /* Paper */
+  --paper: #f3f1eb;          /* the window */
+  --paper-raised: #fbfaf7;   /* cards, dialogs, fields */
+  --paper-sunk: #e9e6de;     /* navigation rail, wells */
+  --paper-hover: #e4e0d6;
+  --paper-active: #dcd7cb;
+  --paper-reading: #fdfcf9;  /* a document page */
+
+  /* Ink */
+  --ink: #1d2130;            /* body text: blue-black, like iron-gall ink */
+  --ink-2: #4a4f5e;          /* secondary text */
+  --ink-3: #656a78;          /* muted text, still AA on every paper */
+  --ink-4: #8e919b;          /* placeholders and disabled (non-text use only) */
+
+  /* Rules */
+  --rule: #dad5c9;
+  --rule-strong: #c3bcad;
+  --rule-faint: #e6e2d8;
+
+  /* Interactive accent: a deeper ink, not a hue. */
+  --accent: #26375f;
+  --accent-hover: #1c2a4b;
+  --accent-ink: #fbfaf7;     /* text on --accent */
+  --accent-soft: #e3e6ee;    /* selected rows, current nav item */
+  --accent-text: #2a4580;    /* links and selected text */
+  --focus: #3a5cab;
+  --selection: #c9d3ea;
+
+  /* States (muted, so they never compete with code colours) */
+  --danger: #a1342a;
+  --danger-hover: #852a21;
+  --danger-soft: #f5e3de;
+  --danger-text: #8f2c23;
+  --warning-soft: #f4ead2;
+  --warning-text: #75500d;
+  --success-soft: #e1ede4;
+  --success-text: #2c6044;
+  --info-soft: #e3e8f1;
+  --info-text: #2f4a7a;
+
+  /* Shadows: warm and low, as if paper sat on paper. */
+  --shadow-1: 0 1px 0 rgba(60, 45, 20, 0.04), 0 1px 2px rgba(60, 45, 20, 0.06);
+  --shadow-2: 0 2px 4px rgba(60, 45, 20, 0.06), 0 8px 24px rgba(60, 45, 20, 0.1);
+  --shadow-3: 0 4px 10px rgba(40, 30, 10, 0.08), 0 20px 48px rgba(40, 30, 10, 0.18);
+  --scrim: rgba(36, 32, 24, 0.36);
+
+  /* Type */
+  --font-ui: 'Instrument Sans Variable', 'Instrument Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-text: 'Literata Variable', 'Literata', Georgia, 'Times New Roman', serif;
+  --font-mono: ui-monospace, 'SF Mono', 'Cascadia Mono', 'DejaVu Sans Mono', Menlo, monospace;
+  --fs-xs: 11.5px;
+  --fs-sm: 12.5px;
+  --fs-md: 13.5px;   /* the interface's body size: dense but legible */
+  --fs-lg: 15px;
+  --fs-xl: 18px;
+  --fs-2xl: 23px;
+  --fs-3xl: 31px;
+  --fs-reading: 17px; /* document text (Literata) */
+  --lh-tight: 1.25;
+  --lh-ui: 1.45;
+  --lh-reading: 1.7;
+  --measure: 68ch;    /* reading measure for documents and memos */
+
+  /* Space: a 4 px grid */
+  --s-0: 2px;
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 20px;
+  --s-6: 24px;
+  --s-7: 32px;
+  --s-8: 48px;
+  --s-9: 64px;
+
+  /* Shape */
+  --r-xs: 3px;
+  --r-sm: 5px;
+  --r-md: 7px;
+  --r-lg: 11px;
+  --r-pill: 999px;
+  --control-h: 32px;
+  --control-h-sm: 26px;
+  --control-h-lg: 40px;
+
+  /* Layout */
+  --rail-w: 232px;
+  --rail-w-collapsed: 60px;
+  --header-h: 52px;
+
+  /* Motion */
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+  --dur-1: 90ms;
+  --dur-2: 160ms;
+  --dur-3: 240ms;
+
+  --z-popover: 40;
+  --z-dialog: 50;
+  --z-toast: 60;
+  --z-tooltip: 70;
+  --z-curtain: 90;
+}
+
+/* Dark: a warm, deep grey-brown, never pure black; text is aged paper. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+    --paper: #1e1d1b;
+    --paper-raised: #272623;
+    --paper-sunk: #181715;
+    --paper-hover: #302e2a;
+    --paper-active: #3a3833;
+    --paper-reading: #22211e;
+    --ink: #ebe7de;
+    --ink-2: #c2bdb2;
+    --ink-3: #9d988d;
+    --ink-4: #6d695f;
+    --rule: #3a3833;
+    --rule-strong: #4d4a43;
+    --rule-faint: #2e2c28;
+    --accent: #c3cfeb;
+    --accent-hover: #d6def2;
+    --accent-ink: #18203a;
+    --accent-soft: #2d3240;
+    --accent-text: #a9bbe6;
+    --focus: #8fa9e6;
+    --selection: #394766;
+    --danger: #e0897d;
+    --danger-hover: #eaa196;
+    --danger-soft: #3c2622;
+    --danger-text: #eb9b90;
+    --warning-soft: #3a311d;
+    --warning-text: #e2c27e;
+    --success-soft: #213229;
+    --success-text: #93c9a6;
+    --info-soft: #232c3d;
+    --info-text: #a9bbe6;
+    --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --shadow-2: 0 2px 6px rgba(0, 0, 0, 0.3), 0 10px 28px rgba(0, 0, 0, 0.35);
+    --shadow-3: 0 6px 14px rgba(0, 0, 0, 0.35), 0 24px 56px rgba(0, 0, 0, 0.5);
+    --scrim: rgba(8, 7, 6, 0.6);
+  }
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --paper: #1e1d1b;
+  --paper-raised: #272623;
+  --paper-sunk: #181715;
+  --paper-hover: #302e2a;
+  --paper-active: #3a3833;
+  --paper-reading: #22211e;
+  --ink: #ebe7de;
+  --ink-2: #c2bdb2;
+  --ink-3: #9d988d;
+  --ink-4: #6d695f;
+  --rule: #3a3833;
+  --rule-strong: #4d4a43;
+  --rule-faint: #2e2c28;
+  --accent: #c3cfeb;
+  --accent-hover: #d6def2;
+  --accent-ink: #18203a;
+  --accent-soft: #2d3240;
+  --accent-text: #a9bbe6;
+  --focus: #8fa9e6;
+  --selection: #394766;
+  --danger: #e0897d;
+  --danger-hover: #eaa196;
+  --danger-soft: #3c2622;
+  --danger-text: #eb9b90;
+  --warning-soft: #3a311d;
+  --warning-text: #e2c27e;
+  --success-soft: #213229;
+  --success-text: #93c9a6;
+  --info-soft: #232c3d;
+  --info-text: #a9bbe6;
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-2: 0 2px 6px rgba(0, 0, 0, 0.3), 0 10px 28px rgba(0, 0, 0, 0.35);
+  --shadow-3: 0 6px 14px rgba(0, 0, 0, 0.35), 0 24px 56px rgba(0, 0, 0, 0.5);
+  --scrim: rgba(8, 7, 6, 0.6);
+}
+
+/* ── Base ───────────────────────────────────────────────────────────────────────────── */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: var(--fs-md);
+  line-height: var(--lh-ui);
+  font-optical-sizing: auto;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  /* Desktop first: below this the window scrolls rather than squeezing the layout. */
+  min-width: 320px;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+  letter-spacing: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: default;
+}
+
+h1,
+h2,
+h3,
+h4,
+p {
+  margin: 0;
+}
+
+h1,
+h2,
+h3 {
+  font-weight: 620;
+  line-height: var(--lh-tight);
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+
+p {
+  text-wrap: pretty;
+}
+
+a {
+  color: var(--accent-text);
+  text-underline-offset: 2px;
+}
+
+::selection {
+  background: var(--selection);
+}
+
+/* Keyboard focus is always visible; a mouse click shows none (:focus-visible). */
+:focus {
+  outline: none;
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+kbd {
+  font-family: var(--font-ui);
+}
+
+/* Scrollbars that sit quietly on paper. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--rule-strong) transparent;
+}
+
+.visually-hidden {
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Document text: other screens use this for anything a participant said or wrote. */
+.reading {
+  font-family: var(--font-text);
+  font-size: var(--fs-reading);
+  line-height: var(--lh-reading);
+  max-width: var(--measure);
+}
+
+.t-muted {
+  color: var(--ink-3);
+}
+
+.t-secondary {
+  color: var(--ink-2);
+}
+
+.t-small {
+  font-size: var(--fs-sm);
+}
+
+.t-tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

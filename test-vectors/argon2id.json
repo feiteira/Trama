@@ -1,0 +1,45 @@
+{
+  "description": "Argon2id (v1.3) vectors shared by the TypeScript core and the desktop shell. Sala derives key-encryption keys with m=65536 KiB, t=3, p=4, 32-byte output.",
+  "vectors": [
+    {
+      "name": "frozen-params-passphrase",
+      "secret_utf8": "correct horse battery staple",
+      "salt_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "m": 65536,
+      "t": 3,
+      "p": 4,
+      "len": 32,
+      "out_hex": "0b220637b2f1ea0425e3c3e4ea5c5c14fd91b0f26b5726839a04f2e387f75f73"
+    },
+    {
+      "name": "frozen-params-recovery-phrase",
+      "secret_utf8": "abandon ability able about above absent absorb abstract absurd abuse access accident",
+      "salt_hex": "a0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebf",
+      "m": 65536,
+      "t": 3,
+      "p": 4,
+      "len": 32,
+      "out_hex": "e50831a1f1023c0a4f465cca449c64b0824ba4da38fec41f5c72ab8da203d45e"
+    },
+    {
+      "name": "non-ascii-passphrase",
+      "secret_utf8": "palavra-passe da Inês ✓",
+      "salt_hex": "ffeeddccbbaa99887766554433221100ffeeddccbbaa99887766554433221100",
+      "m": 65536,
+      "t": 3,
+      "p": 4,
+      "len": 32,
+      "out_hex": "3843d51b8ec0053029cafdc650bd5f6a2b530fbbd6b2157f7069971832f60d3e"
+    },
+    {
+      "name": "small-params-for-fast-tests",
+      "secret_utf8": "test",
+      "salt_hex": "0f0e0d0c0b0a09080706050403020100",
+      "m": 64,
+      "t": 1,
+      "p": 1,
+      "len": 32,
+      "out_hex": "60bb5314d2f7d61e28319a451c9962b3232566b91c073db0789b4a348f01463f"
+    }
+  ]
+}

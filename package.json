@@ -1,0 +1,24 @@
+{
+  "name": "trama",
+  "private": true,
+  "description": "Trama — free, offline, encrypted qualitative data analysis.",
+  "license": "MPL-2.0",
+  "workspaces": [
+    "app",
+    "desktop"
+  ],
+  "scripts": {
+    "dev": "npm run tauri --workspace desktop -- dev",
+    "dev:web": "npm run dev --workspace app",
+    "build:desktop": "npm run tauri --workspace desktop -- build",
+    "typecheck": "npm run typecheck --workspace app",
+    "test": "npm run test --workspace app",
+    "lint:rust": "cargo fmt --manifest-path desktop/src-tauri/Cargo.toml --check && cargo clippy --manifest-path desktop/src-tauri/Cargo.toml --all-targets -- -D warnings",
+    "test:rust": "cargo test --manifest-path desktop/src-tauri/Cargo.toml",
+    "gen:privacy": "npm run gen:privacy --workspace app",
+    "screenshots": "npm run screenshots --workspace app"
+  },
+  "engines": {
+    "node": ">=22.12"
+  }
+}

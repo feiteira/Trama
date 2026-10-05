@@ -1,0 +1,50 @@
+{
+  "name": "@trama/app",
+  "private": true,
+  "version": "0.1.0",
+  "license": "MPL-2.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "gen:privacy": "vite-node scripts/gen-privacy.ts",
+    "check:privacy": "vite-node scripts/gen-privacy.ts -- --check",
+    "screenshots": "node ../tools/screenshots/capture.mjs"
+  },
+  "dependencies": {
+    "@fontsource-variable/instrument-sans": "5.3.0",
+    "@fontsource-variable/literata": "5.3.0",
+    "@noble/ciphers": "2.4.0",
+    "@noble/hashes": "2.4.0",
+    "@scure/bip39": "2.4.0",
+    "@tauri-apps/api": "2.12.0",
+    "@tauri-apps/plugin-dialog": "2.8.0",
+    "@xmldom/xmldom": "0.9.12",
+    "fflate": "0.8.3",
+    "lucide-react": "1.52.0",
+    "luxon": "3.7.2",
+    "mammoth": "1.13.0",
+    "papaparse": "5.7.0",
+    "pdfjs-dist": "6.3.289",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "sql.js": "1.14.2"
+  },
+  "devDependencies": {
+    "@types/luxon": "3.7.5",
+    "@types/node": "26.6.3",
+    "@types/papaparse": "5.5.2",
+    "@types/react": "18.3.28",
+    "@types/react-dom": "18.3.7",
+    "@types/sql.js": "1.4.11",
+    "@vitejs/plugin-react": "6.1.1",
+    "playwright-core": "1.62.1",
+    "typescript": "5.9.3",
+    "vite": "8.3.1",
+    "vite-node": "6.0.0",
+    "vitest": "5.0.2"
+  }
+}

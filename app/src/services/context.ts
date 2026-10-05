@@ -1,0 +1,19 @@
+import type { Coder, LogAction, MediaRef } from '../core/model/types';
+import type { Store } from '../core/store/store';
+
+/**
+ * What domain services need from an open project. `Project` (services/project.ts) implements
+ * it; tests build one over an in-memory store (see services/testing.ts).
+ */
+export interface ProjectContext {
+  readonly id: string;
+  readonly store: Store;
+  /** The coder working on this computer. */
+  readonly me: Coder;
+  /** Encrypts and stores a file (an original document, a recording); returns its reference. */
+  addBlob(bytes: Uint8Array, filename: string, mime: string): Promise<MediaRef>;
+  readBlob(ref: MediaRef): Promise<Uint8Array>;
+  removeBlob(ref: MediaRef): Promise<void>;
+  /** Appends an entry to the audit trail. */
+  log(action: LogAction, summary: string, target?: { kind: string; id: string }): Promise<void>;
+}

@@ -1,0 +1,21 @@
+name: Idea or request
+description: Suggest something Trama could do better
+labels: [idea]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Describe the research situation where this would help — your method, your material, what you are trying to find out. Use invented examples, never real participants' words or details.
+        Pode escrever em português · Puede escribir en español.
+  - type: textarea
+    attributes:
+      label: What are you trying to do?
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: What would help?
+  - type: textarea
+    attributes:
+      label: How do you do it today?
+      description: In another program, by hand, or not at all.

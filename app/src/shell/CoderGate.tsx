@@ -6,8 +6,11 @@ import { Button } from '../ui/components/Button';
 import { RadioGroup } from '../ui/components/Choice';
 import { Card, Notice } from '../ui/components/Feedback';
 import { TextField } from '../ui/components/Field';
+import { inkOn } from '../ui/color';
 import { useAppState, useProject } from './AppState';
+import { initial } from './initial';
 import './shell.css';
+import '../features/agreement/gate.css';
 
 const NEW = '__new__';
 
@@ -16,10 +19,11 @@ const NEW = '__new__';
  * copy) and has no `me` here yet. Every coding is signed by a coder, so nothing opens before.
  */
 export function CoderGate({ onDone }: { onDone: () => void }) {
-  const { t } = useI18n();
+  const { t, tp } = useI18n();
   const project = useProject();
   const { prefs, closeProject } = useAppState();
   const [coders, setCoders] = useState<Coder[] | null>(null);
+  const [counts, setCounts] = useState<Map<string | null, number>>(new Map());
   const [choice, setChoice] = useState<string>(NEW);
   const [name, setName] = useState(prefs.coderName);
   const [busy, setBusy] = useState(false);
@@ -27,6 +31,10 @@ export function CoderGate({ onDone }: { onDone: () => void }) {
   const busyRef = useRef(false);
 
   useEffect(() => {
+    void project.store
+      .summarise('coding', 'coder_id', 'start')
+      .then((rows) => setCounts(new Map(rows.map((r) => [r.key, r.count]))))
+      .catch((e: unknown) => console.error(e));
     void project.coders().then((list) => {
       setCoders(list);
       const mine = list.find((c) => c.name.trim().toLocaleLowerCase() === prefs.coderName.trim().toLocaleLowerCase());
@@ -73,13 +81,42 @@ export function CoderGate({ onDone }: { onDone: () => void }) {
               label={t('app.coder.pick')}
               value={choice}
               onChange={setChoice}
-              options={[...coders.map((c) => ({ value: c.id, label: c.name })), { value: NEW, label: t('app.coder.someoneNew') }]}
+              options={[
+                ...coders.map((c) => {
+                  const n = counts.get(c.id) ?? 0;
+                  return {
+                    value: c.id,
+                    label: (
+                      <span className="gate-coder">
+                        <span className="gate-coder__avatar" style={{ background: c.color, color: inkOn(c.color) }} aria-hidden>
+                          {initial(c.name)}
+                        </span>
+                        <span className="gate-coder__name">{c.name}</span>
+                      </span>
+                    ),
+                    description: n ? tp('agreement.gate.segments', n) : t('agreement.gate.none'),
+                  };
+                }),
+                {
+                  value: NEW,
+                  label: (
+                    <span className="gate-coder">
+                      <span className="gate-coder__avatar gate-coder__avatar--new" aria-hidden>
+                        +
+                      </span>
+                      <span className="gate-coder__name">{t('app.coder.someoneNew')}</span>
+                    </span>
+                  ),
+                },
+              ]}
+              className="gate-coders"
               data-testid="coder-choice"
             />
           ) : null}
           {choice === NEW ? <TextField label={t('app.coder.name')} value={name} onChange={setName} autoFocus maxLength={200} data-testid="coder-name" /> : null}
           {error ? <Notice tone="danger">{error}</Notice> : null}
         </Card>
+        {coders && coders.length > 0 ? <p className="gate-note">{t('agreement.gate.note')}</p> : null}
         <div className="gate__actions">
           <Button variant="ghost" onClick={() => void closeProject()}>
             {t('app.switcher.allProjects')}

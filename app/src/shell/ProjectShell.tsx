@@ -10,6 +10,7 @@ import { Menu, type MenuEntry } from '../ui/components/Menu';
 import { Tooltip } from '../ui/components/Tooltip';
 import { useToast } from '../ui/components/Toast';
 import { watchBack, watchShortcuts } from './activity.web';
+import { BackupScheduler } from './BackupScheduler';
 import { useAppState, useLibrary, useProject } from './AppState';
 import { CoderGate } from './CoderGate';
 import { CommandPalette } from './CommandPalette';
@@ -236,6 +237,7 @@ function Layout() {
 
       <CommandPalette open={palette} onClose={() => setPalette(false)} />
       <LockingScreen />
+      <BackupScheduler />
     </div>
   );
 }

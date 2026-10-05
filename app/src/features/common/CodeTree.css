@@ -1,0 +1,395 @@
+/* The code tree: dense rows, the code's colour as the only saturated mark. */
+
+.codetree {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.codetree--loading {
+  min-height: 120px;
+}
+
+.codetree__rows {
+  display: flex;
+  flex-direction: column;
+  padding: 2px var(--s-2) var(--s-2);
+  outline: none;
+}
+
+.codetree__rows[hidden] {
+  display: none;
+}
+
+.codetree__row {
+  --code: var(--ink-3);
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  padding-right: var(--s-2);
+  border-radius: var(--r-sm);
+  color: var(--ink);
+  cursor: default;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.codetree__row:hover {
+  background: var(--paper-hover);
+}
+
+.codetree__row:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+
+.codetree__row--selected,
+.codetree__row--selected:hover {
+  background: var(--accent-soft);
+}
+
+.codetree__row--selected::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 5px;
+  bottom: 5px;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--code);
+}
+
+.codetree__row--context .codetree__name {
+  color: var(--ink-3);
+}
+
+.codetree__row mark {
+  background: color-mix(in srgb, var(--code) 26%, transparent);
+  color: inherit;
+  border-radius: 2px;
+  padding: 0 1px;
+  margin: 0 -1px;
+}
+
+/* Indentation guides: a faint rule per level. */
+.codetree__guides {
+  position: absolute;
+  left: 6px;
+  top: 0;
+  bottom: 0;
+  pointer-events: none;
+  background-image: linear-gradient(to right, var(--rule-faint) 1px, transparent 1px);
+  background-size: 16px 100%;
+  background-position: 7px 0;
+}
+
+.codetree__twisty {
+  flex: none;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 20px;
+  color: var(--ink-3);
+  border-radius: var(--r-xs);
+  transition: transform var(--dur-1) var(--ease);
+}
+
+.codetree__twisty:not(.codetree__twisty--leaf):hover {
+  color: var(--ink);
+  background: var(--paper-active);
+}
+
+.codetree__twisty--open svg {
+  transform: rotate(90deg);
+}
+
+.codetree__twisty svg {
+  transition: transform var(--dur-2) var(--ease);
+}
+
+.codetree__dot {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  margin: 0 2px;
+  border-radius: 50%;
+  background: var(--code);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12);
+}
+
+.codetree__folder {
+  flex: none;
+  color: var(--code);
+}
+
+.codetree__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  line-height: 1.3;
+}
+
+.codetree--filtering .codetree__name {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  padding: 3px 0;
+}
+
+.codetree__row--category .codetree__name {
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: 0.002em;
+}
+
+.codetree__row--na {
+  cursor: default;
+}
+
+.codetree__row--na .codetree__name,
+.codetree__row--na .codetree__folder {
+  opacity: 0.62;
+}
+
+.codetree--apply .codetree__row:not(.codetree__row--na) {
+  cursor: pointer;
+}
+
+.codetree--apply .codetree__row:not(.codetree__row--na):hover {
+  background: color-mix(in srgb, var(--code) 14%, var(--paper-raised));
+}
+
+.codetree__key {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  border: 1px solid var(--rule-strong);
+  border-bottom-width: 1.5px;
+  border-radius: var(--r-xs);
+  background: var(--paper-raised);
+  color: var(--ink-2);
+  font-size: 10.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.codetree__count {
+  flex: none;
+  min-width: 22px;
+  text-align: right;
+  color: var(--ink-3);
+  font-size: var(--fs-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.codetree__count--zero {
+  color: var(--ink-4);
+}
+
+.codetree__rename {
+  flex: 1;
+  min-width: 0;
+  height: 24px;
+  margin: 0 -4px;
+  padding: 0 5px;
+  border: 1px solid var(--focus);
+  border-radius: var(--r-xs);
+  background: var(--paper-raised);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--focus) 22%, transparent);
+  font-size: var(--fs-md);
+  outline: none;
+}
+
+.codetree__nomatch {
+  padding: var(--s-4) var(--s-4);
+  color: var(--ink-3);
+  font-size: var(--fs-sm);
+}
+
+.codetree__end {
+  flex: 1;
+  min-height: 28px;
+  border-radius: var(--r-sm);
+}
+
+.codetree__end--drop {
+  box-shadow: inset 0 2px 0 var(--focus);
+}
+
+/* Drop feedback */
+.codetree__row--drop-before {
+  box-shadow: inset 0 2px 0 var(--focus);
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
+.codetree__row--drop-after {
+  box-shadow: inset 0 -2px 0 var(--focus);
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.codetree__row--drop-inside {
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1.5px var(--focus);
+}
+
+.codetree__row--drop-apply {
+  background: color-mix(in srgb, var(--code) 20%, var(--paper-raised));
+  box-shadow: inset 0 0 0 1.5px var(--code);
+}
+
+.codetree__row--drop-invalid {
+  background: var(--danger-soft);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--danger) 45%, transparent);
+}
+
+.codetree__refuse {
+  flex: none;
+  color: var(--danger-text);
+  font-size: var(--fs-xs);
+  white-space: nowrap;
+}
+
+/* ── Code pick list (dialogs) ─────────────────────────────────────────────────────────── */
+
+.codepick {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+
+.codepick__list {
+  overflow-y: auto;
+  padding: var(--s-1);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-md);
+  background: var(--paper-raised);
+}
+
+.codepick__option {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-height: 28px;
+  padding-right: var(--s-2);
+  border-radius: var(--r-sm);
+  cursor: default;
+}
+
+.codepick__option:hover,
+.codepick__option[data-active] {
+  background: var(--paper-hover);
+}
+
+.codepick__option--selected,
+.codepick__option--selected:hover,
+.codepick__option--selected[data-active] {
+  background: var(--accent-soft);
+}
+
+.codepick__option--disabled {
+  opacity: 0.5;
+}
+
+.codepick__dot {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12);
+}
+
+.codepick__folder {
+  flex: none;
+}
+
+.codepick__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.codepick__path {
+  color: var(--ink-3);
+}
+
+.codepick__aside {
+  flex: none;
+  color: var(--ink-3);
+  font-size: var(--fs-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.codepick__tick {
+  flex: none;
+  color: var(--accent-text);
+}
+
+.codepick__check {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
+  border: 1.5px solid var(--rule-strong);
+  border-radius: 4px;
+  background: var(--paper-raised);
+}
+
+.codepick__check--on {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.codepick__empty {
+  padding: var(--s-3);
+  color: var(--ink-3);
+  font-size: var(--fs-sm);
+}
+
+/* ── Code dialogs ─────────────────────────────────────────────────────────────────────── */
+
+.codedialog__stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+}
+
+.codedialog__pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--s-3);
+}
+
+@media (max-width: 640px) {
+  .codedialog__pair {
+    grid-template-columns: 1fr;
+  }
+}
+
+.codedialog__consequence {
+  padding: var(--s-2) var(--s-3);
+  border-radius: var(--r-md);
+  background: var(--paper-sunk);
+  color: var(--ink-2);
+}
+
+.codedialog__consequence--warn {
+  background: var(--danger-soft);
+  color: var(--danger-text);
+}

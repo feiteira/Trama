@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { lazy, Suspense, useMemo, useRef, useState } from 'react';
 import { DateTime } from 'luxon';
 import { Ellipsis, FileUp, FolderOpen, Lock, Pencil, Plus, Settings2, Sparkles, Trash2 } from 'lucide-react';
 import { AUTO_LOCK_MINUTES, type AutoLockMinutes, type ThemePref } from '../../services/prefs';
@@ -23,6 +23,9 @@ import { filterProjects, type ProjectSort, sortProjects } from './projectList';
 import './projects.css';
 
 const SORT_KEY = 'trama.projects.sort';
+
+// Loaded on first use: it brings the .trama and REFI-QDA readers with it.
+const ImportProjectDialog = lazy(() => import('../importer/ImportProjectDialog').then((m) => ({ default: m.ImportProjectDialog })));
 
 function readSort(): ProjectSort {
   try {
@@ -53,6 +56,7 @@ export function ProjectsScreen() {
   const [opening, setOpening] = useState<string | null>(null);
   const [addingExample, setAddingExample] = useState(false);
   const [prefsOpen, setPrefsOpen] = useState(false);
+  const [importing, setImporting] = useState(false);
   const prefsButton = useRef<HTMLButtonElement>(null);
   const busy = useRef(false);
 
@@ -138,9 +142,8 @@ export function ProjectsScreen() {
   }
 
   function importFile() {
-    // TODO(exporter): the exporter feature provides the .trama / .qdpx import flow (pick a
-    // file, ask for its password if any, library.importBundle) and replaces this handler.
-    toast.show(t('projects.importSoon'));
+    // The importer feature's dialog: pick a .trama or .qdpx, unlock it, review, import or merge.
+    setImporting(true);
   }
 
   const menuFor = (p: ProjectInfo): MenuEntry[] => [
@@ -272,6 +275,17 @@ export function ProjectsScreen() {
         onClose={() => setEditing(null)}
         onSave={(d) => (editing ? save(editing, d) : Promise.resolve())}
       />
+      {importing ? (
+        <Suspense fallback={null}>
+          <ImportProjectDialog
+            open
+            onClose={() => {
+              setImporting(false);
+              setVersion((v) => v + 1);
+            }}
+          />
+        </Suspense>
+      ) : null}
     </div>
   );
 }

@@ -1,0 +1,88 @@
+/* "Who is coding on this computer?" (shell/CoderGate.tsx): coders as a list with their colour. */
+
+.gate-coders .radios__options {
+  gap: 0;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-md);
+  overflow: hidden;
+}
+
+.gate-coders .radio {
+  align-items: center;
+  gap: var(--s-3);
+  padding: var(--s-2) var(--s-3);
+  min-height: 52px;
+}
+
+.gate-coders .radio + .radio {
+  border-top: 1px solid var(--rule-faint);
+}
+
+.gate-coders .radio:hover {
+  background: var(--paper-hover);
+}
+
+.gate-coders .radio--checked,
+.gate-coders .radio--checked:hover {
+  background: var(--accent-soft);
+}
+
+.gate-coders .choice__text {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  flex: 1;
+  min-width: 0;
+}
+
+.gate-coders .choice__description {
+  font-size: var(--fs-sm);
+  color: var(--ink-3);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.gate-coder {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-width: 0;
+}
+
+.gate-coder__avatar {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  font-size: var(--fs-sm);
+  font-weight: 650;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
+}
+
+.gate-coder__avatar--new {
+  background: var(--paper-sunk);
+  color: var(--ink-2);
+  box-shadow: inset 0 0 0 1px var(--rule-strong);
+  font-size: var(--fs-lg);
+  font-weight: 500;
+}
+
+.gate-coder__name {
+  font-weight: 560;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gate-note {
+  font-size: var(--fs-sm);
+  color: var(--ink-3);
+}
+.gate-coders .radio__dot {
+  margin-top: 0;
+}

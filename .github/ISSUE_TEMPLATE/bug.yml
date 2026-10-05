@@ -1,0 +1,41 @@
+name: Bug report
+description: Something in Trama does not work as it should
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Never include real research data** — no transcripts, recordings, participant details or screenshots of your projects, even pseudonymised. Reproduce the problem with the example project or with invented text instead.
+        Security problem? Do not open an issue: use **Security → Report a vulnerability**.
+        Pode escrever em português · Puede escribir en español.
+  - type: checkboxes
+    attributes:
+      label: Research data
+      options:
+        - label: This report contains no real research data.
+          required: true
+  - type: textarea
+    attributes:
+      label: What happened, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Steps to reproduce
+      description: If you can, start from the example project (Try the example project, or Trama (example)).
+      placeholder: "1. Open the example project\n2. Open “Interview 1”\n3. …"
+  - type: textarea
+    attributes:
+      label: Error details
+      description: If Trama showed an error screen, paste the details it lets you copy. They contain no research data unless it appears in the message — check before pasting.
+      render: text
+  - type: input
+    attributes:
+      label: Trama version and operating system
+      placeholder: "Trama 0.1.0 on Ubuntu 24.04 / Windows 11 / macOS 15"
+    validations:
+      required: true
+  - type: dropdown
+    attributes:
+      label: Interface language
+      options: [English, Português, Español]

@@ -58,7 +58,7 @@ The results show summary statistics, a table **by code** and **by document**, an
 Disagreements are the useful part: each one is a passage where the codebook can be sharpened. The list shows every segment without a match — coded by only one coder, or with **boundaries** that differ too much. Select one to read the passage with both coders’ codings side by side. Then:
 
 - **Accept A** or **Accept B** — keep one coder’s coding and remove the other’s;
-- **Keep both** — leave both and mark the disagreement as reviewed.
+- **Keep both** — leave both and mark the disagreement as resolved.
 
 **Hide resolved** keeps your place in a long list. Each decision can be undone.
 

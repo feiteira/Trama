@@ -17,6 +17,8 @@ import { Store } from '../core/store/store';
 import { type Platform, PlatformError } from '../platform/types';
 import { BLOB_ID, type LibraryKeys, Project, type ProjectInfo, projectKeyOf } from './project';
 import { repairImported } from './reconcile';
+import { afterOpen } from './opening';
+import { LINEAGE_META } from './project';
 
 export type { ProjectInfo } from './project';
 
@@ -73,6 +75,12 @@ export interface ImportOptions {
   /** An existing coder of the bundle to make `me` (a restore knows who made the backup). */
   me?: string | null;
   color?: string;
+  /**
+   * The id of the project this one is a restored copy of (when it could not keep that id: the
+   * original is still in the library). Copies made from it carry that id, and copies of that
+   * project merge into it (see `Project.copyId`).
+   */
+  lineage?: string | null;
   /**
    * true (the default): close the open project and open the new one. false: only add the new
    * project to the library; the open project stays open (see `importBundle`).
@@ -393,7 +401,14 @@ export class Library {
     }));
     if (kept.length === this.list.length && !recovered.length) return;
     this.list = [...kept, ...recovered];
-    if (!this.registryDamaged) await this.saveRegistry();
+    if (this.registryDamaged) return;
+    try {
+      await this.saveRegistry();
+    } catch (e) {
+      // Bookkeeping only (the projects are all there): a full disk or a read-only list must not
+      // keep the researcher out. The next change to the list writes it.
+      console.error('saving the project list failed; it is kept in memory until the next change', e);
+    }
   }
 
   // ── State ──────────────────────────────────────────────────────────────────────────────
@@ -508,6 +523,9 @@ export class Library {
     } catch (e) {
       if (db && !(e instanceof LibraryError)) await db.close().catch(() => undefined);
       wipe(key);
+      // A project folder made for this (a new project, an import, a restore) must not stay as an
+      // empty "recovered project".
+      if (create) await this.platform.projects.erase(id).catch((err: unknown) => console.error('removing a project that was not finished failed', err));
       throw e;
     }
   }
@@ -602,7 +620,12 @@ export class Library {
           const { recovered: _r, ...rest } = { ...p, ...patch };
           return rest;
         });
-        await this.saveRegistry();
+        // When it was last opened is bookkeeping: a list that cannot be written now (a full
+        // disk, a read-only file) must not keep the project shut. The next save writes it.
+        await this.saveRegistry().catch((err: unknown) => console.error('saving the project list failed', err));
+        // Put right what an interruption left (a merge or pseudonymisation cut short, a write
+        // cut in half by an older Trama, files nothing points to).
+        await afterOpen(project);
       } catch (e) {
         await (project ? project.close() : store.close()).catch(() => undefined);
         wipe(key);
@@ -691,7 +714,8 @@ export class Library {
       const coderName = opts.coderName !== undefined ? cleanName(opts.coderName, 'coderName') : null;
       const sane = sanitizeRecords(bundle.records);
       const prepared = prepareBlobs(sane.records, bundle.blobs);
-      const job = { id, name, description, color, coderName, me: opts.me ?? null, origin: bundle.project.origin, rejected: sane.rejected, ...prepared };
+      const lineage = !keep && opts.lineage && BLOB_ID.test(opts.lineage) ? opts.lineage : null;
+      const job = { id, name, description, color, coderName, me: opts.me ?? null, origin: bundle.project.origin, rejected: sane.rejected, lineage, ...prepared };
 
       if (opts.open === false) {
         const current = this.current;
@@ -724,6 +748,7 @@ export class Library {
       me: string | null;
       origin: string | null;
       rejected: number;
+      lineage?: string | null;
       records: BundleRecord[];
       blobs: Map<string, Uint8Array>;
     },
@@ -736,6 +761,7 @@ export class Library {
     this.list.push(info);
     let project: Project | null = null;
     try {
+      if (job.lineage) await store.setMeta(LINEAGE_META, job.lineage);
       project = await this.attach(id, store, key, gate);
       await store.merge(records);
       // Derived data follows the texts: a file whose codings or lengths disagree with them

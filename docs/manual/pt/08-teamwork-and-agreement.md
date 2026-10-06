@@ -58,9 +58,9 @@ Os resultados mostram estatísticas-resumo, uma tabela **por código** e **por d
 As discordâncias são a parte útil: cada uma é uma passagem onde o livro de códigos pode ficar mais claro. A lista mostra todos os segmentos sem correspondência — codificados só por um dos codificadores, ou com **limites diferentes** demais. Selecione um para ler a passagem com as codificações dos dois lado a lado. Depois:
 
 - **Aceitar A** ou **Aceitar B** — manter a codificação de um e remover a do outro;
-- **Manter ambas** — deixar as duas e marcar a discordância como revista.
+- **Manter ambas** — deixar as duas e marcar a discordância como resolvida.
 
-**Ocultar as revistas** ajuda a não se perder numa lista longa. Cada decisão pode ser anulada.
+**Ocultar as já resolvidas** ajuda a não se perder numa lista longa. Cada decisão pode ser anulada.
 
 <a id="report"></a>
 

@@ -438,25 +438,24 @@ class ProjectReader {
   }
 
   /**
-   * The coder for the first of these user GUIDs that names a User, else the project's creator.
-   * A GUID missing from <Users> (which is optional) still stands for one person: it gets a coder
-   * of its own, so two people's codings are neither merged into one coder nor dropped as
+   * The coder for the most specific user GUID present: the Coding's own creatingUser, else the
+   * selection's, else the project's creator. Only that one GUID is consulted, so a known project
+   * creator (or a known selection user) never takes over a coding whose author is named but not
+   * listed. A GUID missing from <Users> (which is optional) still stands for one person: it gets
+   * a coder of its own, so two people's codings are neither merged into one coder nor dropped as
    * duplicates. Only when no GUID is given at all does the coding go to the default coder.
    */
   private coderFor(...guids: (string | null)[]): string {
-    const all = [...guids, attr(this.root, 'creatingUserGUID')].map((g) => normGuid(g)).filter((g): g is string => !!g);
-    for (const g of all) {
-      const plan = this.coders.get(g);
-      if (plan) return plan.id;
-    }
-    const unknown = all[0];
-    if (unknown) {
+    const g = [...guids, attr(this.root, 'creatingUserGUID')].map((x) => normGuid(x)).find((x): x is string => !!x);
+    if (g) {
+      const known = this.coders.get(g);
+      if (known) return known.id;
       const taken = new Set(this.coderList.map((c) => c.name.toLowerCase()));
-      const base = `User ${unknown.slice(0, 8)}`;
+      const base = `User ${g.slice(0, 8)}`;
       let name = base;
       for (let i = 2; taken.has(name.toLowerCase()); i++) name = `${base} (${i})`;
       const plan = { id: uuid(), name: cleanName(name, LIMITS.nameMax, 'User') };
-      this.coders.set(unknown, plan);
+      this.coders.set(g, plan);
       this.coderList.push(plan);
       this.count('unknownUser');
       return plan.id;

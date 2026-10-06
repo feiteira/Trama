@@ -172,12 +172,15 @@ export const CodeTree = forwardRef<CodeTreeHandle, CodeTreeProps>(function CodeT
       },
       rename: startRename,
       createAndRename: async (parentId) => {
+        // What started it ('New code'), for Escape to give the focus back to.
+        const opener = document.activeElement;
         if (parentId) setExpanded(parentId, true);
         const code = await actionsRef.current.create(parentId);
         if (!code) return null;
         setFocusedId(code.id);
         setRenamingId(code.id);
         creatingId.current = code.id;
+        creating.current = { opener: opener instanceof HTMLElement ? opener : null, parentId };
         return code.id;
       },
     }),
@@ -186,6 +189,7 @@ export const CodeTree = forwardRef<CodeTreeHandle, CodeTreeProps>(function CodeT
 
   // A code just created and being named for the first time: Escape takes it back.
   const creatingId = useRef<string | null>(null);
+  const creating = useRef<{ opener: HTMLElement | null; parentId: string | null } | null>(null);
   const commitRename = useCallback(
     (id: string, name: string) => {
       if (creatingId.current === id) creatingId.current = null;
@@ -200,8 +204,17 @@ export const CodeTree = forwardRef<CodeTreeHandle, CodeTreeProps>(function CodeT
       setRenamingId(null);
       if (creatingId.current === id) {
         creatingId.current = null;
+        const from = creating.current;
+        creating.current = null;
         void actionsRef.current.discardNew(id).then((gone) => {
-          if (!gone) focusRow(id);
+          if (!gone) return focusRow(id);
+          // The row is gone with the focus in it: back to what started the creation, else the
+          // parent row, else the tree's Tab stop.
+          requestAnimationFrame(() => {
+            if (from?.opener?.isConnected && from.opener !== document.body && !from.opener.closest('[data-code-id]')) from.opener.focus({ preventScroll: true });
+            else if (from?.parentId) focusRow(from.parentId);
+            else tree.current?.querySelector<HTMLElement>('[data-code-id][tabindex="0"], [data-code-id]')?.focus({ preventScroll: true });
+          });
         });
         return;
       }

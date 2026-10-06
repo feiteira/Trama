@@ -7,6 +7,7 @@ import type { Project } from '../services/project';
 import { type DevicePrefs, readPrefs, writePrefs } from '../services/prefs';
 import type { Route } from './router';
 import { oneAtATime, type Saver, type SaverOptions, Savers } from './savers';
+import { arriveFocus } from './arrival';
 import { watchActivity, watchShortcuts } from './activity.web';
 
 export { SAVE_STAGE, type Saver, type SaverOptions } from './savers';
@@ -111,6 +112,12 @@ export function AppStateProvider({ platform: basePlatform, children, initialPhas
   );
   const phaseRef = useRef(phase);
   phaseRef.current = phase;
+  // Unlocking, locking, closing a project: the control that had the focus went with the old
+  // screen. Give it to the new screen's heading unless the screen placed it itself (a field).
+  // (An open project's screens do the same for themselves, see ProjectShell.)
+  useEffect(() => {
+    if (phase.name !== 'loading' && phase.name !== 'project') arriveFocus();
+  }, [phase.name]);
   const prefsRef = useRef(prefs);
   prefsRef.current = prefs;
 

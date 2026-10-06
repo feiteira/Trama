@@ -266,6 +266,7 @@ export const importer: Messages['importer'] = {
 
   warnings: {
     legacyEncoding: 'Este ficheiro não está em UTF-8, por isso foi lido como Europa Ocidental (Windows-1252). Verifique se as letras acentuadas estão corretas.',
+    damagedUtf8: { one: '{n} carácter não pôde ser lido (o ficheiro está danificado nesse ponto) e aparece como �. O resto do texto foi lido normalmente.', other: '{n} caracteres não puderam ser lidos (o ficheiro está danificado nesses pontos) e aparecem como �. O resto do texto foi lido normalmente.' },
     pdfImagePages: { one: 'A página {pages} parece ser uma imagem; o OCR ainda não está disponível, por isso falta o seu texto.', other: 'As páginas {pages} parecem ser imagens; o OCR ainda não está disponível, por isso falta o seu texto.' },
     pdfNoText: 'Este PDF não tem camada de texto: provavelmente foi digitalizado. O OCR ainda não está disponível, por isso o documento ficará vazio, mas o PDF é guardado.',
     imagesSkipped: { one: '{n} imagem ficou de fora: o Trama importa o texto.', other: '{n} imagens ficaram de fora: o Trama importa o texto.' },
@@ -313,7 +314,7 @@ export const importer: Messages['importer'] = {
     sameTitle: 'Já tem este projeto',
     sameBody: '«{name}», na sua biblioteca, é o mesmo projeto. Este ficheiro pode ser a cópia de um colega.',
     merge: 'Integrar em «{name}»',
-    mergeHint: 'Acrescenta o trabalho deste ficheiro ao seu projeto. Fica a versão mais recente de cada elemento; nada do que é seu é retirado.',
+    mergeHint: 'Acrescenta o trabalho deste ficheiro ao seu projeto. Fica a versão mais recente de cada elemento, exceto o texto de um documento editado dos dois lados: fica o seu, e o Trama diz-lhe qual.',
     separate: 'Importar como cópia separada',
     separateHint: 'Cria um novo projeto ao lado do que já tem. Os dois deixam de poder ser integrados.',
     nothingLost: 'Tudo o que este ficheiro contém pode ser trazido.',
@@ -329,7 +330,7 @@ export const importer: Messages['importer'] = {
     importing: 'A importar o projeto…',
     mergeAction: 'Integrar',
     merging: 'A integrar…',
-    merged: 'Integrado em «{name}»: {added} novos, {updated} atualizados.',
+    mergedTitle: 'Cópia integrada em «{name}»',
     mergedNothing: '«{name}» já tinha tudo o que este ficheiro contém.',
     errorTitle: 'Este ficheiro não pode ser importado',
     importedTitle: '«{name}» está na sua biblioteca',

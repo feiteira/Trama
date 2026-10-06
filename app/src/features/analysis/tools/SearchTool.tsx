@@ -8,7 +8,7 @@ import { Notice, Spinner } from '../../../ui/components/Feedback';
 import { Select, TextField } from '../../../ui/components/Field';
 import { useI18n } from '../../../ui/i18n';
 import { countPerDocument, groupKwic, hitsWithin, kwicExportRows } from '../lib/kwic';
-import { describeSyntaxError } from '../lib/searchErrors';
+import { describeSyntaxError, inlineFlags, regexProblem } from '../lib/searchErrors';
 import { useAnalysisData, useDeferredCompute, useTexts } from '../parts/data';
 import { useExporter } from '../parts/exporting';
 import { KwicList } from '../parts/KwicList';
@@ -77,7 +77,11 @@ export function SearchTool({ initialQuery }: { initialQuery?: string }) {
   }, [s.scope, s.codeId, s.subcodes, codings, data]);
 
   const query = useCallback(
-    (q: string): SearchQuery => ({ query: q, mode: s.mode, wholeWord: s.wholeWord, caseSensitive: s.caseSensitive, accentSensitive: s.accentSensitive }),
+    (q: string): SearchQuery => {
+      // "(?i)" / "(?m)" copied from another tool: applied (or not needed), not rejected.
+      const flags = s.mode === 'regex' ? inlineFlags(q) : { pattern: q, ignoreCase: false };
+      return { query: flags.pattern, mode: s.mode, wholeWord: s.wholeWord, caseSensitive: s.caseSensitive && !flags.ignoreCase, accentSensitive: s.accentSensitive };
+    },
     [s.mode, s.wholeWord, s.caseSensitive, s.accentSensitive],
   );
 
@@ -87,7 +91,8 @@ export function SearchTool({ initialQuery }: { initialQuery?: string }) {
         case 'empty':
           return t('analysis.search.errors.empty');
         case 'invalid-regex':
-          return t('analysis.search.errors.regex', { detail: e.detail });
+          // In the reader's language, quoting what they typed (not Trama's rewritten pattern).
+          return t('analysis.search.errors.regex', { query: typed, detail: t(`analysis.search.errors.regexProblems.${regexProblem(e.detail)}`) });
         case 'negative-only':
           return t('analysis.search.errors.negativeOnly');
         default: {
@@ -105,7 +110,7 @@ export function SearchTool({ initialQuery }: { initialQuery?: string }) {
     const q = query(text);
     const err = validateQuery(q);
     if (err) {
-      setProblem(message(err, q.query));
+      setProblem(message(err, s.mode === 'regex' ? text.trim() : q.query));
       return;
     }
     setProblem(null);
@@ -193,6 +198,11 @@ export function SearchTool({ initialQuery }: { initialQuery?: string }) {
           options={MODES.map((m) => ({ value: m, label: t(`analysis.search.modes.${m}`) }))}
           data-testid="search-mode"
         />
+        {s.mode === 'regex' ? (
+          <p className="an-hint" data-testid="search-regex-hint">
+            {t('analysis.search.regexHint')}
+          </p>
+        ) : null}
         {s.mode === 'words' ? (
           <details className="an-syntax">
             <summary>{t('analysis.search.syntaxTitle')}</summary>

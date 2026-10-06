@@ -5,12 +5,13 @@
 // coded by two coders counts twice, and two coders disagreeing about one passage (one says
 // "Stress relief", the other "Grief & loss") would read as the two codes co-occurring. So the
 // tools count one coder's codings (by default the researcher at this computer), or all coders
-// with identical segments counted once and co-occurrence counted within each coder.
+// with a passage coded with the same code by several coders counted once (even when their
+// boundaries differ) and co-occurrence counted within each coder.
 
 import type { Coding } from '../../../core/model/types';
 import { cooccurrence, type CooccurrenceOptions, type CooccurrencePair, type CooccurrenceResult } from '../../../core/qda/cooccurrence';
 
-/** Every coder's codings, with identical segments counted once. */
+/** Every coder's codings, with a passage several coders coded alike counted once. */
 export const ALL_CODERS = 'all';
 
 export interface CoderCount {
@@ -40,24 +41,85 @@ export function effectiveScope(choice: string, coders: readonly CoderCount[], me
   return ALL_CODERS;
 }
 
-const spanKey = (c: Pick<Coding, 'document_id' | 'code_id' | 'start' | 'end'>) => `${c.document_id}\u0000${c.code_id}\u0000${c.start}\u0000${c.end}`;
-
-/** One coding per (document, code, start, end): the same segment coded alike by several coders. */
-export function dedupeSegments(codings: readonly Coding[], preferCoder?: string): Coding[] {
-  const kept = new Map<string, number>();
-  const out: Coding[] = [];
-  for (const c of codings) {
-    const k = spanKey(c);
-    const at = kept.get(k);
-    if (at === undefined) {
-      kept.set(k, out.length);
-      out.push(c);
-    } else if (preferCoder && c.coder_id === preferCoder && out[at]!.coder_id !== preferCoder) out[at] = c;
+/**
+ * Passages coded with the same code by several coders. Codings of one code in one document by
+ * different coders that overlap are one passage, whatever their exact boundaries (one coder
+ * took the whole sentence, the other stopped at the comma); overlaps chain (A–B–C is one
+ * passage). Each passage is counted through one coder's codings of it: the coder with the most
+ * segments there (a coder who split it in two counts two), the researcher's own on a tie. A coding
+ * no other coder overlaps is its own passage.
+ */
+export function passages(codings: readonly Coding[], preferCoder?: string): { kept: Coding[]; passageOf: Map<string, number> } {
+  const passageOf = new Map<string, number>();
+  const groups = new Map<string, number[]>();
+  codings.forEach((c, i) => {
+    const k = `${c.document_id}\u0000${c.code_id}`;
+    const g = groups.get(k);
+    if (g) g.push(i);
+    else groups.set(k, [i]);
+  });
+  // Union-find over indexes into `codings`.
+  const parent = codings.map((_, i) => i);
+  const find = (i: number): number => {
+    while (parent[i] !== i) {
+      parent[i] = parent[parent[i]!]!;
+      i = parent[i]!;
+    }
+    return i;
+  };
+  for (const list of groups.values()) {
+    if (list.length < 2) continue;
+    const sorted = [...list].sort((a, b) => codings[a]!.start - codings[b]!.start || codings[a]!.end - codings[b]!.end);
+    // Sweep by start: each coding against the earlier ones still open at its start.
+    const open: number[] = [];
+    for (const i of sorted) {
+      const c = codings[i]!;
+      for (let o = open.length - 1; o >= 0; o--) {
+        const j = open[o]!;
+        if (codings[j]!.end <= c.start) open.splice(o, 1);
+        else if (codings[j]!.coder_id !== c.coder_id && c.end > c.start) parent[find(i)] = find(j);
+      }
+      open.push(i);
+    }
   }
-  return out;
+  const members = new Map<number, number[]>();
+  codings.forEach((c, i) => {
+    const r = find(i);
+    passageOf.set(c.id, r);
+    const m = members.get(r);
+    if (m) m.push(i);
+    else members.set(r, [i]);
+  });
+  const keep = new Set<number>();
+  for (const list of members.values()) {
+    if (list.length === 1) {
+      keep.add(list[0]!);
+      continue;
+    }
+    const byCoder = new Map<string, number[]>();
+    for (const i of list) {
+      const id = codings[i]!.coder_id;
+      const l = byCoder.get(id);
+      if (l) l.push(i);
+      else byCoder.set(id, [i]);
+    }
+    // The most segments there (so the count does not depend on who is at this computer); the
+    // researcher's own on a tie.
+    let chosen: number[] | undefined;
+    for (const [id, l] of byCoder) {
+      if (!chosen || l.length > chosen.length || (l.length === chosen.length && id === preferCoder)) chosen = l;
+    }
+    for (const i of chosen!) keep.add(i);
+  }
+  return { kept: codings.filter((_, i) => keep.has(i)), passageOf };
 }
 
-/** The codings counted for a scope: one coder's, or everyone's with identical segments once. */
+/** Each passage once (see `passages`): the codings the "all coders" scope counts. */
+export function dedupeSegments(codings: readonly Coding[], preferCoder?: string): Coding[] {
+  return passages(codings, preferCoder).kept;
+}
+
+/** The codings counted for a scope: one coder's, or everyone's with each passage once. */
 export function scopeCodings(codings: readonly Coding[], scope: string, meId: string): { counted: Coding[]; raw: Coding[] } {
   if (scope !== ALL_CODERS) {
     const own = codings.filter((c) => c.coder_id === scope);
@@ -75,7 +137,7 @@ export function scopeCodings(codings: readonly Coding[], scope: string, meId: st
 export function pooledCooccurrence(raw: readonly Coding[], codeIds: readonly string[], opts: CooccurrenceOptions): CooccurrenceResult {
   const within = cooccurrence(raw, codeIds, { ...opts, sameCoder: true, details: true });
   const counted = cooccurrence(dedupeSegments(raw), codeIds, { ...opts, mode: 'overlap', details: false });
-  const byId = new Map(raw.map((c) => [c.id, c]));
+  const { passageOf } = passages(raw);
   const { codes } = within;
   const k = codes.length;
   const matrix = Array.from({ length: k }, () => new Array<number>(k).fill(0));
@@ -83,9 +145,10 @@ export function pooledCooccurrence(raw: readonly Coding[], codeIds: readonly str
   const jaccard = Array.from({ length: k }, () => new Array<number>(k).fill(0));
   const counts = counted.segmentCounts;
   const pairs = new Map<string, CooccurrencePair[]>();
+  // A segment is its passage: a pair two coders both found, with their own boundaries, is one pair.
   const key = (id: string, documentId: string, start: number, end: number) => {
-    const c = byId.get(id);
-    return `${documentId}\u0000${c?.code_id ?? id}\u0000${start}\u0000${end}`;
+    const at = passageOf.get(id);
+    return at !== undefined ? `p${at}` : `${documentId}\u0000${id}\u0000${start}\u0000${end}`;
   };
   for (let i = 0; i < k; i++) {
     for (let j = i + 1; j < k; j++) {

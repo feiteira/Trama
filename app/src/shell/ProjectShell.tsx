@@ -5,12 +5,14 @@ import { ScreenView } from '../features/registry';
 import { inkOn } from '../ui/color';
 import { cx } from '../ui/cx';
 import { useI18n } from '../ui/i18n';
+import { NARROW_RAIL, useMediaQuery } from '../ui/media';
 import { Button, IconButton } from '../ui/components/Button';
 import { Spinner } from '../ui/components/Feedback';
 import { Menu, type MenuEntry } from '../ui/components/Menu';
 import { Tooltip } from '../ui/components/Tooltip';
 import { useToast } from '../ui/components/Toast';
 import { watchBack, watchShortcuts } from './activity.web';
+import { arriveFocus } from './arrival';
 import { BackupScheduler } from './BackupScheduler';
 import { useAppState, useLibrary, useProject } from './AppState';
 import { CoderGate } from './CoderGate';
@@ -55,12 +57,16 @@ export function ProjectShell({ initialRoute }: { initialRoute?: Route }) {
 function Layout() {
   const { t } = useI18n();
   const key = useKeyLabel();
-  const { route, go, back } = useRouter();
+  const { route, routeKey, go, back, takeReturnFocus } = useRouter();
   const { lock, platform, example, canLeaveExample, leaveExample, closeProject, openProject, prefs, setPrefs } = useAppState();
   const project = useProject();
   const library = useLibrary();
   const toast = useToast();
   const [collapsed, setCollapsed] = useState(readCollapsed);
+  // Narrow windows show the rail as icons too (shell.css): the items then need the same
+  // accessible names and tooltips as a rail the researcher collapsed.
+  const narrow = useMediaQuery(NARROW_RAIL);
+  const iconOnly = collapsed || narrow;
   const [palette, setPalette] = useState(false);
   const [switcher, setSwitcher] = useState(false);
   const switcherRef = useRef<HTMLButtonElement>(null);
@@ -77,6 +83,9 @@ function Layout() {
     });
 
   useEffect(() => watchBack(back), [back]);
+  // A new screen (or the project just opened): if the focus fell to the page with the old one,
+  // give it to the new screen's heading, or back to what had it here before (going Back).
+  useEffect(() => arriveFocus({ scope: '.shell__screen', restore: takeReturnFocus(routeKey) }), [routeKey, takeReturnFocus]);
   useEffect(() => watchShortcuts({ k: () => setPalette((p) => !p) }), []);
   // F1: the manual at this screen's topic. Not over a dialog, which would be left behind.
   const routeName = route.name;
@@ -167,7 +176,7 @@ function Layout() {
         type="button"
         className={cx('rail__item', current && 'rail__item--current')}
         aria-current={current ? 'page' : undefined}
-        aria-label={collapsed ? label : undefined}
+        aria-label={iconOnly ? label : undefined}
         onClick={() => go({ name } as Route)}
         data-testid={`nav-${name}`}
       >
@@ -178,7 +187,7 @@ function Layout() {
     // The tooltip names an icon-only item; the label is visible otherwise.
     return (
       <li key={name}>
-        {collapsed ? (
+        {iconOnly ? (
           <Tooltip label={label} side="right">
             {button}
           </Tooltip>

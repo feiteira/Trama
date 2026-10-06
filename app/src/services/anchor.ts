@@ -23,12 +23,21 @@ function nearest(text: string, needle: string, near: number): number {
  * version of the text it was made against (one of `versions` holding its words at its offsets),
  * else found by its words nearest its old place. Null: it cannot be placed.
  */
-export function anchor(c: Pick<Coding, 'start' | 'end' | 'text'>, text: string, versions: readonly string[], edits: (from: string) => TextEdit[]): { start: number; end: number } | null {
+export function anchor(
+  c: Pick<Coding, 'start' | 'end' | 'text'>,
+  text: string,
+  versions: readonly string[],
+  edits: (from: string) => TextEdit[],
+  opts: { unique?: boolean } = {},
+): { start: number; end: number } | null {
   if (c.end <= text.length && c.start < c.end && text.slice(c.start, c.end) === c.text) return { start: c.start, end: c.end };
   for (const v of versions) {
     if (v === text || c.end > v.length || v.slice(c.start, c.end) !== c.text) continue;
     return mapRange({ start: c.start, end: c.end }, edits(v));
   }
+  // `unique`: guessing between several occurrences could put the coding on another passage
+  // (another participant's words): only words found once are placed.
+  if (opts.unique && c.text && text.indexOf(c.text) !== text.lastIndexOf(c.text)) return null;
   const at = nearest(text, c.text, c.start);
   return at >= 0 ? { start: at, end: at + c.text.length } : null;
 }
@@ -48,10 +57,12 @@ export function anchorAll(codings: readonly Coding[], text: string, versions: re
 }
 
 /**
- * Re-anchors restored codings on their document's current text. A coding deleted before the text
- * changed (a typo fix, pseudonymisation) still holds the offsets and words of the old text: it
- * is found again by its words (with the applied pseudonymisation key put into them, when the
- * names were replaced meanwhile), else deleted again. Returns how many were moved and removed.
+ * Re-anchors restored codings on their document's current text. Codings in the trash follow text
+ * edits (`applyTextEdits`), so they normally sit on their words already. One deleted by an older
+ * Trama before the text changed still holds the offsets and words of the old text: it is found
+ * again by its words when they occur once (with the applied pseudonymisation key put into them,
+ * when the names were replaced meanwhile), else deleted again rather than put on another passage
+ * holding the same words. Returns how many were moved and removed.
  */
 export async function reanchorRestored(ctx: ProjectContext, codingIds: readonly string[], batch: string): Promise<{ moved: number; removed: number }> {
   if (!codingIds.length) return { moved: 0, removed: 0 };
@@ -66,11 +77,11 @@ export async function reanchorRestored(ctx: ProjectContext, codingIds: readonly 
     const t = texts.get(docId);
     if (!t || t.deleted) continue;
     for (const c of list) {
-      let r = anchor(c, t.text, [], () => []);
+      let r = anchor(c, t.text, [], () => [], { unique: true });
       let words = c.text;
       if (!r && key.length) {
         words = pseudonymiseText(c.text, key);
-        if (words !== c.text) r = anchor({ ...c, text: words }, t.text, [], () => []);
+        if (words !== c.text) r = anchor({ ...c, text: words }, t.text, [], () => [], { unique: true });
       }
       if (!r) {
         lost.push(c.id);

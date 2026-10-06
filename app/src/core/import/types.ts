@@ -53,6 +53,8 @@ export interface ImportedTable {
 export const WARNING = {
   /** Not valid UTF-8: read as Windows-1252. Accented letters may need checking. */
   legacyEncoding: 'text.legacyEncoding',
+  /** UTF-8 with a few invalid byte sequences, each read as U+FFFD (argument: how many). */
+  damagedUtf8: 'text.damagedUtf8',
   /** Pages (comma-separated, from 1) without a text layer: probably scanned images. */
   pdfImagePages: 'pdf.imagePages',
   /** The whole PDF has no text layer. */

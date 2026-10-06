@@ -2,7 +2,7 @@ import { toHex, wipe } from '../core/bytes';
 import { open, seal } from '../core/crypto/frames';
 import { type Keyring, subkey } from '../core/crypto/keyring';
 import { uuid } from '../core/ids';
-import type { Coder, LogAction, MediaRef } from '../core/model/types';
+import type { Coder, Draft, LogAction, MediaRef } from '../core/model/types';
 import { LIMITS, PALETTE } from '../core/model/types';
 import type { Store } from '../core/store/store';
 import { type Platform, PlatformError } from '../platform/types';
@@ -47,6 +47,9 @@ export class NeedsCoderError extends Error {
     super('choose who codes on this computer first (project.needsCoder)');
   }
 }
+
+/** Meta key: the id of the project this one is a restored copy of (see `Project.copyId`). */
+export const LINEAGE_META = 'project.lineage';
 
 /** Blob ids become file names: the desktop shell accepts these and nothing else. */
 export const BLOB_ID = /^[a-z0-9][a-z0-9._-]*$/;
@@ -107,6 +110,7 @@ export class Project implements ProjectContext {
   private readonly onClose?: (project: Project) => void;
   private closed = false;
   private meCoder: Coder | null = null;
+  private lineage: string | null = null;
 
   private constructor(parts: ProjectParts) {
     this.platform = parts.platform;
@@ -127,7 +131,17 @@ export class Project implements ProjectContext {
     const meId = await parts.store.getMeta('me');
     const coder = meId ? await parts.store.get('coder', meId) : null;
     project.meCoder = coder && !coder.deleted ? coder : null;
+    project.lineage = await parts.store.getMeta(LINEAGE_META);
     return project;
+  }
+
+  /**
+   * The project id copies of this project carry, and that a teammate's copy must carry to be
+   * merged here: its own id, or, for a backup restored while the original was still in the
+   * library (it got a new id), the original's, so the team can go on exchanging copies.
+   */
+  get copyId(): string {
+    return this.lineage ?? this.id;
   }
 
   get info(): ProjectInfo {
@@ -183,14 +197,18 @@ export class Project implements ProjectContext {
   // ── Audit trail ────────────────────────────────────────────────────────────────────────
 
   async log(action: LogAction, summary: string, target?: { kind: string; id: string }): Promise<void> {
-    await this.store.put('log', {
+    await this.store.put('log', this.logRecord(action, summary, target));
+  }
+
+  logRecord(action: LogAction, summary: string, target?: { kind: string; id: string }): Draft<'log'> {
+    return {
       at: isoSeconds(this.now()),
       coder_id: this.meCoder?.id ?? null,
       action,
       summary,
       target_kind: target?.kind ?? null,
       target_id: target?.id ?? null,
-    });
+    };
   }
 
   // ── Files ──────────────────────────────────────────────────────────────────────────────
@@ -253,8 +271,12 @@ export class Project implements ProjectContext {
     }
   }
 
+  /**
+   * Removes a stored file. Needs no key, so it works after the project closed too: a batch of
+   * files stored by an import that a lock then stopped is removed again (see `createDocuments`).
+   */
   async removeBlob(ref: Pick<MediaRef, 'blob_id'>): Promise<void> {
-    this.ensureOpen();
+    if (!BLOB_ID.test(ref.blob_id)) throw new Error(`invalid blob id: ${ref.blob_id}`);
     try {
       await this.platform.blobs.remove(this.id, ref.blob_id);
     } catch (e) {

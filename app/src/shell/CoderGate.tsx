@@ -25,6 +25,8 @@ export function CoderGate({ onDone }: { onDone: () => void }) {
   const [coders, setCoders] = useState<Coder[] | null>(null);
   const [counts, setCounts] = useState<Map<string | null, number>>(new Map());
   const [choice, setChoice] = useState<string>(NEW);
+  // A coder named like me, preselected: maybe me, maybe a teammate with the same first name.
+  const [sameName, setSameName] = useState<Coder | null>(null);
   const [name, setName] = useState(prefs.coderName);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -38,7 +40,10 @@ export function CoderGate({ onDone }: { onDone: () => void }) {
     void project.coders().then((list) => {
       setCoders(list);
       const mine = list.find((c) => c.name.trim().toLocaleLowerCase() === prefs.coderName.trim().toLocaleLowerCase());
-      if (mine) setChoice(mine.id);
+      if (mine) {
+        setChoice(mine.id);
+        setSameName(mine);
+      }
     });
   }, [project, prefs.coderName]);
 
@@ -112,6 +117,11 @@ export function CoderGate({ onDone }: { onDone: () => void }) {
               className="gate-coders"
               data-testid="coder-choice"
             />
+          ) : null}
+          {sameName && choice === sameName.id ? (
+            <Notice tone="info" data-testid="coder-same-name">
+              {t('agreement.gate.sameName', { name: sameName.name, someoneNew: t('app.coder.someoneNew') })}
+            </Notice>
           ) : null}
           {choice === NEW ? <TextField label={t('app.coder.name')} value={name} onChange={setName} autoFocus maxLength={200} data-testid="coder-name" /> : null}
           {error ? <Notice tone="danger">{error}</Notice> : null}

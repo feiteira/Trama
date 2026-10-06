@@ -27,11 +27,12 @@ describe('memos', () => {
     const a = await createMemo(ctx, { title: 'A', target: { kind: 'project', id: null } });
     await createMemo(ctx, { title: 'B', target: { kind: 'project', id: null } });
     const r = await updateMemo(ctx, a.memo.id, { body: 'first draft' });
-    await updateMemo(ctx, a.memo.id, { body: 'second draft' });
+    const r2 = await updateMemo(ctx, a.memo.id, { body: 'second draft' });
     expect((await listLog(ctx, { action: 'memo.edit' })).length).toBe(1);
     expect((await allMemos(ctx))[0]!.id).toBe(a.memo.id);
     const same = await updateMemo(ctx, a.memo.id, { body: 'second draft' });
     expect(same.undo.weight).toBe(0);
+    await r2.undo.undo();
     await r.undo.undo();
     expect((await ctx.store.get('memo', a.memo.id))!.body).toBe('');
   });
@@ -44,7 +45,7 @@ describe('memos', () => {
     expect(await restoreMemos(ctx, r.batch)).toBe(1);
     expect(await ctx.store.count('memo')).toBe(1);
     // Restored off the undo stack: the delete's undo/redo must not write over that.
-    await expect(r.undo.redo()).rejects.toMatchObject({ code: 'changed_since' });
+    await expect(r.undo.undo()).rejects.toMatchObject({ code: 'changed_since' });
     expect(await ctx.store.count('memo')).toBe(1);
     const all = await listLog(ctx);
     expect(all.some((l) => l.summary.includes('Ana Lima'))).toBe(false);

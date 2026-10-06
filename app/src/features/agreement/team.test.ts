@@ -25,6 +25,8 @@ describe('file problems', () => {
   it('names why a file cannot be merged', () => {
     expect(fileProblem(new DataFileError('DIFFERENT_PROJECT', 'x'))).toBe('differentProject');
     expect(fileProblem(new NotTramaFileError('not-zip'))).toBe('notTrama');
+    // A copy saved by a newer Trama is not "damaged": it says to update Trama.
+    expect(fileProblem(new NotTramaFileError('newer-version', '2'))).toBe('newer');
     expect(fileProblem(new DecryptError())).toBe('wrongPassword');
     expect(fileProblem(new UnlockRequiredError('library-key'))).toBe('backup');
     expect(fileProblem(new Error('disk'))).toBe('unknown');

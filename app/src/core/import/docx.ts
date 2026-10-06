@@ -1,7 +1,8 @@
+import { zipSync } from 'fflate';
 import { htmlToParagraphs } from './html';
 import { canonicalize, tidy } from './text';
 import { ImportError, WARNING, warning } from './types';
-import { checkZipSizes } from './xml';
+import { readZip, zipNames } from './xml';
 
 // Word (.docx) → text through mammoth's HTML (headings, paragraphs, lists, tables, footnotes),
 // then our HTML reader. mammoth reads { buffer } in Node and { arrayBuffer } in the browser
@@ -32,18 +33,35 @@ export interface DocxResult {
   warnings: string[];
 }
 
-export async function docxToText(bytes: Uint8Array, mammoth?: MammothLike): Promise<DocxResult> {
-  // mammoth (JSZip) inflates the parts it reads with no limit: refuse a zip bomb first. Images
-  // are never read (they are only counted), so only the XML parts count.
+/** Parts mammoth never reads (images are only counted, embedded objects ignored). */
+const UNREAD_PART = /^word\/(?:media|embeddings)\/|\.(?:png|jpe?g|gif|bmp|tiff?|emf|wmf|svg|webp|wdp|heic|avif)$/i;
+
+/**
+ * The .docx rebuilt from parts we inflated ourselves, within limits. mammoth's JSZip inflates
+ * whatever part the relationships name with no limit and trusts no declared size, so it must
+ * only ever see entries whose sizes are already verified: those are stored uncompressed, and
+ * the parts mammoth never reads are left empty.
+ */
+function boundedDocx(bytes: Uint8Array): Uint8Array {
+  let parts: Record<string, Uint8Array>;
+  let names: string[];
   try {
-    checkZipSizes(bytes, (name) => /\.(xml|rels)$/i.test(name));
+    parts = readZip(bytes, (name) => !UNREAD_PART.test(name));
+    names = zipNames(bytes);
   } catch (e) {
-    // A damaged archive is mammoth's to report, as a damaged Word file.
-    if (!(e instanceof ImportError) || e.code !== 'DAMAGED') throw e;
+    if (e instanceof ImportError && e.code === 'DAMAGED') throw new ImportError('DAMAGED', 'docx', e.message);
+    throw e;
   }
+  const files: Record<string, Uint8Array> = {};
+  for (const name of names) files[name] = parts[name] ?? new Uint8Array(0);
+  return zipSync(files, { level: 0 });
+}
+
+export async function docxToText(bytes: Uint8Array, mammoth?: MammothLike): Promise<DocxResult> {
+  const safe = boundedDocx(bytes);
   const m = mammoth ?? (await loadMammoth());
   let images = 0;
-  const ab = bytes.slice().buffer as ArrayBuffer;
+  const ab = safe.buffer as ArrayBuffer;
   let html: string;
   try {
     const result = await m.convertToHtml({ arrayBuffer: ab, buffer: ab } as { arrayBuffer: ArrayBuffer }, {

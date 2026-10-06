@@ -60,8 +60,9 @@ export function layoutCloud(words: readonly CloudWord[], opts: CloudOptions): Pl
   const maxSize = opts.maxSize ?? Math.max(minSize + 4, Math.min(56, H / 5));
   const gap = opts.gap ?? 3;
   const counts = words.map((w) => w.count);
-  const max = Math.max(...counts);
-  const min = Math.min(...counts);
+  // A loop, not Math.max(...counts): spreading a long list overflows the call stack.
+  const max = counts.reduce((a, b) => (b > a ? b : a), -Infinity);
+  const min = counts.reduce((a, b) => (b < a ? b : a), Infinity);
   const placed: PlacedWord[] = [];
   const boxes: Box[] = [];
   const cx = W / 2;

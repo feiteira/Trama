@@ -17,6 +17,7 @@ import { LibraryError } from '../../services/library';
 import type { LibraryKeys } from '../../services/project';
 import type { Msg } from './messages';
 import { nameKey } from './model';
+import { problemKey } from '../../ui/problems';
 
 export type ProjectFileType = 'trama' | 'qdpx';
 
@@ -113,6 +114,17 @@ export function meIn(coders: readonly { id: string; name: string }[], myName: st
   return hits.length === 1 ? hits[0]!.id : null;
 }
 
+/**
+ * Who is me in a project imported from a file, or null to ask (the coder gate). A backup of this
+ * library knows (`ownMe`). A REFI-QDA project is the researcher's own work from another program,
+ * so the coder with their name is them. A .trama from another library is a teammate's copy: a coder
+ * there with my name may well be someone else with the same first name, so it is never assumed.
+ */
+export function meForImport(type: 'trama' | 'qdpx', ownMe: string | null, coders: readonly { id: string; name: string }[], myName: string): string | null {
+  if (ownMe) return ownMe;
+  return type === 'qdpx' ? meIn(coders, myName) : null;
+}
+
 /** The project already in the library that this file is a copy of (same project id). */
 export function sameProjectIn<P extends { id: string }>(bundle: ProjectBundle, projects: readonly P[]): P | null {
   const id = bundle.project.id;
@@ -150,5 +162,7 @@ export function projectFileError(e: unknown, protection?: 'password' | 'library-
     if (e.code === 'LOCKED') return { key: 'importer.project.errors.libraryLocked' };
   }
   if (e instanceof JobStopped) return { key: 'importer.project.errors.libraryLocked' };
+  const known = problemKey(e);
+  if (known) return { key: known };
   return { key: 'importer.project.errors.other', vars: { message: e instanceof Error ? e.message : String(e) } };
 }

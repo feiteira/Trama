@@ -142,6 +142,7 @@ export function createMemoryPlatform(opts: MemoryPlatformOptions = {}): MemoryPl
         return b.slice();
       },
       remove: async (project, id) => void blobsOf(project, false)?.delete(id),
+      list: async (project) => [...(blobsOf(project, false)?.keys() ?? [])].sort(),
     },
     files: {
       read: async (path) => {

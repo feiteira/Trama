@@ -1,0 +1,84 @@
+.merge-report {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+
+.merge-report:empty {
+  display: none;
+}
+
+.merge-report .notice__body p {
+  margin: 0;
+}
+
+.merge-report__docs {
+  list-style: none;
+  margin: var(--s-2) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 9.5em;
+  overflow-y: auto;
+}
+
+.merge-report__docs li {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-width: 0;
+}
+
+.merge-report__doc-icon {
+  flex: none;
+  color: var(--ink-3);
+}
+
+.merge-report__doc-name,
+.merge-report__doc-link {
+  font-weight: 560;
+  overflow-wrap: anywhere;
+}
+
+.merge-report__doc-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-weight: 560;
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.merge-report__doc-link:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+.merge-report__action {
+  margin-top: var(--s-2);
+}
+
+.merge-report__notes {
+  margin: 0;
+  padding-left: 1.2em;
+  font-size: var(--fs-sm);
+}
+
+.merge-report__take {
+  margin-left: auto;
+}
+
+.merge-report__taken {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  font-size: var(--fs-sm);
+  color: var(--success-text);
+}

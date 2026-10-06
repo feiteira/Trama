@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { ChevronsDownUp, ChevronsUpDown, Combine, Download, FileUp, ListTree, Plus, Sigma, Tags } from 'lucide-react';
 import * as codesService from '../../services/codes';
 import type { ScreenProps } from '../../shell/router';
@@ -33,6 +34,8 @@ export default function CodesScreen({ route }: ScreenProps<'codes'>) {
   const [ownCounts, setOwnCounts] = useState(false);
   const [mergeSources, setMergeSources] = useState<string[] | null>(null);
   const treeRef = useRef<CodeTreeHandle>(null);
+  // The first code of an empty codebook is being made: the tree is shown so it can be named in place.
+  const [makingFirst, setMakingFirst] = useState(false);
   const files = useCodebookFiles(data);
   const undoToast = useUndoToast();
   const fail = useFail();
@@ -82,9 +85,18 @@ export default function CodesScreen({ route }: ScreenProps<'codes'>) {
   const allCollapsed = branches.length > 0 && branches.every((id) => collapsed.has(id));
   const code = selectedId ? data?.byId.get(selectedId) : undefined;
 
+  // Once the first code is there (or was taken back), the codebook shows what it holds.
+  useEffect(() => {
+    if (makingFirst && data && data.items.length > 0) setMakingFirst(false);
+  }, [makingFirst, data]);
+
   const newCode = async (under: string | null) => {
     const before = selectedId;
+    // An empty codebook shows no tree to name a code in: show it first, at once, so the new code
+    // opens for naming like any other (and the header button and the command work there too).
+    if (!treeRef.current) flushSync(() => setMakingFirst(true));
     const id = await treeRef.current?.createAndRename(under);
+    if (!id) setMakingFirst(false);
     // The new code opens on the right, so its definition is the one being edited.
     if (id) {
       select(id);
@@ -201,7 +213,7 @@ export default function CodesScreen({ route }: ScreenProps<'codes'>) {
           <div className="codes__loading">
             <Spinner label={t('common.loading')} />
           </div>
-        ) : data.items.length === 0 ? (
+        ) : data.items.length === 0 && !makingFirst ? (
           <EmptyState
             icon={Tags}
             title={t('codes.screen.emptyTitle')}
@@ -209,7 +221,7 @@ export default function CodesScreen({ route }: ScreenProps<'codes'>) {
             data-testid="codes-empty"
             actions={
               <>
-                <Button variant="primary" icon={Plus} onClick={() => void actions.create(null).then((c) => c && select(c.id))}>
+                <Button variant="primary" icon={Plus} onClick={() => void newCode(null)} data-testid="codes-empty-new">
                   {t('codes.screen.newCode')}
                 </Button>
                 <Button variant="secondary" icon={FileUp} onClick={() => void files.importFile()}>

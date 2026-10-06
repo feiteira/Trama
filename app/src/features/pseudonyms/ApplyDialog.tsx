@@ -83,7 +83,10 @@ export function ApplyDialog({ preview, ids, entryCount, onClose }: { preview: Pr
           <div className="papply__done">
             <CircleCheck size={20} aria-hidden strokeWidth={1.75} className="papply__done-icon" />
             <div>
-              <p data-testid="apply-summary">{t('pseudonyms.apply.doneBody', { replacements: tp('pseudonyms.apply.replacements', result.replacements), documents: tp('common.count.documents', result.documents) })}</p>
+              <p data-testid="apply-summary">
+                {t('pseudonyms.apply.doneBody', { replacements: tp('pseudonyms.apply.replacements', result.replacements - result.fieldReplacements), documents: tp('common.count.documents', result.documents) })}
+                {result.fieldReplacements ? ` ${tp('pseudonyms.apply.doneFields', result.fieldReplacements)}` : ''}
+              </p>
               {result.removedCodings ? <p className="t-muted t-small">{tp('pseudonyms.apply.removedCodings', result.removedCodings)}</p> : null}
               <p className="t-muted t-small papply__undo-note">{t('pseudonyms.apply.undoNote')}</p>
             </div>
@@ -114,12 +117,13 @@ export function ApplyDialog({ preview, ids, entryCount, onClose }: { preview: Pr
       }
     >
       <div className="papply">
-        <p>
-          {t('pseudonyms.apply.body', {
-            replacements: tp('pseudonyms.apply.replacements', preview.total),
+        <p data-testid="apply-body">
+          {preview.textTotal === 0 ? tp('pseudonyms.apply.bodyFields', preview.total) : t('pseudonyms.apply.body', {
+            replacements: tp('pseudonyms.apply.replacements', preview.textTotal),
             documents: tp('common.count.documents', preview.documents.length),
             entries: tp('pseudonyms.count', entryCount),
           })}
+          {preview.textTotal > 0 && preview.total > preview.textTotal ? ` ${tp('pseudonyms.apply.bodyFields', preview.total - preview.textTotal)}` : ''}
         </p>
         <Notice tone="warning" icon={TriangleAlert} title={t('pseudonyms.apply.warningTitle')}>
           <ul className="papply__points">
@@ -127,6 +131,10 @@ export function ApplyDialog({ preview, ids, entryCount, onClose }: { preview: Pr
             <li>{t('pseudonyms.apply.point2')}</li>
             <li>{t('pseudonyms.apply.point3')}</li>
           </ul>
+        </Notice>
+        <Notice tone="info" data-testid="apply-not-covered">
+          <p>{t('pseudonyms.apply.point4')}</p>
+          {preview.logEntries ? <p>{tp('pseudonyms.preview.logTitle', preview.logEntries)}. {t('pseudonyms.preview.logBody')}</p> : null}
         </Notice>
         {running ? (
           <div className="papply__progress">

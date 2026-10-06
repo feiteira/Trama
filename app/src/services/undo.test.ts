@@ -3,7 +3,7 @@ import { createCode, updateCode } from './codes';
 import { createDocument } from './documents';
 import { listLog } from './log';
 import { makeTestProject } from './testing';
-import { chunks, combineUndo, commit, draftOf, listIn, noopUndo, Plan, recordsInBatch, restoreBatch, UndoManager, type Undoable } from './undo';
+import { chunks, combineUndo, commit, draftOf, listIn, noopUndo, Plan, recordsInBatch, restoreBatch, ServiceError, UndoManager, type Undoable } from './undo';
 
 function counter(label = 'code.edit' as const) {
   const state = { value: 0 };
@@ -81,13 +81,21 @@ describe('UndoManager', () => {
     expect(m.canUndo || m.canRedo).toBe(false);
   });
 
-  it('drops an entry whose undo fails, and keeps working', async () => {
+  it('keeps an entry whose undo failed (to try again), drops one refused for good', async () => {
     const m = new UndoManager();
     const { state, make } = counter();
     m.record(make(1));
-    m.record({ ...make(2), undo: async () => Promise.reject(new Error('disk full')) });
+    let fail = true;
+    m.record({ ...make(2), undo: async () => (fail ? Promise.reject(new Error('disk full')) : undefined) });
     await expect(m.undo()).rejects.toThrow('disk full');
     expect(m.canRedo).toBe(false);
+    expect(m.labels.undo?.detail).toBe('+2');
+    fail = false;
+    await m.undo();
+    expect(m.canRedo).toBe(true);
+    m.record({ ...make(3), undo: async () => Promise.reject(new ServiceError('changed_since', 'x')) });
+    await expect(m.undo()).rejects.toMatchObject({ code: 'changed_since' });
+    expect(m.labels.undo?.detail).toBe('+1');
     state.value = 1;
     await m.undo();
     expect(state.value).toBe(0);

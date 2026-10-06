@@ -29,12 +29,12 @@ export function sameProject(bundle: Pick<ProjectBundle, 'project'>, projectId: s
   return !!bundle.project.id && bundle.project.id === projectId;
 }
 
-export type FileProblem = 'differentProject' | 'notTrama' | 'wrongPassword' | 'backup' | 'unknown';
+export type FileProblem = 'differentProject' | 'newer' | 'notTrama' | 'wrongPassword' | 'backup' | 'unknown';
 
 /** Why a file could not be merged, for the message shown. */
 export function fileProblem(e: unknown): FileProblem {
   if (e instanceof DataFileError && e.code === 'DIFFERENT_PROJECT') return 'differentProject';
-  if (e instanceof NotTramaFileError) return 'notTrama';
+  if (e instanceof NotTramaFileError) return e.reason === 'newer-version' ? 'newer' : 'notTrama';
   if (e instanceof DecryptError) return 'wrongPassword';
   if (e instanceof UnlockRequiredError && e.protection === 'library-key') return 'backup';
   return 'unknown';

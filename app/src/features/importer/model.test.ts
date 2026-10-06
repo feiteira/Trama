@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { cuesToTranscript, parseTextTranscript } from '../../core/import';
 import type { ImportedDoc } from '../../core/import';
 import {
+  appendAll,
   batchTotals,
   coalesce,
   findDuplicates,
@@ -170,5 +171,23 @@ describe('media', () => {
     expect(matchMedia('C:\\rec\\interview 3.mp3', rows)).toBe('a');
     expect(matchMedia('Interview 5.mp3', rows)).toBeNull();
     expect(matchMedia('Other.mp3', rows)).toBeNull();
+  });
+});
+
+describe('long lists', () => {
+  // 130,000 survey respondents: created.push(...docs) threw "Maximum call stack size exceeded"
+  // after every document was committed, so the row was marked failed and a retry duplicated all.
+  it('appends 200,000 items without overflowing the call stack', () => {
+    const many = Array.from({ length: 200_000 }, (_, i) => i);
+    expect(() => [0].push(...many)).toThrow(RangeError);
+    const out = appendAll([-1], many);
+    expect(out.length).toBe(200_001);
+    expect(out[200_000]).toBe(199_999);
+  });
+
+  it('plans a speaker with 200,000 turns', () => {
+    const spans = Array.from({ length: 200_000 }, (_, i) => ({ start: i * 10, end: i * 10 + 5 }));
+    const plan = speakerPlan([{ name: 'Ana', spans }]);
+    expect(plan[0]!.spans.length).toBe(200_000);
   });
 });

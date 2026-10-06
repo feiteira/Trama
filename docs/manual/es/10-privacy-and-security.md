@@ -75,18 +75,20 @@ Quien pueda abrir la carpeta de copias ve que existen archivos de copia, sus fec
 
 ## Seudonimización
 
-La **seudonimización** sustituye nombres y otros datos identificativos de forma coherente en todos los documentos —«Ana Lima» pasa a ser «[Participante 1]» en todas partes—, mientras los segmentos codificados, los comentarios y las marcas de tiempo de las transcripciones siguen al texto modificado.
+La **seudonimización** sustituye nombres y otros datos identificativos de forma coherente en todos los documentos —«Ana Lima» pasa a ser «[Participante 1]» en todas partes—, mientras los segmentos codificados y las marcas de tiempo de las transcripciones siguen al texto modificado. Las mismas sustituciones se hacen en los nombres de documentos, casos, códigos y grupos, en los nombres de archivo, en las descripciones y atributos de texto de los casos, en los memorandos, en los comentarios de los segmentos codificados y en las definiciones de los códigos.
 
 1. **Prepare la clave.** Añada entradas una a una (el original, tal como aparece, y su sustitución), o elija **Sugerir nombres**: Trama enumera palabras y expresiones con mayúscula de sus documentos que pueden ser nombres o lugares, y numera las sustituciones por usted (`[Participante 1]`, `[Lugar 2]`…). Las sugerencias son solo un punto de partida: los apodos, las calles, los lugares de trabajo y los detalles poco comunes pueden identificar a alguien igual de bien. Lea también sus documentos.
 2. **Ajuste las opciones de cada entrada.** **Palabra completa** deja tranquilo «Ana» dentro de «Anabel». **Mayúsculas** sustituye «Rosa» el nombre, no «rosa» la flor.
-3. **Vista previa** muestra todas las sustituciones, documento por documento, antes de cambiar nada.
+3. **Vista previa** muestra todas las sustituciones antes de cambiar nada: documento por documento y, después, en todo el resto del proyecto (nombres, nombres de archivo, memorandos, comentarios, definiciones), agrupadas por tipo.
 4. **Aplicar a los documentos.** Los originales se sustituyen en los propios documentos, no solo en las exportaciones. Los segmentos codificados que solo cubrían un nombre sustituido se quitan. Puede aplicar la clave entera o solo las entradas que marque.
 
 Aplicarla solo se puede deshacer con **Deshacer justo después**; en cuanto sigue trabajando, el cambio es permanente. Haga antes una copia de seguridad.
 
 **La clave** (qué se sustituyó por qué) es el vínculo con la identidad de sus participantes. Se queda dentro del proyecto cifrado, se deja fuera de todas las exportaciones y copias salvo que la incluya expresamente, y siempre está en las copias de seguridad cifradas. **Exportar clave** la guarda como tabla CSV para su archivo: guarde ese archivo cifrado y separado del material seudonimizado, como suelen exigir las aprobaciones éticas. Al eliminar una entrada se borra al instante el nombre original del proyecto; no se puede deshacer.
 
-Los archivos PDF y Word originales se conservan tal como se importaron. Cuando el texto de un documento se ha editado (seudonimizado, por ejemplo), las exportaciones REFI-QDA dejan siempre fuera su PDF original, porque el original seguiría mostrando lo que se quitó.
+Los archivos PDF y Word originales se conservan tal como se importaron. Cuando el texto de un documento se ha editado (seudonimizado, por ejemplo), las exportaciones REFI-QDA y las copias .trama dejan fuera su PDF original, porque el original seguiría mostrando lo que se quitó (las copias de seguridad lo guardan todo).
+
+**El registro de auditoría no se seudonimiza.** Nunca se edita, así que las entradas escritas antes de aplicar la clave («Añadió el documento «Entrevista — Ana Lima»») conservan los nombres. La vista previa y la ventana Aplicar dicen cuántas entradas lo hacen. El registro viaja en las copias .trama del proyecto y en su exportación CSV: compártalas solo con quien pueda ver los nombres.
 
 <a id="audit-trail"></a>
 

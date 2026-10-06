@@ -323,6 +323,23 @@
   animation: manual-target 1.6s var(--ease);
 }
 
+/* Reduced motion: the mark still shows, without fading: on for a moment, then off. The
+   duration must beat the global rule, which would otherwise cut it to nothing. */
+@media (prefers-reduced-motion: reduce) {
+  .manual .is-target {
+    animation: manual-target-still 2s steps(1, end);
+    animation-duration: 2s !important;
+  }
+}
+
+@keyframes manual-target-still {
+  from,
+  to {
+    background: var(--accent-soft);
+    box-shadow: 0 0 0 6px var(--accent-soft);
+  }
+}
+
 @keyframes manual-target {
   0%,
   35% {

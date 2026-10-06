@@ -235,6 +235,7 @@
   flex-direction: column;
 }
 
+/* Icon-only at this width: ui/media.ts NARROW_RAIL repeats it, for the items' names and tooltips. */
 @media (max-width: 900px) {
   .shell {
     grid-template-columns: var(--rail-w-collapsed) minmax(0, 1fr);

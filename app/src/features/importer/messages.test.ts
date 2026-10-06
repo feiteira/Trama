@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { ImportError } from '../../core/import';
-import { failureMessage, failureOf, isSerious, pageList, warningMessage } from './messages';
+import { catalogs } from '../../core/i18n/catalogs';
+import { UI_LOCALES } from '../../core/i18n/languages';
+import { translatePlural } from '../../core/i18n/translate';
+import { parseCsv } from '../../core/import/csv';
+import { failureMessage, failureOf, isSerious, pageList, tableWarnings, warningMessage } from './messages';
 
 describe('failures', () => {
   it('keeps the importer code and detail', () => {
@@ -32,9 +36,29 @@ describe('warnings', () => {
   it('counts skipped things and falls back for unknown codes', () => {
     expect(warningMessage('doc.imagesSkipped:4', 'en')).toEqual({ plural: 'importer.warnings.imagesSkipped', n: 4 });
     expect(warningMessage('text.legacyEncoding', 'en')).toEqual({ key: 'importer.warnings.legacyEncoding' });
+    expect(warningMessage('text.damagedUtf8:3', 'en')).toEqual({ plural: 'importer.warnings.damagedUtf8', n: 3 });
     expect(warningMessage('rtf.codePage:932', 'en')).toEqual({ key: 'importer.warnings.rtfCodePage', vars: { page: '932' } });
     expect(warningMessage('new.thing', 'en')).toEqual({ key: 'importer.warnings.other', vars: { code: 'new.thing' } });
     expect(isSerious('pdf.noText')).toBe(true);
     expect(isSerious('doc.commentsSkipped:1')).toBe(false);
+  });
+});
+
+describe('spreadsheet warnings on screens that import rows', () => {
+  // The case-attributes repro: Amina's note opens a quote that is never closed, so Arthur, Steve
+  // and Nadia run into her cell. The screen must say so, in its own words, before importing.
+  const csv = 'Participante;Escolaridade;Notas\nAmina;Secundário;"Mudou-se em 2023\nArthur;Primário;Reformado\nSteve;Universitário;Voluntário\nNadia;Secundário;Nova no bairro\n';
+  it('turns an unbalanced quote into the screen’s own warning and keeps the others', () => {
+    const table = parseCsv(csv, 'atributos.csv');
+    expect(table.rows.length).toBe(1);
+    const w = tableWarnings(table.warnings, 'pt-PT', 'cases.import.malformedQuotes');
+    expect(w.quotes).toMatchObject({ plural: 'cases.import.malformedQuotes', n: 1, vars: { lines: '2' } });
+    for (const locale of UI_LOCALES) {
+      const text = translatePlural(catalogs[locale], catalogs.en, 'cases.import.malformedQuotes', 1, 'en', { lines: '3' });
+      expect(text).toContain('3');
+      expect(text).not.toMatch(/\{\w+\}/);
+    }
+    expect(tableWarnings(['table.raggedRows:2'], 'en', 'codes.import.malformedQuotes')).toEqual({ quotes: null, others: [{ plural: 'importer.warnings.raggedRows', n: 2 }] });
+    expect(tableWarnings(undefined, 'en', 'codes.import.malformedQuotes')).toEqual({ quotes: null, others: [] });
   });
 });

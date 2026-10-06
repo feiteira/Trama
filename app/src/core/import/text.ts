@@ -9,6 +9,30 @@ export type TextEncodingName = 'utf-8' | 'utf-16le' | 'utf-16be' | 'windows-1252
 export interface DecodedText {
   text: string;
   encoding: TextEncodingName;
+  /** UTF-8 with this many invalid byte sequences, each read as U+FFFD (absent when none). */
+  invalid?: number;
+}
+
+/**
+ * Lenient UTF-8: invalid sequences become U+FFFD. `invalid` counts them, `valid` the non-ASCII
+ * characters decoded correctly (a U+FFFD written in the file as EF BF BD is one of these).
+ */
+export function decodeUtf8Lenient(body: Uint8Array): { text: string; invalid: number; valid: number } {
+  const text = new TextDecoder('utf-8', { ignoreBOM: true }).decode(body);
+  let valid = 0;
+  let invalid = 0;
+  for (let i = 0; i < text.length; i++) {
+    const c = text.charCodeAt(i);
+    if (c === 0xfffd) invalid++;
+    else if (c > 0x7f && (c < 0xdc00 || c > 0xdfff)) valid++;
+  }
+  for (let i = 0; i + 2 < body.length; i++) {
+    if (body[i] === 0xef && body[i + 1] === 0xbf && body[i + 2] === 0xbd) {
+      invalid--;
+      valid++;
+    }
+  }
+  return { text, invalid, valid };
 }
 
 /**
@@ -47,8 +71,9 @@ function decodeUtf16(b: Uint8Array, littleEndian: boolean): string {
 
 /**
  * Decodes a text file of unknown encoding: UTF-16 with a byte-order mark (or recognisably
- * UTF-16 without one), UTF-8 with or without a BOM, and Windows-1252 when the bytes are not
- * valid UTF-8 (files saved by older Notepad or Excel in Portugal and Spain). Never throws.
+ * UTF-16 without one), UTF-8 with or without a BOM (a few invalid bytes become U+FFFD and are
+ * counted in `invalid`), and Windows-1252 when the bytes are mostly not UTF-8 (files saved by
+ * older Notepad or Excel in Portugal and Spain). Never throws.
  */
 export function decodeTextWithInfo(bytes: Uint8Array): DecodedText {
   if (bytes[0] === 0xff && bytes[1] === 0xfe) return { text: decodeUtf16(bytes.subarray(2), true), encoding: 'utf-16le' };
@@ -58,8 +83,15 @@ export function decodeTextWithInfo(bytes: Uint8Array): DecodedText {
   try {
     return { text: new TextDecoder('utf-8', { fatal: true }).decode(bytes), encoding: 'utf-8' };
   } catch {
-    return { text: fromWindows1252(bytes), encoding: 'windows-1252' };
+    // Not valid UTF-8. A file that is mostly UTF-8 with a stray byte or two (a damaged copy, a
+    // paste from elsewhere) keeps its UTF-8 reading with U+FFFD for the bad bytes: decoding all
+    // of it as Windows-1252 would turn every accented letter into mojibake. Only a file whose
+    // invalid sequences outnumber its valid non-ASCII characters is read as Windows-1252.
   }
+  const lenient = decodeUtf8Lenient(bytes);
+  if (lenient.invalid > lenient.valid) return { text: fromWindows1252(bytes), encoding: 'windows-1252' };
+  const bom = lenient.text.charCodeAt(0) === 0xfeff ? 1 : 0;
+  return { text: lenient.text.slice(bom), encoding: 'utf-8', invalid: lenient.invalid };
 }
 
 export function decodeText(bytes: Uint8Array): string {

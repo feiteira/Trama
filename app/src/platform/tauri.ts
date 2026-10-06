@@ -228,6 +228,7 @@ export function createTauriPlatform(): Platform {
       write: (project, id, bytes) => call<void>('blob_write', body(bytes), { 'x-project': h(project), 'x-blob-id': h(id) }),
       read: async (project, id) => toBytes(await call<ArrayBuffer>('blob_read', { project, id })),
       remove: (project, id) => call<void>('blob_delete', { project, id }),
+      list: (project) => call<string[]>('blob_list', { project }),
     },
     files: {
       read: async (path) => toBytes(await call<ArrayBuffer>('fs_read', { path })),

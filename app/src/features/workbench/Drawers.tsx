@@ -15,6 +15,17 @@ import { useI18n } from '../../ui/i18n';
 // Side drawers of the viewer: the coded segments of the document in text order, and the memos
 // written about the document and about its coded segments.
 
+/** Esc anywhere in a drawer closes it (the viewer then gives the focus back to its opener). */
+function escapeCloses(e: React.KeyboardEvent, onClose: () => void) {
+  if (e.key !== 'Escape' || e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+  e.preventDefault();
+  e.stopPropagation();
+  // Leave the field first: a memo saves on blur, and a field removed with the focus in it never
+  // hears one.
+  if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+  onClose();
+}
+
 function DrawerHead({ title, count, onClose, closeLabel }: { title: string; count?: string; onClose: () => void; closeLabel: string }) {
   return (
     <div className="wb-drawer__head">
@@ -40,7 +51,7 @@ export function SegmentsDrawer({ codings, codes, coders, meId, onJump, onRemove,
   const { t, tp } = useI18n();
   const many = coders.size > 1;
   return (
-    <aside className="wb-drawer" aria-label={t('workbench.segments.title')} data-testid="segments-drawer">
+    <aside className="wb-drawer" aria-label={t('workbench.segments.title')} data-testid="segments-drawer" onKeyDown={(e) => escapeCloses(e, onClose)}>
       <DrawerHead title={t('workbench.segments.title')} count={tp('common.count.codings', codings.length)} onClose={onClose} closeLabel={t('common.close')} />
       {codings.length ? (
         <ol className="wb-seglist">
@@ -144,7 +155,7 @@ export function MemosDrawer({ docId, codings, codes, focusId, onJump, onClose }:
 
   const total = (data?.own.length ?? 0) + (data?.ofCodings.length ?? 0);
   return (
-    <aside className="wb-drawer" aria-label={t('workbench.memos.title')} data-testid="memos-drawer">
+    <aside className="wb-drawer" aria-label={t('workbench.memos.title')} data-testid="memos-drawer" onKeyDown={(e) => escapeCloses(e, onClose)}>
       <DrawerHead title={t('workbench.memos.title')} count={tp('common.count.memos', total)} onClose={onClose} closeLabel={t('common.close')} />
       <div className="wb-drawer__tools">
         <Button size="sm" icon={Plus} onClick={() => void add()} data-testid="memo-new">

@@ -1,4 +1,4 @@
-import type { Coder, LogAction, MediaRef } from '../core/model/types';
+import type { Coder, Draft, LogAction, MediaRef } from '../core/model/types';
 import type { Store } from '../core/store/store';
 
 /**
@@ -21,4 +21,9 @@ export interface ProjectContext {
   reloadMe?(): Promise<void>;
   /** Appends an entry to the audit trail. */
   log(action: LogAction, summary: string, target?: { kind: string; id: string }): Promise<void>;
+  /**
+   * The audit-trail record `log` would write, for an operation to write it in the same
+   * transaction as its changes. Optional: without it, entries are written after.
+   */
+  logRecord?(action: LogAction, summary: string, target?: { kind: string; id: string }): Draft<'log'>;
 }

@@ -101,8 +101,11 @@ describe('createCode / updateCode', () => {
     expect(logs.map((l) => l.action).sort()).toEqual(['code.edit', 'code.rename']);
     expect(logs.find((l) => l.action === 'code.rename')!.summary).toBe('"Trust" → "Confiança"');
     // Further definition edits soon after are not logged again.
-    await updateCode(ctx, code.id, { description: 'Relações de confiança mútua' });
+    const r2 = await updateCode(ctx, code.id, { description: 'Relações de confiança mútua' });
     expect((await listLog(ctx, { action: 'code.edit' })).length).toBe(1);
+    // An older step cannot be undone over a newer one; in order, both are.
+    await expect(r.undo.undo()).rejects.toMatchObject({ code: 'changed_since' });
+    await r2.undo.undo();
     await r.undo.undo();
     const back = (await ctx.store.get('code', code.id))!;
     expect(back.name).toBe('Trust');
@@ -177,7 +180,7 @@ describe('deleteCode', () => {
     expect(await ctx.store.count('memo')).toBe(0);
     expect((await listLog(ctx, { action: 'code.delete' }))[0]!.summary).toContain('×3');
     const restored = await restoreCodes(ctx, r.batch);
-    expect(restored).toEqual({ codes: 3, codings: 3 });
+    expect(restored).toEqual({ codes: 3, codings: 3, pseudonymised: 0 });
     expect((await ctx.store.get('code', fear.id))!.parent_id).toBe(emotions.id);
     expect(await ctx.store.count('memo')).toBe(2);
   });

@@ -250,6 +250,15 @@ export function coalesce(spans: readonly Span[]): Span[] {
 }
 
 /**
+ * Appends items one by one: `target.push(...items)` passes every item as an argument and throws
+ * (call stack size exceeded) past about 120,000, a survey of that many respondents, say.
+ */
+export function appendAll<T>(target: T[], items: readonly T[]): T[] {
+  for (const item of items) target.push(item);
+  return target;
+}
+
+/**
  * Auto-coding speakers: one code per speaker (names that differ only in case or spacing are one
  * speaker) with every turn's words as its spans, in order of first appearance.
  */
@@ -260,7 +269,7 @@ export function speakerPlan(speakers: ImportedDoc['speakers'], max = 120): Speak
     if (!name || !s.spans.length) continue;
     const k = nameKey(name);
     const plan = byKey.get(k) ?? { name, spans: [] };
-    plan.spans.push(...s.spans);
+    appendAll(plan.spans, s.spans);
     byKey.set(k, plan);
   }
   const plans = [...byKey.values()].map((p) => ({ name: p.name, spans: coalesce(p.spans) })).filter((p) => p.spans.length);

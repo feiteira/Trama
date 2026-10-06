@@ -264,6 +264,7 @@ export const importer = {
 
   warnings: {
     legacyEncoding: 'This file is not in UTF-8, so it was read as Western European (Windows-1252). Check that accented letters look right.',
+    damagedUtf8: { one: '{n} character could not be read (the file is damaged there) and shows as �. The rest of the text was read normally.', other: '{n} characters could not be read (the file is damaged there) and show as �. The rest of the text was read normally.' },
     pdfImagePages: { one: 'Page {pages} looks like an image; OCR is not available yet, so its text is missing.', other: 'Pages {pages} look like images; OCR is not available yet, so their text is missing.' },
     pdfNoText: 'This PDF has no text layer: it is probably scanned. OCR is not available yet, so the document will be empty, but the PDF is kept.',
     imagesSkipped: { one: '{n} image was left out: Trama imports the text.', other: '{n} images were left out: Trama imports the text.' },
@@ -311,7 +312,7 @@ export const importer = {
     sameTitle: 'You already have this project',
     sameBody: '“{name}” in your library is the same project. This file may be a teammate’s copy.',
     merge: 'Merge into “{name}”',
-    mergeHint: 'Adds the work in this file to your project. The newer version of each item is kept; nothing of yours is removed.',
+    mergeHint: 'Adds the work in this file to your project. The newer version of each item is kept, except a document text edited on both sides: yours is kept, and Trama tells you which.',
     separate: 'Import as a separate copy',
     separateHint: 'Creates a new project beside the one you have. The two can no longer be merged.',
     nothingLost: 'Everything in this file can be carried over.',
@@ -327,7 +328,7 @@ export const importer = {
     importing: 'Importing the project…',
     mergeAction: 'Merge',
     merging: 'Merging…',
-    merged: 'Merged into “{name}”: {added} new, {updated} updated.',
+    mergedTitle: 'Copy merged into “{name}”',
     mergedNothing: '“{name}” already had everything in this file.',
     errorTitle: 'This file cannot be imported',
     importedTitle: '“{name}” is in your library',

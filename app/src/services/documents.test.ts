@@ -277,7 +277,7 @@ describe('deleteDocuments / restoreDocuments', () => {
     expect(tomb.deleted_batch).toBe(r.batch);
 
     const restored = await restoreDocuments(ctx, r.batch);
-    expect(restored).toEqual({ documents: 1, codings: 1, memos: 2 });
+    expect(restored).toEqual({ documents: 1, codings: 1, memos: 2, pseudonymised: 0 });
     expect((await getText(ctx, doc.id)).text).toBe(TEXT);
     expect((await listLog(ctx, { action: 'document.restore' })).length).toBe(1);
   });

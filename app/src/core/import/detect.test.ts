@@ -16,6 +16,17 @@ describe('formatOf', () => {
     for (const [file, format] of cases) expect([file, formatOf(file, fixture(file))]).toEqual([file, format]);
   });
 
+  it('sniffs a text file opening with many comments in linear time', () => {
+    const enc = new TextEncoder();
+    const comments = '<!-- nota -->\n'.repeat(200);
+    const t0 = performance.now();
+    expect(formatOf('notas.txt', enc.encode(`${comments}Entrevista com a participante.\n`))).toBe('txt');
+    expect(formatOf('notas', enc.encode(`${'<!--a-->'.repeat(400)}x`))).toBe('txt');
+    expect(formatOf('notas.txt', enc.encode(`<!-- ${'-'.repeat(3000)} sem fim`))).toBe('txt');
+    expect(performance.now() - t0).toBeLessThan(50);
+    expect(formatOf('pagina.txt', enc.encode(`${comments}<!DOCTYPE html><p>x</p>`))).toBe('html');
+  });
+
   it('trusts the bytes over a wrong extension', () => {
     expect(formatOf('entrevista.doc', fixture('word.rtf'))).toBe('rtf');
     expect(formatOf('relatorio.zip', fixture('report.docx'))).toBe('docx');

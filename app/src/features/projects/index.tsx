@@ -21,6 +21,7 @@ import { Brand, LanguagePicker } from '../onboarding/Frame';
 import { ProjectDialog, type ProjectDraft } from './ProjectDialog';
 import { filterProjects, type ProjectSort, sortProjects } from './projectList';
 import { forgetProjectPrefs } from '../common/localPrefs';
+import { problemKey } from '../../ui/problems';
 import './projects.css';
 
 const SORT_KEY = 'trama.projects.sort';
@@ -38,6 +39,7 @@ function readSort(): ProjectSort {
 }
 
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
+
 
 /** The library after unlocking: every project, and making, editing and removing them. */
 export function ProjectsScreen() {
@@ -83,7 +85,9 @@ export function ProjectsScreen() {
       await openProject(p.id);
     } catch (e) {
       console.error('opening a project failed', e);
-      toast.show({ message: t('projects.openFailed', { name: p.name, message: message(e) }), tone: 'danger' });
+      // A project from a newer Trama, a damaged key, a full disk: said in words, not the engine's English.
+      const known = problemKey(e);
+      toast.show({ message: t('projects.openFailed', { name: p.name, message: known ? t(known) : message(e) }), tone: 'danger' });
     } finally {
       busy.current = false;
       setOpening(null);

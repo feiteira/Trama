@@ -549,8 +549,11 @@
   display: block;
 }
 
+/* Inset: the scroller would clip an outer ring. The active cell has its own ring as well. */
 .an-heat__svg:focus-visible {
-  outline: none;
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+  border-radius: var(--r-sm);
 }
 
 .an-net__svg {

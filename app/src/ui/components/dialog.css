@@ -94,6 +94,12 @@
   gap: var(--s-4);
 }
 
+/* Focusable only when it scrolls (Dialog.tsx). */
+.dialog__body:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+
 .dialog__footer {
   display: flex;
   justify-content: flex-end;

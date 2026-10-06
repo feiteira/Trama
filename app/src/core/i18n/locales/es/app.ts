@@ -60,6 +60,10 @@ export const app: Messages['app'] = {
     redoneBare: 'Rehecho.',
     nothingToUndo: 'No hay nada que deshacer.',
     nothingToRedo: 'No hay nada que rehacer.',
+    refusedUndo: 'No se puede deshacer: {what}. Parte de este paso se modificó después (se asoció una grabación, se fusionó la copia de un compañero…), así que se ha quitado de la lista de deshacer.',
+    refusedRedo: 'No se puede rehacer: {what}. Parte de este paso se modificó después (se asoció una grabación, se fusionó la copia de un compañero…), así que se ha quitado de la lista de rehacer.',
+    refusedUndoBare: 'No se puede deshacer este paso: parte de él se modificó después (se asoció una grabación, se fusionó la copia de un compañero…), así que se ha quitado de la lista de deshacer.',
+    refusedRedoBare: 'No se puede rehacer este paso: parte de él se modificó después (se asoció una grabación, se fusionó la copia de un compañero…), así que se ha quitado de la lista de rehacer.',
   },
   example: {
     badge: 'Ejemplo',

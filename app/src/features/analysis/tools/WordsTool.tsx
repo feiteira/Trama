@@ -1,10 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Cloud, EyeOff, Scale, Table as TableIcon, WholeWord } from 'lucide-react';
 import { SETTING_KEYS } from '../../../core/model/types';
-import { kwic, searchTexts } from '../../../core/qda/search';
+import { kwic } from '../../../core/qda/search';
 import { STOPWORD_LANGUAGES } from '../../../core/qda/stopwords';
-import type { Span } from '../../../core/qda/util';
-import { codedTexts, compareFrequencies, type TextInput, type WordCount, wordFrequencies } from '../../../core/qda/wordfreq';
+import { compareFrequencies, type TextInput, type WordCount, wordFrequencies } from '../../../core/qda/wordfreq';
 import { useProject } from '../../../shell/AppState';
 import { useRouter } from '../../../shell/router';
 import { Button, IconButton } from '../../../ui/components/Button';
@@ -17,8 +16,8 @@ import { TipRow } from '../charts/ChartTip';
 import { WordCloud } from '../charts/WordCloud';
 import { formatFixed, formatP, formatPercent, formatValue } from '../lib/format';
 import { SERIES } from '../lib/heat';
-import { groupKwic, hitsWithin, countPerDocument } from '../lib/kwic';
-import { compareCorpora, keynessRows } from '../lib/words';
+import { groupKwic } from '../lib/kwic';
+import { codedInputs, codeSpans, compareCorpora, documentInputs, keynessRows, wordSheet } from '../lib/words';
 import { useAnalysisData, useDeferredCompute, useTexts, useTheme } from '../parts/data';
 import { useExporter } from '../parts/exporting';
 import { KwicList } from '../parts/KwicList';
@@ -38,6 +37,8 @@ const DEFAULTS = {
   language: '' as string,
   minLength: 3,
   numbers: false,
+  /** Count transcript speaker labels and [annotations] too. */
+  includeMarkup: false,
   view: 'cloud' as View,
   groupA: '',
   groupB: '',
@@ -67,7 +68,10 @@ export function WordsTool() {
   }, [data.extraStopwords]);
 
   const language = s.language === '' ? data.language : s.language === 'none' ? null : s.language;
-  const opts = useMemo(() => ({ language, extraStopwords: data.extraStopwords, minLength: s.minLength, includeNumbers: s.numbers }), [language, data.extraStopwords, s.minLength, s.numbers]);
+  const opts = useMemo(
+    () => ({ language, extraStopwords: data.extraStopwords, minLength: s.minLength, includeNumbers: s.numbers, includeMarkup: s.includeMarkup }),
+    [language, data.extraStopwords, s.minLength, s.numbers, s.includeMarkup],
+  );
 
   const docsOf = (scope: Scope, groupId: string) => (scope === 'group' ? documents.filter((d) => d.group_ids.includes(groupId)) : documents);
   const codeIds = useMemo(() => (s.codeId ? [s.codeId, ...(s.subcodes ? data.descendants(s.codeId).map((c) => c.id) : [])] : []), [s.codeId, s.subcodes, data]);
@@ -75,10 +79,10 @@ export function WordsTool() {
 
   const inputs = useMemo((): TextInput[] | null => {
     if (!texts || !scopeReady) return null;
-    if (s.scope === 'code') return codedTexts(codings, codeIds, { texts });
-    return docsOf(s.scope, s.groupId).map((d) => ({ id: d.id, text: texts.get(d.id) ?? '' }));
+    if (s.scope === 'code') return codedInputs(codings, codeIds, documents, texts, s.includeMarkup);
+    return documentInputs(docsOf(s.scope, s.groupId), texts);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [texts, scopeReady, s.scope, s.groupId, codings, codeIds, documents]);
+  }, [texts, scopeReady, s.scope, s.groupId, codings, codeIds, documents, s.includeMarkup]);
 
   const freq = useDeferredCompute(() => (inputs ? wordFrequencies(inputs, opts) : null), [inputs, opts]);
   const f = freq.value;
@@ -86,40 +90,20 @@ export function WordsTool() {
   const compare = useDeferredCompute(() => {
     if (s.view !== 'compare' || !texts || !s.groupA) return null;
     const { a, b, shared } = compareCorpora(documents, s.groupA, s.groupB);
-    const res = compareFrequencies(
-      a.map((d) => ({ id: d.id, text: texts.get(d.id) ?? '' })),
-      b.map((d) => ({ id: d.id, text: texts.get(d.id) ?? '' })),
-      { ...opts, limit: 200, minCount: 3 },
-    );
+    const res = compareFrequencies(documentInputs(a, texts), documentInputs(b, texts), { ...opts, limit: 200, minCount: 3 });
     return { ...res, docsA: a.length, docsB: b.length, shared };
   }, [s.view, texts, s.groupA, s.groupB, documents, opts]);
 
-  // KWIC for the word clicked: whole word, in the scope's documents (inside the code's segments).
+  // KWIC for the word clicked: the word as the list counts it (wordSheet), in the scope's
+  // documents (inside the code's segments), so the sheet's total is the word's count.
   const kwicGroups = useMemo(() => {
     if (!word || !texts) return null;
     const docs = s.scope === 'group' && s.view !== 'compare' ? docsOf('group', s.groupId) : documents;
-    const r = searchTexts(
-      docs.map((d) => ({ id: d.id, text: texts.get(d.id) ?? '' })),
-      { query: word, mode: 'phrase', wholeWord: true, caseSensitive: false, accentSensitive: true },
-      { limit: s.scope === 'code' ? Number.MAX_SAFE_INTEGER : 2000, context: 90 },
-    );
-    let hits = r.hits;
-    let per = r.perDocument;
-    if (s.scope === 'code' && s.view !== 'compare') {
-      const ids = new Set(codeIds);
-      const spans = new Map<string, Span[]>();
-      for (const c of codings) {
-        if (!ids.has(c.code_id)) continue;
-        const l = spans.get(c.document_id);
-        if (l) l.push({ start: c.start, end: c.end });
-        else spans.set(c.document_id, [{ start: c.start, end: c.end }]);
-      }
-      hits = hitsWithin(hits, spans).slice(0, 2000);
-      per = countPerDocument(hitsWithin(r.hits, spans));
-    }
-    return { groups: groupKwic(kwic(hits, 70), docs, per), total: [...per.values()].reduce((a, b) => a + b, 0) };
+    const within = s.scope === 'code' && s.view !== 'compare' ? codeSpans(codings, codeIds) : null;
+    const r = wordSheet(word, docs, texts, opts, within);
+    return { groups: groupKwic(kwic(r.hits, 70), docs, r.perDocument), total: r.total };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [word, texts, s.scope, s.groupId, s.view, codeIds, codings, documents]);
+  }, [word, texts, s.scope, s.groupId, s.view, codeIds, codings, documents, opts]);
 
   const saveStops = async (list: string[]) => {
     const clean = [...new Set(list.map((w) => w.trim().toLowerCase()).filter(Boolean))];
@@ -220,6 +204,13 @@ export function WordsTool() {
           data-testid="words-minlength"
         />
         <Checkbox label={t('analysis.words.numbers')} checked={s.numbers} onChange={(numbers) => set({ numbers })} />
+        <Checkbox
+          label={t('analysis.words.markup')}
+          description={t('analysis.words.markupHint')}
+          checked={s.includeMarkup}
+          onChange={(includeMarkup) => set({ includeMarkup })}
+          data-testid="words-markup"
+        />
       </PanelSection>
       <PanelSection title={t('analysis.words.stopwords')}>
         <TextArea

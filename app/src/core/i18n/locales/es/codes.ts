@@ -177,6 +177,11 @@ export const codes: Messages['codes'] = {
     confirm: 'Crear subcódigo',
   },
   import: {
+    malformedQuotes: {
+      one: 'Una celda entre comillas de la línea {lines} nunca se cierra, así que los códigos de las líneas siguientes pueden haberse leído como parte de una sola celda y faltarían. Revise el archivo en una hoja de cálculo antes de importar.',
+      other: 'Hay celdas entre comillas en las líneas {lines} que nunca se cierran, así que los códigos de las líneas siguientes pueden haberse leído como parte de una sola celda y faltarían. Revise el archivo en una hoja de cálculo antes de importar.',
+    },
+    quotesConfirm: 'He revisado el archivo: importar de todos modos',
     title: 'Importar un libro de códigos',
     confirm: 'Añadir al libro de códigos',
     new: { one: 'código nuevo', other: 'códigos nuevos' },

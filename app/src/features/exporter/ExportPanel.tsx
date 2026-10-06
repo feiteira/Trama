@@ -4,7 +4,8 @@ import { utf8 } from '../../core/bytes';
 import { buildDocx, buildHtml, csvBytes } from '../../core/export/office';
 import { exportQdc, exportQdpx } from '../../core/export/refi';
 import type { FileFilter } from '../../platform/types';
-import { exportProjectFile, projectToBundle } from '../../services/datafile';
+import { exportProjectFile, logProjectExport, projectToBundle } from '../../services/datafile';
+import { problemKey } from '../../ui/problems';
 import { JobStopped } from '../../services/jobs';
 import { useHold, usePlatform, useProject } from '../../shell/AppState';
 import { useRouter } from '../../shell/router';
@@ -76,7 +77,10 @@ export function ExportPanel() {
    * Asks where to save first (so nothing is built or logged for a cancelled export), then
    * builds the bytes, writes them and says where they went.
    */
-  async function save(kind: Exclude<Busy, null>, opts: { title: string; what: string | null; ext: string; filter: FileFilter; build: () => Promise<Uint8Array> }): Promise<boolean> {
+  async function save(
+    kind: Exclude<Busy, null>,
+    opts: { title: string; what: string | null; ext: string; filter: FileFilter; build: () => Promise<Uint8Array>; /** The audit-trail entry, written once the file is. */ log: () => Promise<void> },
+  ): Promise<boolean> {
     if (busy) return false;
     const path = await platform.dialogs.saveFile(opts.title, exportFileName(project.info.name, opts.what, opts.ext, new Date()), [opts.filter]);
     if (!path) return false;
@@ -84,12 +88,14 @@ export function ExportPanel() {
     try {
       const bytes = await opts.build();
       await platform.files.write(path, bytes);
+      await opts.log();
       toast.show({ message: t('exporter.export.saved', { name: baseName(path) }), tone: 'success', durationMs: 8000 });
       return true;
     } catch (e) {
       if (e instanceof JobStopped || !project.isOpen) return false;
       console.error('export failed', e);
-      toast.show({ message: t('exporter.export.failed', { message: e instanceof Error ? e.message : String(e) }), tone: 'danger' });
+      const known = problemKey(e);
+      toast.show({ message: t('exporter.export.failed', { message: known ? t(known) : e instanceof Error ? e.message : String(e) }), tone: 'danger' });
       return false;
     } finally {
       setBusy(null);
@@ -105,7 +111,8 @@ export function ExportPanel() {
       what: null,
       ext: 'trama',
       filter: { name: t('exporter.export.trama.fileType'), extensions: ['trama'] },
-      build: () => exportProjectFile(project, tramaExportOptions(trama)),
+      build: () => exportProjectFile(project, { ...tramaExportOptions(trama), log: false }),
+      log: () => logProjectExport(project, tramaExportOptions(trama)),
     });
     if (ok) {
       setTrama((o) => ({ ...o, password: '', confirm: '' }));
@@ -128,9 +135,9 @@ export function ExportPanel() {
           ...bundle.warnings.map((item) => t('exporter.export.qdpx.issues.unreadable', { item })),
           ...out.issues.map((i) => tp(`exporter.export.qdpx.issues.${i.code}`, i.count)),
         ];
-        await project.log('export', `.qdpx${crlf ? ' (MAXQDA line endings)' : ''}`);
         return out.bytes;
       },
+      log: () => project.log('export', `.qdpx${crlf ? ' (MAXQDA line endings)' : ''}`),
     });
     setQdpxWarnings(ok && warnings.length ? warnings : null);
   }
@@ -162,9 +169,9 @@ export function ExportPanel() {
         const data = await loadReportData(project, project.info);
         const doc = projectReport(data, i18n, { generator: origin, now: new Date() });
         const bytes = f === 'docx' ? buildDocx(doc) : utf8(buildHtml(doc));
-        await project.log('export', `project report .${f}`);
         return bytes;
       },
+      log: () => project.log('export', `project report .${f}`),
     });
   }
 

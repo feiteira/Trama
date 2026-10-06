@@ -43,6 +43,34 @@ export class ErasedRecordError extends Error {
   }
 }
 
+/** What `Store.write` writes, all in one transaction. */
+export interface WriteOp {
+  puts?: { kind: Kind; draft: Draft<Kind> }[];
+  /** Deleted records written with this content (kept deleted, under `batch` when given). */
+  tombstones?: { kind: Kind; draft: Draft<Kind>; batch?: string }[];
+  removes?: { kind: Kind; ids: string[]; batch?: string }[];
+  restores?: { kind: Kind; ids: string[] }[];
+  /** Meta keys to set (null: removed). */
+  meta?: { key: string; value: string | null }[];
+}
+
+export interface WriteResult {
+  /** The records `puts` wrote, in order. */
+  saved: Base[];
+  /** The stamp of every record the write touched, as it is now (`kind:id`). */
+  stamps: Map<string, string>;
+  restored: Map<Kind, Entity<Kind>[]>;
+  removed: number;
+}
+
+/** A project saved by a newer version of Trama (its schema is ahead of this one): update Trama to open it. */
+export class NewerSchemaError extends Error {
+  constructor(readonly version: number) {
+    super('This project was saved by a newer version of Trama. Please update Trama.');
+    this.name = 'NewerSchemaError';
+  }
+}
+
 /** Lookups by id are batched: SQLite limits bound parameters, so `IN (…)` takes this many at a time. */
 const ID_CHUNK = 500;
 
@@ -214,15 +242,36 @@ export class Store {
    * scrubbed tombstone) is never written over: the whole batch is refused (ErasedRecordError).
    */
   async putMany(items: { kind: Kind; draft: Draft<Kind> }[]): Promise<Base[]> {
-    const saved: Base[] = [];
+    return (await this.write({ puts: items })).saved;
+  }
+
+  /**
+   * Several kinds of writes in ONE transaction: records created or replaced, tombstones written
+   * as given (a deleted record changed in place, or a delete written back by an undo), records
+   * deleted, deleted records brought back, and meta keys. A lock or crash part-way leaves all of
+   * it or none of it. Returns the records written, and the stamp every touched record carries
+   * afterwards (`kind:id` → stamp; a record left as it was keeps its stamp).
+   */
+  async write(op: WriteOp): Promise<WriteResult> {
     const statements: SqlStatement[] = [];
-    const cleaned = items.map(({ kind, draft }) => ({ kind, clean: validate(kind, draft) }));
+    const kinds = new Set<Kind>();
+    const stamps = new Map<string, string>();
+    const saved: Base[] = [];
+    const restored = new Map<Kind, Entity<Kind>[]>();
+    let removed = 0;
+    const puts = (op.puts ?? []).map(({ kind, draft }) => ({ kind, clean: validate(kind, draft) }));
+    const tombs = (op.tombstones ?? []).map(({ kind, draft, batch }) => ({ kind, clean: validate(kind, draft), batch }));
     // Existing records, looked up once per kind rather than once per record.
-    const byKind = new Map<Kind, string[]>();
-    for (const { kind, clean } of cleaned) if (clean.id) (byKind.get(kind) ?? byKind.set(kind, []).get(kind)!).push(clean.id);
-    const known = new Map<Kind, Map<string, { created_at: string; scrubbed: boolean }>>();
-    for (const [kind, ids] of byKind) known.set(kind, await this.stamps(kind, ids));
-    for (const { kind, clean } of cleaned) {
+    const ids = new Map<Kind, Set<string>>();
+    const want = (kind: Kind, id: string | undefined) => {
+      if (id) (ids.get(kind) ?? ids.set(kind, new Set()).get(kind)!).add(id);
+    };
+    for (const { kind, clean } of puts) want(kind, clean.id);
+    for (const { kind, clean } of tombs) want(kind, clean.id);
+    const known = new Map<Kind, Map<string, { created_at: string; scrubbed: boolean; hlc: string }>>();
+    for (const [kind, set] of ids) known.set(kind, await this.stamps(kind, set));
+    const stampOf = (kind: Kind, record: { id: string; updated_at_hlc: string }) => stamps.set(`${kind}:${record.id}`, record.updated_at_hlc);
+    for (const { kind, clean } of puts) {
       const id = clean.id ?? uuid();
       const existing = clean.id ? known.get(kind)?.get(id) : undefined;
       if (existing?.scrubbed) throw new ErasedRecordError(kind, id);
@@ -235,10 +284,67 @@ export class Store {
       } as Entity<Kind>;
       statements.push(upsert(kind, record));
       saved.push(record);
+      stampOf(kind, record);
+      kinds.add(kind);
     }
-    await this.db.batch(statements);
-    this.emit(items.map((i) => i.kind));
-    return saved;
+    for (const { kind, clean, batch } of tombs) {
+      const id = clean.id!;
+      const existing = known.get(kind)?.get(id);
+      if (existing?.scrubbed) throw new ErasedRecordError(kind, id);
+      const tomb: Tombstone<Kind> = {
+        ...(clean as unknown as Entity<Kind>),
+        id,
+        created_at: existing?.created_at ?? this.now().toISOString(),
+        updated_at_hlc: this.hlc.tick(),
+        deleted: true,
+      };
+      if (batch) tomb.deleted_batch = batch;
+      statements.push(upsert(kind, tomb));
+      stampOf(kind, tomb);
+      kinds.add(kind);
+    }
+    for (const { kind, ids: list, batch } of op.removes ?? []) {
+      const found = await this.getMany(kind, list);
+      for (const id of new Set(list)) {
+        const current = found.get(id);
+        if (!current) continue;
+        if (current.deleted) {
+          stampOf(kind, current);
+          continue;
+        }
+        const tomb: Tombstone<Kind> = { ...current, deleted: true, updated_at_hlc: this.hlc.tick() };
+        if (batch) tomb.deleted_batch = batch;
+        statements.push(upsert(kind, tomb));
+        stampOf(kind, tomb);
+        kinds.add(kind);
+        removed++;
+      }
+    }
+    for (const { kind, ids: list } of op.restores ?? []) {
+      const found = await this.getMany(kind, list);
+      const out = restored.get(kind) ?? restored.set(kind, []).get(kind)!;
+      for (const id of new Set(list)) {
+        const current = (found.get(id) ?? null) as Tombstone<Kind> | null;
+        if (!current) continue;
+        if (!current.deleted || current.scrubbed) {
+          stampOf(kind, current);
+          continue;
+        }
+        const { created_at, updated_at_hlc: _h, deleted: _d, deleted_batch: _b, scrubbed: _s, ...rest } = current as Tombstone<Kind> & Base;
+        const clean = validate(kind, { ...rest, id } as Draft<Kind>);
+        const record = { ...clean, id, created_at, updated_at_hlc: this.hlc.tick(), deleted: false } as Entity<Kind>;
+        statements.push(upsert(kind, record));
+        out.push(record);
+        stampOf(kind, record);
+        kinds.add(kind);
+      }
+    }
+    for (const m of op.meta ?? []) {
+      statements.push(m.value === null ? { sql: 'DELETE FROM meta WHERE key = ?', params: [m.key] } : metaWrite(m.key, m.value));
+    }
+    if (statements.length) await this.db.batch(statements);
+    if (kinds.size) this.emit(kinds);
+    return { saved, stamps, restored, removed };
   }
 
   /** Applies a partial change to an existing record. */
@@ -256,19 +362,7 @@ export class Store {
    * were deleted; ones already deleted are left as they are.
    */
   async remove(kind: Kind, ids: string[], opts: { batch?: string } = {}): Promise<number> {
-    const statements: SqlStatement[] = [];
-    const found = await this.getMany(kind, ids);
-    for (const id of new Set(ids)) {
-      const current = found.get(id);
-      if (!current || current.deleted) continue;
-      const tomb: Tombstone<Kind> = { ...current, deleted: true, updated_at_hlc: this.hlc.tick() };
-      if (opts.batch) tomb.deleted_batch = opts.batch;
-      statements.push(upsert(kind, tomb));
-    }
-    if (!statements.length) return 0;
-    await this.db.batch(statements);
-    this.emit([kind]);
-    return statements.length;
+    return (await this.write({ removes: [{ kind, ids, ...(opts.batch ? { batch: opts.batch } : {}) }] })).removed;
   }
 
   /**
@@ -276,22 +370,7 @@ export class Store {
    * scrubbed are skipped. Returns the records restored.
    */
   async restore<K extends Kind>(kind: K, ids: string[]): Promise<Entity<K>[]> {
-    const restored: Entity<K>[] = [];
-    const statements: SqlStatement[] = [];
-    const found = await this.getMany(kind, ids);
-    for (const id of new Set(ids)) {
-      const current = (found.get(id) ?? null) as Tombstone<K> | null;
-      if (!current || !current.deleted || current.scrubbed) continue;
-      const { created_at, updated_at_hlc: _h, deleted: _d, deleted_batch: _b, scrubbed: _s, ...rest } = current as Tombstone<K> & Base;
-      const clean = validate(kind, { ...rest, id } as Draft<K>);
-      const record = { ...clean, id, created_at, updated_at_hlc: this.hlc.tick(), deleted: false } as Entity<K>;
-      statements.push(upsert(kind, record));
-      restored.push(record);
-    }
-    if (!statements.length) return restored;
-    await this.db.batch(statements);
-    this.emit([kind]);
-    return restored;
+    return ((await this.write({ restores: [{ kind, ids }] })).restored.get(kind) ?? []) as Entity<K>[];
   }
 
   /**
@@ -440,7 +519,7 @@ async function migrate(db: Db): Promise<void> {
   const rows = await db.query<{ value: string }>("SELECT value FROM meta WHERE key = 'schema_version'");
   const current = Number(rows[0]?.value ?? 0);
   if (current > SCHEMA_VERSION) {
-    throw new Error('This project was saved by a newer version of Trama. Please update Trama.');
+    throw new NewerSchemaError(current);
   }
   for (const m of MIGRATIONS) {
     if (m.version <= current) continue;

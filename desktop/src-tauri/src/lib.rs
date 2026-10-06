@@ -237,6 +237,11 @@ async fn blob_delete(paths: State<'_, Paths>, project: String, id: String) -> Ap
     files::remove_blob(&paths.data, &project, &id)
 }
 
+#[tauri::command]
+async fn blob_list(paths: State<'_, Paths>, project: String) -> AppResult<Vec<String>> {
+    files::list_blobs(&paths.data, &project)
+}
+
 // ── Files the researcher chose ───────────────────────────────────────────────────────────
 
 #[tauri::command]
@@ -324,6 +329,7 @@ pub fn run() {
             blob_write,
             blob_read,
             blob_delete,
+            blob_list,
             fs_read,
             fs_write,
             fs_list,

@@ -308,6 +308,7 @@ describe('exports leave out the original files of edited documents', () => {
     const back = (await p.store.get('document', doc.id))!;
     expect(back.name).toBe('Interview one');
     expect(back.original?.blob_id).toBe(doc.original!.blob_id);
-    expect(back.source?.filename).toBe('Maria_Silva_interview.pdf');
+    // Applying the key replaced the name in the file names too.
+    expect(back.source?.filename).toBe('P1_interview.pdf');
   });
 });

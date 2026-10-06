@@ -8,7 +8,7 @@ import { createMemoryPlatform } from '../../platform/memory';
 import { projectToBundle } from '../../services/datafile';
 import { Library, LibraryError } from '../../services/library';
 import { FAST_KDF } from '../../services/testing';
-import { copyName, detectProjectFile, importName, meIn, openTrama, projectFileError, sameProjectIn, summariseBundle } from './projectFile';
+import { copyName, detectProjectFile, importName, meForImport, meIn, openTrama, projectFileError, sameProjectIn, summariseBundle } from './projectFile';
 
 async function setup() {
   const platform = createMemoryPlatform();
@@ -69,6 +69,12 @@ describe('project files', () => {
     expect(meIn(coders, ' ana ')).toBe(coders[0]!.id);
     expect(meIn(coders, 'Rui')).toBeNull();
     expect(meIn(coders, '')).toBeNull();
+    // A teammate's .trama from another library: a coder with my first name may be someone else,
+    // so the coder gate asks (it preselects the name). A backup of this library and a REFI-QDA
+    // project of my own are bound without asking.
+    expect(meForImport('trama', null, coders, 'Ana')).toBeNull();
+    expect(meForImport('trama', 'own-me', coders, 'Ana')).toBe('own-me');
+    expect(meForImport('qdpx', null, coders, 'ana')).toBe(coders[0]!.id);
     expect(copyName('Garden study', ['Garden study'])).toBe('Garden study (2)');
     // An import never takes the name of a project already in the library, copy or not.
     expect(importName('Allotment gardens study', 'x.qdpx', ['Allotment gardens study'])).toBe('Allotment gardens study (2)');

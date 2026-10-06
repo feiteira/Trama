@@ -175,6 +175,11 @@ export const codes = {
     confirm: 'Create sub-code',
   },
   import: {
+    malformedQuotes: {
+      one: 'A quoted cell on line {lines} is never closed, so the codes on the lines after it may have been read as part of one cell and would be missing. Check the file in a spreadsheet before importing.',
+      other: 'Quoted cells on lines {lines} are never closed, so the codes on the lines after them may have been read as part of one cell and would be missing. Check the file in a spreadsheet before importing.',
+    },
+    quotesConfirm: 'I have checked the file: import anyway',
     title: 'Import a codebook',
     confirm: 'Merge into codebook',
     new: { one: 'new code', other: 'new codes' },

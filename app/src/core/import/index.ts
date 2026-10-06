@@ -10,7 +10,7 @@ import { decodeRtfBytes, isRtf, rtfToText } from './rtf';
 import { parseSrt } from './srt';
 import { baseName, canonicalize, decodeTextWithInfo, tidyPlain } from './text';
 import { type SpeakerOptions, cuesToTranscript, parseTextTranscript } from './transcript';
-import { ImportError, type ImportFormat, type ImportedDoc, type ImportedTable, WARNING } from './types';
+import { ImportError, type ImportFormat, type ImportedDoc, type ImportedTable, WARNING, warning } from './types';
 import { parseVtt } from './vtt';
 import { type XlsxSheet, readXlsx } from './xlsx';
 
@@ -101,9 +101,14 @@ function textTranscript(text: string, opts: ImportOptions, force: boolean) {
   return parseTextTranscript(text, { force, ...(opts.speakers ? { speakers: opts.speakers } : {}) });
 }
 
+function encodingWarnings(legacy: boolean, invalid = 0): string[] {
+  if (legacy) return [WARNING.legacyEncoding];
+  return invalid ? [warning(WARNING.damagedUtf8, invalid)] : [];
+}
+
 function decoded(bytes: Uint8Array): { text: string; warnings: string[] } {
   const d = decodeTextWithInfo(bytes);
-  return { text: d.text, warnings: d.encoding === 'windows-1252' ? [WARNING.legacyEncoding] : [] };
+  return { text: d.text, warnings: encodingWarnings(d.encoding === 'windows-1252', d.invalid) };
 }
 
 async function parse(format: ImportFormat, bytes: Uint8Array, opts: ImportOptions): Promise<Parsed> {
@@ -118,7 +123,7 @@ async function parse(format: ImportFormat, bytes: Uint8Array, opts: ImportOption
     }
     case 'html': {
       const d = decodeHtml(bytes);
-      return { text: htmlToText(d.text), warnings: d.legacy ? [WARNING.legacyEncoding] : [], transcriptable: true };
+      return { text: htmlToText(d.text), warnings: encodingWarnings(d.legacy, d.invalid), transcriptable: true };
     }
     case 'rtf': {
       const src = decodeRtfBytes(bytes);

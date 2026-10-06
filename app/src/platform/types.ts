@@ -87,6 +87,8 @@ export interface Platform {
     write(project: string, id: string, bytes: Uint8Array): Promise<void>;
     read(project: string, id: string): Promise<Uint8Array>;
     remove(project: string, id: string): Promise<void>;
+    /** Ids of the blobs stored for a project (to find files nothing points to any more). */
+    list(project: string): Promise<string[]>;
   };
 
   /** Files and folders the researcher picked (absolute paths). */

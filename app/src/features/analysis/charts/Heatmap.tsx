@@ -1,5 +1,6 @@
-import React, { forwardRef, useMemo, useState, type ReactNode } from 'react';
+import React, { forwardRef, useMemo, useRef, useState, type ReactNode } from 'react';
 import { CHROME, type HeatScale, type Theme } from '../lib/heat';
+import { revealScroll } from '../lib/reveal';
 import { ChartTip } from './ChartTip';
 import { fitText, textWidth } from './measure';
 import { useSize } from './useSize';
@@ -42,6 +43,7 @@ export const Heatmap = forwardRef<SVGSVGElement, HeatmapProps>(function Heatmap(
   const [hover, setHover] = useState<{ i: number; j: number } | null>(null);
   const [active, setActive] = useState<{ i: number; j: number } | null>(null);
   const [focused, setFocused] = useState(false);
+  const scroller = useRef<HTMLDivElement>(null);
   const c = CHROME[theme];
 
   const layout = useMemo(() => {
@@ -75,12 +77,26 @@ export const Heatmap = forwardRef<SVGSVGElement, HeatmapProps>(function Heatmap(
       return;
     } else return;
     e.preventDefault();
-    setActive({ i: Math.max(0, Math.min(rows.length - 1, i)), j: Math.max(0, Math.min(cols.length - 1, j)) });
+    const next = { i: Math.max(0, Math.min(rows.length - 1, i)), j: Math.max(0, Math.min(cols.length - 1, j)) };
+    setActive(next);
+    reveal(next);
+  };
+
+  // The arrow keys belong to the matrix, so it follows the active cell: scrolled into view in the
+  // chart's own scroller (with its row label when that fits), then in whatever scrolls the page.
+  const reveal = ({ i, j }: { i: number; j: number }) => {
+    const el = scroller.current;
+    if (!el) return;
+    const box = { x: rowW + j * cell, y: top + i * cell, w: cell, h: cell };
+    const next = revealScroll({ left: el.scrollLeft, top: el.scrollTop, width: el.clientWidth, height: el.clientHeight }, box, { x: rowW, y: top });
+    el.scrollLeft = next.left;
+    el.scrollTop = next.top;
+    el.querySelector(`[data-i="${i}"][data-j="${j}"]`)?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
   };
 
   return (
     <div className="an-chart an-heat" ref={frame} data-testid={testId}>
-      <div className="an-chart__scroll">
+      <div className="an-chart__scroll" ref={scroller}>
         <svg
           ref={svgRef}
           viewBox={`0 0 ${width} ${height}`}

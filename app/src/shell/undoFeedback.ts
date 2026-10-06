@@ -27,3 +27,13 @@ export function stepDoneMessage(kind: 'undo' | 'redo', step: Step, i18n: Lang): 
   if (kind === 'undo') return what ? i18n.t('app.undo.undone', { what }) : i18n.t('app.undo.undoneBare');
   return what ? i18n.t('app.undo.redone', { what }) : i18n.t('app.undo.redoneBare');
 }
+
+/**
+ * The toast when an undo or a redo was refused because a record it would write back changed
+ * since (ServiceError 'changed_since'): which step, why, and that it left the stack.
+ */
+export function stepRefusedMessage(kind: 'undo' | 'redo', step: Step | null, i18n: Lang): string {
+  const what = step ? describeStep(step, i18n) : '';
+  if (kind === 'undo') return what ? i18n.t('app.undo.refusedUndo', { what }) : i18n.t('app.undo.refusedUndoBare');
+  return what ? i18n.t('app.undo.refusedRedo', { what }) : i18n.t('app.undo.refusedRedoBare');
+}

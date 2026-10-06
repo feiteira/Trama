@@ -1,5 +1,6 @@
 // Helpers shared by the REFI-QDA readers and writers.
 import { decodeText, fromWindows1252 } from '../../bytes';
+import { decodeUtf8Lenient } from '../../import/text';
 import { uuid } from '../../ids';
 
 export const PROJECT_NS = 'urn:QDA-XML:project:1.0';
@@ -29,21 +30,7 @@ export function decodeRefiText(b: Uint8Array): { text: string; damaged: boolean 
   } catch {
     // not valid UTF-8: see below
   }
-  const lossy = new TextDecoder('utf-8', { ignoreBOM: true }).decode(body);
-  let good = 0;
-  let bad = 0;
-  for (const ch of lossy) {
-    const c = ch.codePointAt(0)!;
-    if (c === 0xfffd) bad++;
-    else if (c > 0x7f) good++;
-  }
-  // A U+FFFD that was in the file (EF BF BD) is a valid character, not a decoding failure.
-  for (let i = 0; i + 2 < body.length; i++) {
-    if (body[i] === 0xef && body[i + 1] === 0xbf && body[i + 2] === 0xbd) {
-      bad--;
-      good++;
-    }
-  }
+  const { text: lossy, invalid: bad, valid: good } = decodeUtf8Lenient(body);
   return { text: bad > good ? fromWindows1252(body) : lossy, damaged: true };
 }
 

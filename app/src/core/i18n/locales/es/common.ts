@@ -40,6 +40,15 @@ export const common: Messages['common'] = {
   no: 'No',
   untitled: 'Sin título',
   unknownError: 'Algo ha fallado: {message}',
+  /** Errors the computer reports, said in words (see ui/problems.ts). */
+  problems: {
+    newerProject: 'Este proyecto se guardó con una versión más reciente de Trama. Actualice Trama para abrirlo.',
+    newerFile: 'Este archivo se hizo con una versión más reciente de Trama. Actualice Trama para abrirlo.',
+    diskFull: 'El disco está lleno. Libere espacio, o elija una carpeta en otro disco, y vuelva a intentarlo.',
+    permission: 'Trama no tiene permiso para escribir ahí. Elija una carpeta en la que pueda escribir.',
+    notFound: 'No se ha encontrado el archivo o la carpeta. Si está en una memoria USB, conéctela y vuelva a intentarlo.',
+    wrongKey: 'No se ha podido desbloquear este proyecto con la clave de esta biblioteca: puede estar dañado. Restáurelo a partir de una copia de seguridad.',
+  },
   confirmDelete: '¿Eliminar «{name}»?',
   deletedToast: '«{name}» eliminado.',
   lock: 'Bloquear',

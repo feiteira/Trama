@@ -75,18 +75,20 @@ Anyone who can open the backup folder sees that backup files exist, their dates 
 
 ## Pseudonymisation
 
-**Pseudonymisation** replaces names and other identifying details consistently across every document — “Ana Lima” becomes “[Participant 1]” everywhere — while coded segments, comments and transcript time stamps follow the changed text.
+**Pseudonymisation** replaces names and other identifying details consistently across every document — “Ana Lima” becomes “[Participant 1]” everywhere — while coded segments and transcript time stamps follow the changed text. The same replacements are made in the names of documents, cases, codes and groups, in file names, case descriptions and text attributes, memos, comments on coded segments and code definitions.
 
 1. **Build the key.** Add entries one by one (the original, exactly as it appears, and its replacement), or choose **Suggest names**: Trama lists capitalised words and phrases from your documents that may be names or places, and numbers the replacements for you (`[Participant 1]`, `[Place 2]`…). Suggestions are only a starting point: nicknames, streets, workplaces and rare details can identify someone just as well. Read your documents too.
 2. **Set each entry’s options.** **Whole word** leaves “Ana” inside “Anabela” alone. **Match case** replaces “Rose” the name, not “rose” the flower.
-3. **Preview** shows every replacement, document by document, before anything changes.
+3. **Preview** shows every replacement before anything changes: document by document, then everywhere else in the project (names, file names, memos, comments, definitions), grouped by kind.
 4. **Apply to documents.** The originals are replaced in the documents themselves, not only in exports. Coded segments that covered only a replaced name are removed. You can apply the whole key or only the entries you tick.
 
 Applying can be undone only with **Undo straight afterwards**; once you carry on working, the change is permanent. Make a backup first.
 
 **The key** (what replaced what) is the link back to who your participants are. It stays inside the encrypted project, is left out of every export and copy unless you explicitly include it, and is always in encrypted backups. **Export key** saves it as a CSV table for your records — store that file encrypted and apart from the pseudonymised material, as ethics approvals usually require. Deleting an entry erases the original name from the project immediately; it cannot be undone.
 
-Original PDF and Word files are kept as imported. When a document’s text has been edited (pseudonymised, say), REFI-QDA exports always leave out its original PDF, because the original would still show what was removed.
+Original PDF and Word files are kept as imported. When a document’s text has been edited (pseudonymised, say), REFI-QDA exports and .trama copies leave out its original PDF, because the original would still show what was removed (backups keep everything).
+
+**The audit trail is not pseudonymised.** It is never edited, so entries written before you applied the key (“Added document “Interview — Ana Lima””) keep the names. The preview and the Apply dialog say how many entries do. The trail travels in .trama copies of the project and in its CSV export: share those only with people allowed to see the names.
 
 <a id="audit-trail"></a>
 

@@ -21,6 +21,8 @@ import { BACKUP_ERROR_MESSAGE, type BackupView, folderLabel, groupBackups } from
 import { formatBytes } from './report';
 import { RestoreUnlockDialog } from './RestoreUnlockDialog';
 import { useBackupState } from './useBackupState';
+import { say } from '../importer/messages';
+import { projectFileError } from '../importer/projectFile';
 
 const STATE_ICON = { example: HardDrive, off: TriangleAlert, running: Clock3, never: Clock3, ok: CircleCheck, stale: TriangleAlert, failed: CircleAlert } as const;
 
@@ -140,13 +142,14 @@ export function Backups() {
         if (e instanceof UnlockRequiredError) return 'unlock';
         if (slot && (e instanceof WrongSecretError || e instanceof DecryptError)) return 'wrong';
         console.error('restoring a backup failed', e);
-        toast.show({ message: t('exporter.backups.restore.failed', { message: e instanceof Error ? e.message : String(e) }), tone: 'danger' });
+        // A file from a newer Trama, a damaged file, a full disk: said in words (as importing says it).
+        toast.show({ message: t('exporter.backups.restore.failed', { message: say(projectFileError(e), t, tp) }), tone: 'danger' });
         return 'done';
       } finally {
         setRestoring(false);
       }
     },
-    [library, runSavers, enterProject, toast, t],
+    [library, runSavers, enterProject, toast, t, tp],
   );
 
   async function startRestore(bytes: Uint8Array, body: string) {

@@ -4,6 +4,7 @@ import type { Memo, MemoTarget } from '../core/model/types';
 import { LIMITS } from '../core/model/types';
 import type { ProjectContext } from './context';
 import { recentlyLogged } from './log';
+import { reapplyKey } from './pseudonyms';
 import { commit, need, noopUndo, Plan, q, restoreBatch, type LogSpec, type Undoable } from './undo';
 
 export interface NewMemo {
@@ -78,6 +79,8 @@ export async function restoreMemos(ctx: ProjectContext, batch: string): Promise<
     const m = await ctx.store.get('memo', id);
     if (m) await ctx.log('memo.create', `↶ ${memoLabel(m)}`, { kind: 'memo', id });
   }
+  // A memo written before the pseudonymisation key was applied comes back with it applied.
+  await reapplyKey(ctx, ids.map((id) => `memo:${id}`), 'restore');
   return ids.length;
 }
 

@@ -28,6 +28,7 @@ export class ZipIndex {
   private inflated = 0;
 
   constructor(private readonly zip: Uint8Array) {
+    let duplicate: string | null = null;
     try {
       unzipSync(zip, {
         filter: (f) => {
@@ -36,18 +37,24 @@ export class ZipIndex {
             this.refused.push(f.name);
             return false;
           }
-          this.sizes.set(f.name, f.originalSize);
+          // fflate inflates every entry the read filter accepts, so a name stored twice would be
+          // inflated twice while counted once against the budget; and lookups ignore case and
+          // path spelling, so two entries one lookup could mean make the archive ambiguous.
           const key = normPath(f.name).toLowerCase();
-          if (!this.byLower.has(key)) {
-            this.byLower.set(key, f.name);
-            this.names.push(f.name);
+          if (this.byLower.has(key) || this.sizes.has(f.name)) {
+            duplicate ??= f.name;
+            return false;
           }
+          this.sizes.set(f.name, f.originalSize);
+          this.byLower.set(key, f.name);
+          this.names.push(f.name);
           return false;
         },
       });
     } catch {
       throw new RefiError('This file is not a ZIP archive (a .qdpx file is one).');
     }
+    if (duplicate !== null) throw new RefiError(`This archive is damaged: it holds ${duplicate} more than once.`);
   }
 
   /** The stored name of an entry, looked up case-insensitively, or null. */

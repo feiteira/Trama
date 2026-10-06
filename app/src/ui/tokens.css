@@ -22,7 +22,7 @@
   /* Ink */
   --ink: #1d2130;            /* body text: blue-black, like iron-gall ink */
   --ink-2: #4a4f5e;          /* secondary text */
-  --ink-3: #656a78;          /* muted text, still AA on every paper */
+  --ink-3: #575c6a;          /* muted text, AA (4.5:1) on every paper and soft tint (ui/tokens.test.ts) */
   --ink-4: #8e919b;          /* placeholders and disabled (non-text use only) */
 
   /* Rules */
@@ -126,7 +126,7 @@
     --paper-reading: #22211e;
     --ink: #ebe7de;
     --ink-2: #c2bdb2;
-    --ink-3: #9d988d;
+    --ink-3: #a7a296;
     --ink-4: #6d695f;
     --rule: #3a3833;
     --rule-strong: #4d4a43;
@@ -165,7 +165,7 @@
   --paper-reading: #22211e;
   --ink: #ebe7de;
   --ink-2: #c2bdb2;
-  --ink-3: #9d988d;
+  --ink-3: #a7a296;
   --ink-4: #6d695f;
   --rule: #3a3833;
   --rule-strong: #4d4a43;
@@ -333,4 +333,24 @@ kbd {
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+/*
+ * Forced colours (Windows High Contrast) replace every background with Canvas. A code's,
+ * group's or coder's colour is information, not decoration: keep the small swatches drawn with
+ * an inline colour (aria-hidden spans: dots, chips, bars), each with a CanvasText edge so a pale
+ * colour still shows on a white or black Canvas.
+ */
+@media (forced-colors: active) {
+  span[aria-hidden='true'][style*='background'] {
+    forced-color-adjust: none;
+    outline: 1px solid CanvasText;
+    outline-offset: 0;
+  }
+}
+
+/* A screen's heading takes the focus when the screen changes (shell/arrival.ts), for screen
+   readers to announce it; it is not a control, so it draws no ring. */
+h1[tabindex='-1']:focus {
+  outline: none;
 }

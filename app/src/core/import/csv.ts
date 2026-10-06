@@ -60,20 +60,49 @@ export function tidyHeaders(raw: string[], width: number): string[] {
 
 /**
  * Rows of cells → a table: the first non-empty row is the header, empty rows go, short rows
- * are padded and the header widened for long ones.
+ * are padded and the header widened for long ones. Columns with no value in any row (header
+ * included) are left out, as readXlsx does: Excel saves every CSV row out to the sheet's used
+ * range, so one stray value in column XFD would otherwise make every row 16 384 cells wide.
+ * A kept column without a header is named by its letter in the file, not by its new position.
  */
 export function rowsToTable(name: string, rows: string[][]): ImportedTable {
-  const cleanRows = rows.map((r) => r.map((c) => canonicalize(c).trim())).filter((r) => r.some((c) => c));
-  const [header = [], ...body] = cleanRows;
-  // reduce, not Math.max(...rows): a spread of 100 000 rows overflows the call stack.
-  const width = body.reduce((w, r) => Math.max(w, r.length), header.length);
+  const clean: string[][] = [];
+  const lengths: number[] = [];
+  for (const r of rows) {
+    // Trailing empty cells are dropped before anything else is done to them.
+    let end = r.length;
+    while (end > 0 && !r[end - 1]!.trim()) end--;
+    const row = new Array<string>(end);
+    let any = false;
+    for (let i = 0; i < end; i++) {
+      const c = canonicalize(r[i]!).trim();
+      row[i] = c;
+      if (c) any = true;
+    }
+    if (!any) continue;
+    clean.push(row);
+    lengths.push(r.length);
+  }
+  const [header = [], ...body] = clean;
+  const headerLength = lengths[0] ?? 0;
+  // A loop, not Math.max(...rows): a spread of 100 000 rows overflows the call stack.
+  let width = 0;
+  for (const r of clean) width = Math.max(width, r.length);
+  const used = new Uint8Array(width);
+  for (const r of clean) for (let i = 0; i < r.length; i++) if (r[i]) used[i] = 1;
+  const cols: number[] = [];
+  for (let i = 0; i < width; i++) if (used[i]) cols.push(i);
+  const every = cols.length === width;
   let ragged = 0;
-  const out = body.map((r) => {
-    if (r.length !== header.length) ragged++;
+  // Ragged compares the rows as written: a row Excel padded to the header's width is not ragged.
+  const out = body.map((r, k) => {
+    if (lengths[k + 1] !== headerLength) ragged++;
+    if (!every) return cols.map((c) => r[c] ?? '');
     return r.length < width ? [...r, ...Array<string>(width - r.length).fill('')] : r;
   });
   const warnings = ragged ? [warning(WARNING.raggedRows, ragged)] : [];
-  return { name, headers: width ? tidyHeaders(header, width) : [], rows: out, warnings };
+  const names = cols.map((c) => header[c] || columnLetter(c));
+  return { name, headers: cols.length ? tidyHeaders(names, cols.length) : [], rows: out, warnings };
 }
 
 export interface CsvOptions {

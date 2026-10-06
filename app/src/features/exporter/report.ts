@@ -251,7 +251,7 @@ export function projectReport(data: ReportData, i18n: Pick<I18n, 't' | 'tp' | 'm
 
   // Codebook
   blocks.push({ type: 'pageBreak' }, { type: 'heading', level: 1, text: t('exporter.report.codebook') });
-  blocks.push(...codebookBlocks(data.codes, i18n, { details: true }));
+  for (const b of codebookBlocks(data.codes, i18n, { details: true })) blocks.push(b);
 
   // Memos
   blocks.push({ type: 'pageBreak' }, { type: 'heading', level: 1, text: t('exporter.report.memos') });
@@ -259,7 +259,7 @@ export function projectReport(data: ReportData, i18n: Pick<I18n, 't' | 'tp' | 'm
   for (const m of data.memos) {
     blocks.push({ type: 'heading', level: 2, text: m.title.trim() || t('common.untitled') });
     blocks.push({ type: 'paragraph', text: [{ text: memoHeading(m, t), small: true, italic: true }] });
-    blocks.push(...memoBlocks(m.body));
+    for (const b of memoBlocks(m.body)) blocks.push(b);
   }
 
   // Cases

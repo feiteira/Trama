@@ -20,6 +20,14 @@ export function focusables(root: HTMLElement): HTMLElement[] {
   );
 }
 
+/**
+ * True when a box's content overflows it vertically. Such a box needs to be focusable when
+ * nothing inside it is, or keyboard readers can never scroll to the rest (a dialog of text).
+ */
+export function overflowsY(el: Pick<HTMLElement, 'scrollHeight' | 'clientHeight'>): boolean {
+  return el.scrollHeight - el.clientHeight > 1;
+}
+
 /** Keeps Tab and Shift+Tab inside `root` (a modal). */
 export function trapTab(e: KeyboardEvent | React.KeyboardEvent, root: HTMLElement): void {
   if (e.key !== 'Tab') return;

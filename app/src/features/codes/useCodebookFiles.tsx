@@ -27,6 +27,7 @@ import {
   type ReportLabels,
 } from './codebookIO';
 import { ImportCodebookDialog } from './CodesDialogs';
+import { say, tableWarnings } from '../importer/messages';
 
 export type ExportFormat = 'qdc' | 'docx' | 'csv' | 'xlsx' | 'md';
 
@@ -37,6 +38,8 @@ interface Pending {
   codes: ImportedCode[];
   skipped: number;
   warnings: string[];
+  /** The file's quotes do not balance (rows may have run together): shown, and confirmed before importing. */
+  quotes?: string;
 }
 
 /** Exporting the codebook to files, and importing one (preview, then merge by name). */
@@ -137,7 +140,8 @@ export function useCodebookFiles(data: CodeData | undefined): { exportAs: (f: Ex
           toast.show({ message: res.problem === 'noNameColumn' ? t('codes.import.noNameColumn') : t('codes.import.empty'), tone: 'danger' });
           return;
         }
-        next = { fileName, codes: res.codes, skipped: res.skipped, warnings: [] };
+        const notes = tableWarnings(table.warnings, meta.bcp47, 'codes.import.malformedQuotes');
+        next = { fileName, codes: res.codes, skipped: res.skipped, warnings: notes.others.map((m) => say(m, t, tp)), ...(notes.quotes ? { quotes: say(notes.quotes, t, tp) } : {}) };
       }
       if (!next.codes.length) {
         toast.show({ message: t('codes.import.empty'), tone: 'danger' });
@@ -203,6 +207,7 @@ export function useCodebookFiles(data: CodeData | undefined): { exportAs: (f: Ex
         plan={plan}
         skipped={pending.skipped}
         warnings={pending.warnings}
+        {...(pending.quotes ? { quotes: pending.quotes } : {})}
         overwrite={overwrite}
         onOverwrite={setOverwrite}
         onCancel={() => setPending(null)}

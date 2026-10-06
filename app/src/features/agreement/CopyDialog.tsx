@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { exportProjectFile } from '../../services/datafile';
+import { exportProjectFile, logProjectExport } from '../../services/datafile';
+import { problemKey } from '../../ui/problems';
 import { JobStopped } from '../../services/jobs';
 import { useHold, useProject } from '../../shell/AppState';
 import { Button } from '../../ui/components/Button';
@@ -41,7 +42,9 @@ export function CopyDialog({ open, onClose }: { open: boolean; onClose: () => vo
     setBusy(true);
     setError(null);
     try {
-      const bytes = await exportProjectFile(project, { includePseudonyms: pseudonyms, ...(protect ? { password } : {}) });
+      const opts = { includePseudonyms: pseudonyms, ...(protect ? { password } : {}) };
+      // Logged once the file is written: not for a cancelled save or a full disk.
+      const bytes = await exportProjectFile(project, { ...opts, log: false });
       const name = await saveBytes(
         project.platform,
         t('agreement.copy.dialogTitle'),
@@ -50,12 +53,14 @@ export function CopyDialog({ open, onClose }: { open: boolean; onClose: () => vo
         bytes,
       );
       if (!name) return;
+      await logProjectExport(project, opts);
       toast.show({ message: t('agreement.copy.saved', { name }), tone: 'success', durationMs: 8000 });
       onClose();
     } catch (e) {
       if (e instanceof JobStopped) return;
       console.error('copy for a teammate failed', e);
-      setError(t('agreement.copy.failed', { message: e instanceof Error ? e.message : String(e) }));
+      const known = problemKey(e);
+      setError(t('agreement.copy.failed', { message: known ? t(known) : e instanceof Error ? e.message : String(e) }));
     } finally {
       setBusy(false);
     }

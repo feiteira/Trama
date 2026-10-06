@@ -44,6 +44,25 @@ describe('importFile', () => {
     expect(cp.warnings).toEqual(['text.legacyEncoding']);
   });
 
+  it('a stray invalid byte in a UTF-8 file becomes one U+FFFD, not mojibake of every accented letter', async () => {
+    const text = 'Entrevistadora: Como é a horta?\nParticipante: É ótima, ação coletiva e união.';
+    const damaged = new Uint8Array([...utf8(text), 0x96, 0x0a]);
+    const doc = await one('e.txt', damaged);
+    expect(doc.text).toBe(`${text}\uFFFD`);
+    expect(doc.warnings).toEqual(['text.damagedUtf8:1']);
+    expect((await one('e.md', damaged)).warnings).toEqual(['text.damagedUtf8:1']);
+    const csv = await importFile('s.csv', new Uint8Array([...utf8('id,resposta\nR1,ação coletiva\nR2,união'), 0x96]));
+    if (!isTableResult(csv)) throw new Error('expected a table');
+    expect(csv.table.rows).toEqual([['R1', 'ação coletiva'], ['R2', 'união\uFFFD']]);
+    expect(csv.table.warnings).toEqual(['text.damagedUtf8:1']);
+    // A U+FFFD written in the file is a character, not damage; a BOM still comes off.
+    expect((await one('f.txt', new Uint8Array([0xef, 0xbb, 0xbf, ...utf8('a \uFFFD b é'), 0xff]))).text).toBe('a \uFFFD b é\uFFFD');
+    // Mostly not UTF-8: still Windows-1252, with that warning.
+    const cp = await one('w.txt', new Uint8Array([...'Avó, não, pão, ação'].map((c) => c.charCodeAt(0))));
+    expect(cp.text).toBe('Avó, não, pão, ação');
+    expect(cp.warnings).toEqual(['text.legacyEncoding']);
+  });
+
   it('keeps blank lines of plain text but trims the ends', async () => {
     expect((await one('n.txt', utf8('\n\nUm\n\n\nDois  \n\n'))).text).toBe('Um\n\n\nDois');
   });

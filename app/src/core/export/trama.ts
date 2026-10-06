@@ -52,7 +52,7 @@ export interface TramaBundle extends ProjectBundle {
 
 export type NotTramaReason =
   | 'unknown-type' | 'not-zip' | 'no-manifest' | 'format' | 'newer-version' | 'checksum' | 'unlisted-file'
-  | 'unsafe-path' | 'bad-record' | 'header' | 'too-large';
+  | 'unsafe-path' | 'bad-record' | 'header' | 'too-large' | 'duplicate-entry';
 
 export class NotTramaFileError extends Error {
   constructor(readonly reason: NotTramaReason, detail = '') {
@@ -270,10 +270,14 @@ const isReadableCopy = (path: string) => path.startsWith('readable/');
 /** Reads and verifies an unencrypted .trama ZIP. */
 export function readTramaZip(zip: Uint8Array): TramaBundle {
   // 1. List the entries without inflating any, and refuse the archive on names and sizes alone.
+  // Every central-directory record counts: fflate inflates each entry the filter accepts, so an
+  // archive repeating one name would otherwise inflate it many times while being counted once.
   const sizes = new Map<string, number>();
+  let duplicate: string | null = null;
   try {
     unzipSync(zip, {
       filter: (f) => {
+        if (sizes.has(f.name)) duplicate ??= f.name;
         sizes.set(f.name, f.originalSize);
         return false;
       },
@@ -281,6 +285,7 @@ export function readTramaZip(zip: Uint8Array): TramaBundle {
   } catch {
     throw new NotTramaFileError('not-zip');
   }
+  if (duplicate !== null) throw new NotTramaFileError('duplicate-entry', duplicate);
   let total = 0;
   for (const [path, size] of sizes) {
     if (!isSafePath(path)) throw new NotTramaFileError('unsafe-path', path);

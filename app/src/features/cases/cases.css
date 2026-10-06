@@ -1124,3 +1124,7 @@
 .imp__names {
   overflow-wrap: anywhere;
 }
+
+.imp .notice__body p {
+  margin: 0 0 var(--s-2);
+}

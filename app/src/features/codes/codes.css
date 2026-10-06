@@ -741,3 +741,7 @@ button.cdetail__crumb:hover {
     padding: 0 6px;
   }
 }
+
+.codedialog__stack .notice__body p {
+  margin: 0 0 var(--s-2);
+}

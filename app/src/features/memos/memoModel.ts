@@ -325,7 +325,7 @@ export function memosReport(items: readonly MemoExportItem[], labels: MemoExport
     for (const i of g.items) {
       blocks.push({ type: 'heading', level: 2, text: i.memo.title.trim() || labels.untitled });
       blocks.push({ type: 'paragraph', text: [labels.about(i.target), labels.byline(i)].filter(Boolean).join(' · '), style: 'small' });
-      blocks.push(...markdownBlocks(i.memo.body));
+      for (const b of markdownBlocks(i.memo.body)) blocks.push(b);
     }
   }
   return { title: labels.title, subtitle: labels.subtitle, lang: labels.lang, generator: labels.generator, blocks };

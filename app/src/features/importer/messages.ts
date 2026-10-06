@@ -73,6 +73,8 @@ export function warningMessage(w: string, bcp47: string): Msg {
   switch (code) {
     case WARNING.legacyEncoding:
       return { key: 'importer.warnings.legacyEncoding' };
+    case WARNING.damagedUtf8:
+      return { plural: 'importer.warnings.damagedUtf8', n: Number(arg) || 1 };
     case WARNING.pdfImagePages: {
       const pages = (arg ?? '').split(',').filter(Boolean).length;
       return { plural: 'importer.warnings.pdfImagePages', n: pages, vars: { pages: pageList(arg, bcp47) } };
@@ -100,8 +102,27 @@ export function warningMessage(w: string, bcp47: string): Msg {
   }
 }
 
+/**
+ * A spreadsheet's warnings for a screen that imports rows of it (case attributes, a codebook):
+ * an unbalanced quote, said with that screen's own consequence (`quotesKey`, given `{lines}`),
+ * apart from the rest. An unbalanced quote swallows the following rows into one cell, which
+ * cannot be seen once imported, so screens ask before importing such a file.
+ */
+export function tableWarnings(warnings: readonly string[] | undefined, bcp47: string, quotesKey: PluralKey): { quotes: Msg | null; others: Msg[] } {
+  let quotes: Msg | null = null;
+  const others: Msg[] = [];
+  for (const w of warnings ?? []) {
+    const { code, arg } = parseWarning(w);
+    if (code === WARNING.malformedQuotes) {
+      const lines = (arg ?? '').split(',').filter(Boolean).length;
+      quotes = { plural: quotesKey, n: Math.max(1, lines), vars: { lines: pageList(arg, bcp47) } };
+    } else others.push(warningMessage(w, bcp47));
+  }
+  return { quotes, others };
+}
+
 /** Warnings worth stopping at (the document will be empty or wrong without a look). */
 export function isSerious(w: string): boolean {
   const { code } = parseWarning(w);
-  return code === WARNING.pdfNoText || code === WARNING.pdfImagePages || code === WARNING.legacyEncoding || code === WARNING.rtfCodePage || code === WARNING.malformedQuotes;
+  return code === WARNING.pdfNoText || code === WARNING.pdfImagePages || code === WARNING.legacyEncoding || code === WARNING.damagedUtf8 || code === WARNING.rtfCodePage || code === WARNING.malformedQuotes;
 }

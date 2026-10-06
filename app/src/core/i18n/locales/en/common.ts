@@ -38,6 +38,15 @@ export const common = {
   no: 'No',
   untitled: 'Untitled',
   unknownError: 'Something went wrong: {message}',
+  /** Errors the computer reports, said in words (see ui/problems.ts). */
+  problems: {
+    newerProject: 'This project was saved by a newer version of Trama. Update Trama to open it.',
+    newerFile: 'This file was made by a newer version of Trama. Update Trama to open it.',
+    diskFull: 'The disk is full. Free some space, or choose a folder on another drive, and try again.',
+    permission: 'Trama is not allowed to write there. Choose a folder you can write to.',
+    notFound: 'The file or folder could not be found. If it is on a USB drive, plug it in and try again.',
+    wrongKey: 'This project could not be unlocked with this library’s key: it may be damaged. Restore it from a backup.',
+  },
   confirmDelete: 'Delete “{name}”?',
   deletedToast: '“{name}” deleted.',
   lock: 'Lock',

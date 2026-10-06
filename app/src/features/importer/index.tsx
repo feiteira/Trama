@@ -15,6 +15,7 @@ import { useUndo } from '../../shell/undo';
 import { useCommands } from '../../shell/useCommands';
 import { useLive } from '../../shell/useLive';
 import { useI18n } from '../../ui/i18n';
+import { problemKey } from '../../ui/problems';
 import { Button } from '../../ui/components/Button';
 import { useConfirm } from '../../ui/components/Confirm';
 import { MenuButton, type MenuEntry } from '../../ui/components/Menu';
@@ -23,6 +24,7 @@ import { CodebookDialog, NewDocumentDialog, PasteDialog } from './Dialogs';
 import { fromBrowserFile, fromPath, type IncomingFile, loadPdfJs, pickFiles } from './files';
 import { failureOf } from './messages';
 import {
+  appendAll,
   batchTotals,
   findDuplicates,
   importable,
@@ -355,7 +357,7 @@ export default function ImporterScreen(_props: ScreenProps<'import'>) {
             setRun((r) => (r ? { ...r, sub: { n, total } } : r));
             if (n % 10 === 0) await nextFrame();
           });
-          created.push(...docs);
+          appendAll(created, docs);
           importedIds.push(row.id);
           setRun((r) => (r ? { ...r, statuses: { ...r.statuses, [row.id]: 'done' } } : r));
         } catch (e) {
@@ -365,7 +367,8 @@ export default function ImporterScreen(_props: ScreenProps<'import'>) {
             break;
           }
           console.error('import failed', e);
-          failures.push({ name: row.name, message: t('importer.errors.importFailed', { message: e instanceof Error ? e.message : String(e) }) });
+          const known = problemKey(e);
+          failures.push({ name: row.name, message: t('importer.errors.importFailed', { message: known ? t(known) : e instanceof Error ? e.message : String(e) }) });
           setRun((r) => (r ? { ...r, statuses: { ...r.statuses, [row.id]: 'failed' } } : r));
         }
       }

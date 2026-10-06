@@ -1,9 +1,9 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
-import { type Undoable, UndoManager, type UndoState } from '../services/undo';
+import { ServiceError, type Undoable, UndoManager, type UndoState } from '../services/undo';
 import { isTextEntry, modalOpen } from '../ui/focus';
 import { useToast } from '../ui/components/Toast';
 import { useI18n } from '../ui/i18n';
-import { stepDoneMessage } from './undoFeedback';
+import { stepDoneMessage, stepRefusedMessage } from './undoFeedback';
 
 // The open project's undo/redo stack (services/undo.ts), shared by every screen. Screens
 // record what a domain operation returns:
@@ -52,11 +52,16 @@ export function UndoProvider({ children }: { children: ReactNode }) {
   // back: Ctrl+Z works from any screen, and a step reverted out of sight must not pass unnoticed.
   const step = useCallback(
     async (kind: 'undo' | 'redo') => {
+      // The step about to run, to name it if it is refused (the stack drops a refused step).
+      const top = manager.labels[kind];
       let entry: Undoable | null;
       try {
         entry = await (kind === 'undo' ? manager.undo() : manager.redo());
       } catch (e) {
-        toast.error(e);
+        if (e instanceof ServiceError && e.code === 'changed_since') {
+          console.warn(e);
+          toast.show({ message: stepRefusedMessage(kind, top, i18n), tone: 'danger', durationMs: 12_000 });
+        } else toast.error(e);
         return;
       }
       if (!entry) {

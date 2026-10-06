@@ -82,16 +82,20 @@ export interface DocText extends Base {
   /** Transcript timestamps, sorted by pos (empty for other documents). */
   sync: SyncPoint[];
   /**
-   * The text's revision history: short hashes (`textRev`) of the versions this text went
-   * through, oldest first, the current one last (up to REVS_MAX). A merge uses it to tell a
-   * teammate's later version of the text (it lists this one) from a text changed on both sides.
-   * Missing in projects made before it existed.
+   * The text's revision history, oldest first, the current one last (up to REVS_MAX): a fresh
+   * random id (16 hex digits) for every write of the text (services/revs.ts). A merge uses it to
+   * tell a teammate's later version of the text (it lists this one's latest id) from a text
+   * changed on both sides. An id prefixed `~` is a teammate's revision this text was kept over in
+   * a conflict. Older projects hold content hashes here, or nothing.
    */
   revs?: string[];
 }
 
-/** How many text revisions a DocText remembers. */
-export const REVS_MAX = 64;
+/**
+ * How many text revisions a DocText remembers: enough that one side saving a document many
+ * times between two merges never pushes out the revision the other side still has.
+ */
+export const REVS_MAX = 2000;
 
 export interface Code extends Base {
   name: string;

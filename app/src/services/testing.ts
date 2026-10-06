@@ -51,16 +51,20 @@ export async function makeTestProject(opts: { now?: () => Date; coderName?: stri
       blobs.delete(ref.blob_id);
     },
     async log(action: LogAction, summary: string, target?: { kind: string; id: string }) {
-      await store.put('log', {
-        at: now().toISOString().replace(/\.\d{3}Z$/, 'Z'),
-        coder_id: me.id,
-        action,
-        summary,
-        target_kind: target?.kind ?? null,
-        target_id: target?.id ?? null,
-      });
+      await store.put('log', logRecord(action, summary, target));
     },
+    logRecord,
   };
+  function logRecord(action: LogAction, summary: string, target?: { kind: string; id: string }) {
+    return {
+      at: now().toISOString().replace(/\.\d{3}Z$/, 'Z'),
+      coder_id: me.id,
+      action,
+      summary,
+      target_kind: target?.kind ?? null,
+      target_id: target?.id ?? null,
+    };
+  }
 }
 
 export const sha256hex = (s: string) => toHex(sha256(new TextEncoder().encode(s)));

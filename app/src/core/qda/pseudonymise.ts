@@ -36,10 +36,19 @@ export interface Planned {
 
 /**
  * The replacements for one text: longer originals first, so "Ana Lima" wins over "Ana", and no
- * two replacements overlap.
+ * two replacements overlap. With `protect`, text that already reads as one of the replacements
+ * is left alone: applying a key again to text that was pseudonymised already never replaces an
+ * original inside its own replacement ("Rui" → "Rui P." must not become "Rui P. P.").
  */
-export function planText(text: string, rules: readonly Pseudonym[]): Planned {
+export function planText(text: string, rules: readonly Pseudonym[], opts: { protect?: boolean } = {}): Planned {
   const taken = new Uint8Array(text.length);
+  if (opts.protect) {
+    for (const r of rules) {
+      const rep = r.replacement;
+      if (!rep) continue;
+      for (let i = text.indexOf(rep); i >= 0; i = text.indexOf(rep, i + 1)) taken.fill(1, i, i + rep.length);
+    }
+  }
   const counts = new Map<string, number>();
   const matches: Planned['matches'] = [];
   const ordered = [...rules].sort((a, b) => tidy(b.original).length - tidy(a.original).length || (a.created_at < b.created_at ? -1 : 1));
@@ -60,9 +69,9 @@ export function planText(text: string, rules: readonly Pseudonym[]): Planned {
 
 
 /** `text` with the rules' originals replaced (longest first, never overlapping). */
-export function pseudonymiseText(text: string, rules: readonly Pseudonym[]): string {
+export function pseudonymiseText(text: string, rules: readonly Pseudonym[], opts: { protect?: boolean } = {}): string {
   if (!rules.length || !text) return text;
-  const { edits } = planText(text, rules);
+  const { edits } = planText(text, rules, opts);
   if (!edits.length) return text;
   let out = '';
   let at = 0;
@@ -72,3 +81,24 @@ export function pseudonymiseText(text: string, rules: readonly Pseudonym[]): str
   }
   return out + text.slice(at);
 }
+
+/** File names write words apart with separators instead ("Maria_Silva-interview.pdf"): one space each, so positions stay. */
+export const fileWords = (name: string): string => name.replace(/[_.+-]/g, ' ');
+
+/** A rule as it matches inside file names: any case, inside words too, separators as spaces. */
+const fileRule = <R extends Rule>(p: R): R => ({ ...p, original: fileWords(p.original), whole_word: false, case_sensitive: false });
+
+/** Where the rules' originals occur in a file name (see `fileWords`). */
+export function planFileName(name: string, rules: readonly Pseudonym[]): Planned {
+  const words = fileWords(name);
+  // Whole words as the rule says ("Ana" stays out of "Analysis.docx"), in any case.
+  const planned = planText(words, rules.map((p) => ({ ...p, original: fileWords(p.original), case_sensitive: false })));
+  const byId = new Map(rules.map((r) => [r.id, r]));
+  // A replacement as file-name words: spaces become underscores, characters file systems refuse go.
+  const asFile = (s: string) => s.replace(/[\\/:*?"<>|\u0000-\u001f]/g, '').replace(/\s+/g, '_');
+  return { ...planned, edits: planned.matches.map((m) => ({ start: m.start, end: m.end, insert: asFile(byId.get(m.pseudonymId)!.replacement) })) };
+}
+
+/** True when an original of the rules occurs in the file name (see `planFileName`). */
+export const fileNameHolds = (name: string, rules: readonly Rule[]): boolean =>
+  !!name && rules.some((p) => findMatches(fileWords(name), fileRule(p)).length > 0);

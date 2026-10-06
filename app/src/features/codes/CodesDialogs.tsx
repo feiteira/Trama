@@ -169,6 +169,7 @@ export function ImportCodebookDialog({
   plan,
   skipped,
   warnings,
+  quotes,
   overwrite,
   onOverwrite,
   onCancel,
@@ -178,6 +179,8 @@ export function ImportCodebookDialog({
   plan: MergePlan;
   skipped: number;
   warnings: string[];
+  /** Why the file may have lost rows (unbalanced quotes): importing waits for the researcher to confirm. */
+  quotes?: string;
   overwrite: boolean;
   onOverwrite: (v: boolean) => void;
   onCancel: () => void;
@@ -185,10 +188,12 @@ export function ImportCodebookDialog({
 }) {
   const { t, tp } = useI18n();
   const [busy, setBusy] = useState(false);
+  const [quotesChecked, setQuotesChecked] = useState(false);
   const changes = plan.created + plan.updated;
+  const blocked = !!quotes && !quotesChecked;
   const shown = plan.items.slice(0, 400);
   const submit = async () => {
-    if (busy || !changes) return;
+    if (busy || !changes || blocked) return;
     setBusy(true);
     try {
       await onConfirm();
@@ -210,7 +215,7 @@ export function ImportCodebookDialog({
           <Button variant="ghost" onClick={onCancel} disabled={busy}>
             {t('common.cancel')}
           </Button>
-          <Button variant="primary" disabled={!changes} busy={busy} onClick={() => void submit()} data-testid="import-codebook-confirm">
+          <Button variant="primary" disabled={!changes || blocked} busy={busy} onClick={() => void submit()} data-testid="import-codebook-confirm">
             {t('codes.import.confirm')}
           </Button>
         </>
@@ -229,6 +234,12 @@ export function ImportCodebookDialog({
           </span>
         </div>
         <Checkbox checked={overwrite} onChange={onOverwrite} label={t('codes.import.overwrite')} description={t('codes.import.overwriteHint')} data-testid="import-codebook-overwrite" />
+        {quotes ? (
+          <Notice tone="warning" data-testid="import-codebook-quotes">
+            <p>{quotes}</p>
+            <Checkbox checked={quotesChecked} onChange={setQuotesChecked} label={t('codes.import.quotesConfirm')} data-testid="import-codebook-quotes-confirm" />
+          </Notice>
+        ) : null}
         {skipped ? <Notice tone="warning">{tp('codes.import.skipped', skipped)}</Notice> : null}
         {warnings.map((w) => (
           <Notice key={w} tone="info">

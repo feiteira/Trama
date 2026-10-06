@@ -35,8 +35,9 @@ describe('groups', () => {
     expect((await addToGroup(ctx, group.id, [d1.id])).changed).toBe(0);
     expect((await ctx.store.get('document', d1.id))!.group_ids).toEqual([group.id]);
     expect((await listLog(ctx, { action: 'group.edit' }))[0]!.summary).toBe('"Entrevista 1", "Entrevista 2" → "Wave 1"');
-    await removeFromGroup(ctx, group.id, [d2.id]);
+    const removed = await removeFromGroup(ctx, group.id, [d2.id]);
     expect((await ctx.store.get('document', d2.id))!.group_ids).toEqual([]);
+    await removed.undo.undo();
     await r.undo.undo();
     expect((await ctx.store.get('document', d1.id))!.group_ids).toEqual([]);
   });

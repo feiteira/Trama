@@ -1,13 +1,14 @@
 // Documents: creating one with its text, renaming, grouping, ordering, deleting with everything
 // that points into it, and editing its text with every coding and sync point remapped.
 
-import { sha256 } from '@noble/hashes/sha2.js';
-import { toHex } from '../core/bytes';
 import type { Coding, DocKind, DocSource, DocText, Document, MediaRef, SyncPoint } from '../core/model/types';
-import { DOC_KINDS, LIMITS, REVS_MAX } from '../core/model/types';
+import { DOC_KINDS, LIMITS } from '../core/model/types';
+import { textSha256 } from './hash';
+import { appendRev, capRevs, newRevId, revsOf } from './revs';
 import { applyEdits, computeEdits, mapOffset, mapRange, normalizeEdits, splitsPair, type Assoc, type TextEdit } from '../core/qda/ranges';
 import { orderAfterLast, placeBefore } from '../core/qda/tree';
 import { reanchorRestored } from './anchor';
+import { reapplyKey } from './pseudonyms';
 import type { ProjectContext } from './context';
 import { stopper } from './jobs';
 import {
@@ -96,17 +97,12 @@ export function canonicalText(raw: string): string {
   return canonicalise(raw).text;
 }
 
-export const textSha256 = (text: string) => toHex(sha256(new TextEncoder().encode(text)));
+export { textSha256 };
+export { textRev } from './revs';
 
-/** A short revision id of a text (the start of its SHA-256), for `DocText.revs`. */
-export const textRev = (text: string): string => textSha256(text).slice(0, 16);
-
-/** The revision history of a text after it changed to `text`. */
+/** The revision history of a text after it changed to `text` (a fresh revision id appended). */
 export function nextRevs(current: Pick<DocText, 'text' | 'revs'>, text: string): string[] {
-  const revs = current.revs?.length ? [...current.revs] : [textRev(current.text)];
-  const rev = textRev(text);
-  if (revs[revs.length - 1] !== rev) revs.push(rev);
-  return revs.slice(-REVS_MAX);
+  return text === current.text ? revsOf(current) : appendRev(current);
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -282,7 +278,7 @@ export async function createDocuments(
         order: slot.order,
         color: input.color ?? null,
       });
-      plan.create('doctext', { id, text, sync, revs: [textRev(text)] });
+      plan.create('doctext', { id, text, sync, revs: [newRevId()] });
       created.push({ id, name: slot.name });
       await opts.onProgress?.(i + 1, prepared.length);
     }
@@ -444,8 +440,12 @@ export async function deleteDocuments(ctx: ProjectContext, ids: string[]): Promi
   return { batch, documents: docs.length, codings: codings.length, memos: memos.length, undo };
 }
 
-/** Brings back what one `deleteDocuments` removed (from "recently deleted"). */
-export async function restoreDocuments(ctx: ProjectContext, batch: string): Promise<{ documents: number; codings: number; memos: number }> {
+/**
+ * Brings back what one `deleteDocuments` removed (from "recently deleted"). What was deleted
+ * before the pseudonymisation key was applied comes back with it applied (`pseudonymised`
+ * counts the replacements made, logged like any application of the key).
+ */
+export async function restoreDocuments(ctx: ProjectContext, batch: string): Promise<{ documents: number; codings: number; memos: number; pseudonymised: number }> {
   const restored = await restoreBatch(ctx, batch, ['document', 'doctext', 'coding', 'memo']);
   const fixed = await reanchorRestored(ctx, restored.get('coding') ?? [], batch);
   const docIds = restored.get('document') ?? [];
@@ -453,7 +453,15 @@ export async function restoreDocuments(ctx: ProjectContext, batch: string): Prom
     const d = await ctx.store.get('document', id);
     if (d) await ctx.log('document.restore', q(d.name), { kind: 'document', id });
   }
-  return { documents: docIds.length, codings: (restored.get('coding')?.length ?? 0) - fixed.removed, memos: restored.get('memo')?.length ?? 0 };
+  const pseudonymised = (await reapplyKey(ctx, restoredKeys(restored), 'restore')).replacements;
+  return { documents: docIds.length, codings: (restored.get('coding')?.length ?? 0) - fixed.removed, memos: restored.get('memo')?.length ?? 0, pseudonymised };
+}
+
+/** `kind:id` of what a restore brought back (a text counts as its document). */
+export function restoredKeys(restored: ReadonlyMap<string, readonly string[]>): string[] {
+  const out: string[] = [];
+  for (const [kind, ids] of restored) for (const id of ids) out.push(`${kind === 'doctext' ? 'document' : kind}:${id}`);
+  return out;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -489,7 +497,7 @@ export async function applyTextEdits(
   ctx: ProjectContext,
   id: string,
   rawEdits: readonly TextEdit[],
-  opts: { log?: boolean; current?: DocText } = {},
+  opts: { log?: boolean; current?: DocText; extraMeta?: { key: string; value: string | null }[]; revs?: string[] } = {},
 ): Promise<TextEditResult> {
   const doc = await need(ctx, 'document', id);
   const dt = opts.current ?? (await need(ctx, 'doctext', id));
@@ -501,7 +509,7 @@ export async function applyTextEdits(
   if (text.length > LIMITS.textMax) throw new ServiceError('too_large', 'the text is too long');
   const plan = new Plan();
   const sync = dt.sync.map((s) => ({ pos: Math.min(text.length, mapOffset(s.pos, edits, 'before')), ms: s.ms }));
-  plan.change('doctext', dt, { text, sync, revs: nextRevs(dt, text) });
+  plan.change('doctext', dt, { text, sync, revs: opts.revs ?? nextRevs(dt, text) });
   plan.change('document', doc, { chars: text.length });
 
   const codings = await ctx.store.list('coding', { where: 'document_id = ?', params: [id] });
@@ -525,13 +533,39 @@ export async function applyTextEdits(
       if (m.target.kind === 'coding') plan.remove('memo', m);
     }
   }
+  // Codings in the trash (deleted with their code, say) follow the edit too, so that restoring
+  // them puts each back on its own words, never on another occurrence of them. One that the edit
+  // leaves without text stays in the trash where it was, emptied so it cannot come back wrong.
+  const trashed = await ctx.store.list('coding', { includeDeleted: true, where: 'deleted = 1 AND document_id = ?', params: [id] });
+  for (const c of trashed) {
+    if ((c as Coding & { scrubbed?: boolean }).scrubbed) continue;
+    const r = mapRange(c, edits);
+    if (r) {
+      const t = text.slice(r.start, r.end);
+      if (r.start !== c.start || r.end !== c.end || t !== c.text) plan.changeDeleted('coding', c, { start: r.start, end: r.end, text: t });
+    } else if (c.text) plan.changeDeleted('coding', c, { text: '' });
+  }
   const logs: LogSpec[] = [];
   if (opts.log !== false) {
     logs.push({ action: 'document.edit', summary: `${q(doc.name)} ×${edits.length}`, target: { kind: 'document', id } });
     if (removed.length) logs.push({ action: 'coding.remove', summary: `${q(doc.name)} ×${removed.length}`, target: { kind: 'document', id } });
   }
-  const { undo } = await commit(ctx, plan, { label: 'document.edit', detail: q(doc.name), logs });
+  const { undo } = await commit(ctx, plan, { label: 'document.edit', detail: q(doc.name), logs, ...(opts.extraMeta ? { extraMeta: opts.extraMeta } : {}) });
   return { removedCodings: removed.length, remappedCodings: remapped, edits, undo };
+}
+
+/**
+ * Resolves a text conflict of a merge (`TextConflict`) by taking the teammate's text instead of
+ * this one: codings are remapped onto it like any edit, and the text lists both copies'
+ * revisions, so either copy merging the other afterwards keeps it without a conflict.
+ */
+export async function takeTeammateText(ctx: ProjectContext, id: string, text: string, theirRevs: readonly string[]): Promise<TextEditResult> {
+  const dt = await need(ctx, 'doctext', id);
+  const next = canonicalText(text);
+  if (next.length > LIMITS.textMax) throw new ServiceError('too_large', 'the text is too long');
+  const mine = revsOf(dt);
+  const both = [...mine, ...theirRevs.filter((r) => !mine.includes(r))];
+  return applyTextEdits(ctx, id, computeEdits(dt.text, next), { current: dt, revs: capRevs([...both, newRevId()]) });
 }
 
 // ---------------------------------------------------------------------------------------------

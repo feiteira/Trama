@@ -199,6 +199,31 @@ pub fn remove_blob(dir: &Path, project: &str, id: &str) -> AppResult<()> {
     remove_file_if_exists(&blob_file(dir, project, id)?)
 }
 
+/// Ids of a project's blobs: the regular files of its blob folder with a name a blob id can
+/// have (temporary files of an unfinished write, links and anything else are left out).
+pub fn list_blobs(dir: &Path, project: &str) -> AppResult<Vec<String>> {
+    let entries = match fs::read_dir(project_dir(dir, project)?.join(BLOB_DIR)) {
+        Ok(e) => e,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(e) => return Err(e.into()),
+    };
+    let mut out = Vec::new();
+    for entry in entries {
+        let entry = entry?;
+        if !entry.file_type()?.is_file() {
+            continue;
+        }
+        let Some(name) = entry.file_name().to_str().map(str::to_owned) else {
+            continue;
+        };
+        if valid_name(&name) {
+            out.push(name);
+        }
+    }
+    out.sort();
+    Ok(out)
+}
+
 /// Ids of the project folders that hold a database. Anything else under `projects/` (a
 /// half-created folder, a stray file, a name the UI could never have made) is ignored.
 pub fn list_projects(dir: &Path) -> AppResult<Vec<String>> {
@@ -484,6 +509,22 @@ mod tests {
         remove_blob(dir.path(), ID, "b1").unwrap();
         remove_blob(dir.path(), ID, "b1").unwrap(); // idempotent
         assert!(!p.exists());
+    }
+
+    #[test]
+    fn lists_blobs_without_temporary_files() {
+        let dir = tempfile::tempdir().unwrap();
+        assert!(list_blobs(dir.path(), ID).unwrap().is_empty());
+        fs::create_dir_all(project_dir(dir.path(), ID).unwrap()).unwrap();
+        assert!(list_blobs(dir.path(), ID).unwrap().is_empty());
+        for id in ["b2", "b1"] {
+            write_atomic(&blob_file_for_write(dir.path(), ID, id).unwrap(), b"x").unwrap();
+        }
+        let blobs = project_dir(dir.path(), ID).unwrap().join(BLOB_DIR);
+        fs::write(blobs.join(".b3.42-0.tmp"), b"x").unwrap();
+        fs::create_dir(blobs.join("sub")).unwrap();
+        assert_eq!(list_blobs(dir.path(), ID).unwrap(), vec!["b1", "b2"]);
+        assert!(list_blobs(dir.path(), "../x").is_err());
     }
 
     #[test]

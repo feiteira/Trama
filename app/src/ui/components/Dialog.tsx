@@ -1,8 +1,8 @@
-import React, { useEffect, useId, useRef, type ReactNode } from 'react';
+import React, { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { cx } from '../cx';
-import { focusables, focusBackTo, pushLayer, trapTab, useOpener } from '../focus';
+import { focusables, focusBackTo, overflowsY, pushLayer, trapTab, useOpener } from '../focus';
 import { useI18n } from '../i18n';
 import { IconButton } from './Button';
 import './dialog.css';
@@ -41,6 +41,21 @@ export function Dialog({ open, onClose, title, description, children, footer, si
   const tracked = useOpener(open);
   const dismissRef = useRef(dismissible);
   dismissRef.current = dismissible;
+  // A body taller than the dialog scrolls; it joins the Tab order then (a named region), so the
+  // keyboard can scroll it even when it holds nothing focusable (the shortcuts list).
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const [scrolls, setScrolls] = useState(false);
+  useLayoutEffect(() => {
+    const el = bodyRef.current;
+    if (!open || !el) return;
+    const check = () => setScrolls(overflowsY(el));
+    check();
+    if (typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(check);
+    ro.observe(el);
+    for (const child of el.children) ro.observe(child);
+    return () => ro.disconnect();
+  }, [open, children]);
 
   useEffect(() => {
     if (!open) return;
@@ -94,7 +109,18 @@ export function Dialog({ open, onClose, title, description, children, footer, si
           <IconButton className="dialog__close" icon={X} label={t('common.close')} size="sm" onClick={onClose} data-testid="dialog-close" />
         ) : null}
       </header>
-      {children ? <div className="dialog__body">{children}</div> : null}
+      {children ? (
+        <div
+          ref={bodyRef}
+          className="dialog__body"
+          tabIndex={scrolls ? 0 : undefined}
+          role={scrolls ? 'region' : undefined}
+          aria-labelledby={scrolls ? titleId : undefined}
+          data-testid="dialog-body"
+        >
+          {children}
+        </div>
+      ) : null}
       {footer ? <footer className="dialog__footer">{footer}</footer> : null}
     </>
   );

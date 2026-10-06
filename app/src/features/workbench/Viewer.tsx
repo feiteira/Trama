@@ -8,7 +8,7 @@ import { TABLES } from '../../core/store/schema';
 import { createCode } from '../../services/codes';
 import { applyCode, autocode, inVivo, recode, removeCoding, resizeCoding, setComment } from '../../services/codings';
 import { attachMedia, detachMedia, editDocumentText } from '../../services/documents';
-import { DraftClaims, isDirty, startDraft, type EditDraft } from './editDraft';
+import { closedUnder, DraftClaims, isDirty, SaveInFlight, startDraft, type EditDraft } from './editDraft';
 import { createMemo, memosFor } from '../../services/memos';
 import { combineUndo, q, ServiceError } from '../../services/undo';
 import { claimAltArrows } from '../../shell/activity.web';
@@ -23,6 +23,7 @@ import { Badge, Button, IconButton, Menu, type MenuEntry, Popover, Spinner, useC
 import { isTextEntry, modalOpen } from '../../ui/focus';
 import type { Rect } from '../../ui/position';
 import { type MessageKey, useI18n } from '../../ui/i18n';
+import { scrollBehavior } from '../../ui/media';
 import { CodingPopover } from './CodingPopover';
 import { type Box, rangeFor, scrollToOffset, spanExtent, spanRects, visibleParagraphs } from './dom';
 import { buildViews, DocTextBody, type ParaView, type ViewCache } from './DocText';
@@ -32,7 +33,7 @@ import { FindBar } from './FindBar';
 import { MediaBar, type MediaHandle } from './MediaBar';
 import { codeOptions, favourites, pushRecent } from './model/codeSearch';
 import { findAll, firstMatchFrom } from './model/find';
-import { type CoderFilter, coderFilterKey, filterByCoder, markStyles, parseCoderFilter } from './model/highlight';
+import { type CoderFilter, coderFilterKey, filterByCoder, markColor, markStyles, parseCoderFilter } from './model/highlight';
 import { assignLanes, clusterWidths, type LaneItem } from './model/lanes';
 import { cleanSelection, type NodeLike, rangeOffsets } from './model/offsets';
 import { paragraphAtTime, paragraphIndexAt, splitParagraphs } from './model/paragraphs';
@@ -237,6 +238,40 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ do
     // The body remounts when leaving edit mode.
   }, [loaded, !!editing]);
   const [drawer, setDrawer] = useState<Drawer>(null);
+  // What opened the drawer, to give it the focus back on close: its toolbar toggle, or the text
+  // (a memo on a passage or a coding, with the caret's offset there).
+  const drawerFrom = useRef<{ kind: 'toggle' } | { kind: 'text'; at: number }>({ kind: 'toggle' });
+  const segToggle = useRef<HTMLButtonElement>(null);
+  const memoToggle = useRef<HTMLButtonElement>(null);
+  const openDrawer = useCallback((d: Exclude<Drawer, null>, from: { kind: 'toggle' } | { kind: 'text'; at: number }) => {
+    drawerFrom.current = from;
+    setDrawer(d);
+  }, []);
+  const closeDrawer = useCallback(() => {
+    const which = drawerRef.current;
+    const active = document.activeElement;
+    const adrift = !active || active === document.body || !!active.closest('.wb-drawer');
+    setDrawer(null);
+    // Closed from inside (its Close button, Esc): the focus would fall to the page.
+    if (!adrift) return;
+    const from = drawerFrom.current;
+    requestAnimationFrame(() => {
+      const toggle = which === 'memos' ? memoToggle.current : segToggle.current;
+      const root = rootRef.current;
+      if (from.kind === 'toggle' && toggle?.isConnected) return toggle.focus({ preventScroll: true });
+      if (!root) return;
+      // Back in the text where the caret was (typing in the drawer moved the page's selection).
+      const r = from.kind === 'text' ? rangeFor(root, parasRef.current, from.at, from.at) : null;
+      const sel = document.getSelection();
+      if (r && sel) {
+        sel.removeAllRanges();
+        sel.addRange(r);
+      }
+      root.focus({ preventScroll: true });
+    });
+  }, []);
+  const drawerRef = useRef<Drawer>(drawer);
+  drawerRef.current = drawer;
   const drawerPushes = width >= 760;
   const textWidth = drawer && drawerPushes ? width - 320 : width;
   const roomy = textWidth >= 720;
@@ -293,7 +328,8 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ do
       items.push({
         id: c.id,
         name: code?.name ?? '',
-        color: code?.color ?? '#7a7f87',
+        // Dimmed stripes fade as a whole (CSS); the bar itself always reaches 3:1.
+        color: markColor(code?.color ?? '#7a7f87', 'normal', dark),
         top: Math.round(e.top * 10) / 10,
         height: Math.round((e.bottom - e.top) * 10) / 10,
         lane: laneOf.get(c.id) ?? 0,
@@ -302,7 +338,7 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ do
       });
     }
     setStripes({ items });
-  }, [showStripes, shown, large, marginW, codeMap, styles]);
+  }, [showStripes, shown, large, marginW, codeMap, styles, dark]);
   const measureRef = useRef(measure);
   measureRef.current = measure;
 
@@ -448,14 +484,42 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ do
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pending, native, views, fontSize, width, drawer]);
 
-  const clearSelection = useCallback(() => {
+  /**
+   * Drops the pending selection. With `caretAt`, leaves a caret there instead (the end of the
+   * passage just coded), so a keyboard reader goes on from where they were rather than from the
+   * top of the screen.
+   */
+  const clearSelection = useCallback((opts: { caretAt?: number } = {}) => {
     const sel = document.getSelection();
     const root = rootRef.current;
-    if (sel && root && sel.rangeCount && root.contains(sel.getRangeAt(0).startContainer)) sel.removeAllRanges();
+    const at = opts.caretAt;
+    const caret = root && at !== undefined ? rangeFor(root, parasRef.current, at, at) : null;
+    if (sel && caret) {
+      sel.removeAllRanges();
+      sel.addRange(caret);
+      // The new coding re-renders the passage, replacing the text nodes the caret sits in:
+      // put it back once that has happened (the layout effect below).
+      caretWanted.current = { at: at!, until: Date.now() + 3000 };
+    } else if (sel && root && sel.rangeCount && root.contains(sel.getRangeAt(0).startContainer)) sel.removeAllRanges();
     setPending(null);
     setSelOpen(false);
     setNative(false);
   }, [setPending]);
+  const caretWanted = useRef<{ at: number; until: number } | null>(null);
+  useLayoutEffect(() => {
+    const want = caretWanted.current;
+    const root = rootRef.current;
+    const sel = document.getSelection();
+    if (!want || !root || !sel) return;
+    caretWanted.current = null;
+    // Not over a selection the reader has made since, nor long after (the coding never re-rendered).
+    if (Date.now() > want.until || pendingRef.current || (sel.rangeCount && !sel.isCollapsed)) return;
+    const at = want.at;
+    const r = rangeFor(root, parasRef.current, at, at);
+    if (!r) return;
+    sel.removeAllRanges();
+    sel.addRange(r);
+  }, [views]);
 
   // A new document starts with nothing selected and nothing open.
   useEffect(() => {
@@ -519,7 +583,23 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ do
     if (!selectKey || !select || !loaded || !text || codingData?.id !== docId || handledSelect.current === selectKey) return;
     handledSelect.current = selectKey;
     const s = { start: Math.max(0, Math.min(text.length, select.start)), end: Math.max(0, Math.min(text.length, select.end)) };
-    requestAnimationFrame(() => requestAnimationFrame(() => jumpTo(s)));
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        jumpTo(s);
+        // Arriving from another screen (a segment card, a search hit), the focus fell to the
+        // page or to this screen's heading: put it in the text, with the caret at the passage,
+        // so the keyboard and screen readers start there rather than about 30 Tabs away.
+        const root = rootRef.current;
+        const active = document.activeElement;
+        const adrift = !active || active === document.body || !active.isConnected || active.tagName === 'H1';
+        const r = root && adrift ? rangeFor(root, parasRef.current, s.start, s.start) : null;
+        const sel = document.getSelection();
+        if (!root || !r || !sel) return;
+        sel.removeAllRanges();
+        sel.addRange(r);
+        root.focus({ preventScroll: true });
+      }),
+    );
   }, [selectKey, select, loaded, text, jumpTo, codingData, docId]);
 
   // ── Coding actions ──────────────────────────────────────────────────────────────────────
@@ -550,7 +630,7 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ do
           const r = await applyCode(project, { documentId: docId, start: span.start, end: span.end, codeId });
           record(r.undo);
           setRecent((cur) => pushRecent(cur, codeId));
-          clearSelection();
+          clearSelection({ caretAt: span.end });
           const name = codeMap.get(codeId)?.name ?? '';
           toast.show({ message: r.created ? t('workbench.toast.coded', { code: name }) : t('workbench.toast.extended', { code: name }), action: undoAction });
         } catch (e) {
@@ -575,7 +655,7 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ do
             throw e;
           }
           setRecent((cur) => pushRecent(cur, made.code.id));
-          clearSelection();
+          clearSelection({ caretAt: span.end });
           toast.show({ message: t('workbench.toast.created', { code: made.code.name }), action: undoAction });
         } catch (e) {
           fail(e);
@@ -593,7 +673,7 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ do
         const r = await inVivo(project, { documentId: docId, start: span.start, end: span.end, parent_id: null });
         record(r.undo);
         setRecent((cur) => pushRecent(cur, r.code.id));
-        clearSelection();
+        clearSelection({ caretAt: span.end });
         toast.show({ message: t('workbench.toast.inVivo', { code: r.code.name }), action: undoAction });
       } catch (e) {
         fail(e);
@@ -609,14 +689,14 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ do
       try {
         const { memo, undo } = await createMemo(project, { title: `“${excerpt(textRef.current.slice(span.start, span.end), 50)}”`, target: { kind: 'document', id: docId } });
         record(undo);
-        clearSelection();
-        setDrawer('memos');
+        clearSelection({ caretAt: span.end });
+        openDrawer('memos', { kind: 'text', at: span.end });
         setMemoFocus(memo.id);
       } catch (e) {
         fail(e);
       }
     });
-  }, [once, project, docId, record, clearSelection, fail]);
+  }, [once, project, docId, record, clearSelection, openDrawer, fail]);
 
   const applyFavourite = useCallback(
     (n: number) => {
@@ -704,13 +784,14 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ do
             focus = memo.id;
           }
           setCodPop(null);
-          setDrawer('memos');
+          const c = shownById.get(id);
+          openDrawer('memos', c ? { kind: 'text', at: c.start } : { kind: 'toggle' });
           setMemoFocus(focus);
         } catch (e) {
           fail(e);
         }
       }),
-    [once, project, record, fail],
+    [once, project, record, openDrawer, shownById, fail],
   );
 
   const startAdjust = useCallback(
@@ -735,7 +816,7 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ do
         const r = await resizeCoding(project, id, span.start, span.end);
         record(r.undo);
         setResizing(null);
-        clearSelection();
+        clearSelection({ caretAt: span.end });
         toast.show({ message: t('workbench.toast.resized'), action: undoAction });
       } catch (e) {
         fail(e);
@@ -822,7 +903,7 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ do
           const r = el.getBoundingClientRect();
           const s = scroller.getBoundingClientRect();
           if (r.top < s.top + 24 || r.bottom > s.bottom - 64) {
-            scroller.scrollTo({ top: scroller.scrollTop + (r.top - s.top) - scroller.clientHeight * 0.3, behavior: 'smooth' });
+            scroller.scrollTo({ top: scroller.scrollTop + (r.top - s.top) - scroller.clientHeight * 0.3, behavior: scrollBehavior() });
           }
         }
       }
@@ -865,6 +946,7 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ do
   }, [confirm, project, docId, t, fail]);
 
   // ── Editing the text ────────────────────────────────────────────────────────────────────
+  const inFlight = useRef(new SaveInFlight());
   const saveEdit = useCallback(async () => {
     if (!editing || editing.busy) return;
     if (editing.text === editing.base) {
@@ -873,7 +955,7 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ do
     }
     setEditing({ ...editing, busy: true });
     try {
-      const r = await editDocumentText(project, editing.docId, editing.text);
+      const r = await inFlight.current.track(editing, editDocumentText(project, editing.docId, editing.text));
       record(r.undo);
       setEditing(null);
       toast.show({
@@ -883,15 +965,21 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ do
       });
     } catch (e) {
       setEditing((cur) => (cur ? { ...cur, busy: false } : cur));
+      // A saver starting before the next render must see the edit as unsaved again.
+      if (editingRef.current?.docId === editing.docId) editingRef.current = { ...editingRef.current, busy: false };
+      // Closed under the save (locked, window closing): the lock's saver has taken the draft.
+      if (closedUnder(e, project.isOpen)) return;
       fail(e);
     }
   }, [editing, project, record, toast, tp, t, undoAction, fail]);
   const editingRef = useRef(editing);
   editingRef.current = editing;
   const claims = useRef(new DraftClaims());
-  // Locking or closing the project keeps an edit in progress rather than dropping it.
+  // Locking or closing the project keeps an edit in progress rather than dropping it: first the
+  // save already running (Save pressed just before Ctrl+L) finishes, then whatever is unsaved.
   useRegisterSaver(async () => {
-    const d = claims.current.claim(editingRef.current);
+    const failed = await inFlight.current.settle();
+    const d = claims.current.claim(failed ?? editingRef.current);
     if (d) await editDocumentText(project, d.docId, d.text).then((r) => record(r.undo));
   });
   // So does leaving it: opening another document, going to another screen. The researcher
@@ -910,7 +998,9 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ do
           action: undoAction,
         });
       },
-      (e: unknown) => fail(e),
+      (e: unknown) => {
+        if (!closedUnder(e, project.isOpen)) fail(e);
+      },
     );
   };
   useEffect(() => () => keepOnLeave.current(), [docId]);
@@ -968,7 +1058,14 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ do
         else sel.collapseToEnd();
         return;
       }
+      // The caret must not leave the text (ArrowLeft at its very start would move it into the
+      // page around it, where the next Enter does nothing): put it back if it did.
+      const before = { anchor: sel.anchorNode, anchorOffset: sel.anchorOffset, focus: sel.focusNode, focusOffset: sel.focusOffset };
       sel.modify(e.shiftKey ? 'extend' : 'move', move[0], move[1]);
+      if (!sel.focusNode || !root.contains(sel.focusNode) || !sel.anchorNode || !root.contains(sel.anchorNode)) {
+        if (before.anchor && before.focus) sel.setBaseAndExtent(before.anchor, before.anchorOffset, before.focus, before.focusOffset);
+        return;
+      }
       const node = sel.focusNode;
       const el = node instanceof Element ? node : node?.parentElement;
       el?.scrollIntoView({ block: 'nearest' });
@@ -991,7 +1088,9 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ do
         cancelAdjust();
       } else if (pendingRef.current) {
         e.preventDefault();
-        clearSelection();
+        // Esc drops the selection but keeps the place: a caret where the selection's focus end was.
+        if (sel.focusNode && root.contains(sel.focusNode)) sel.collapse(sel.focusNode, sel.focusOffset);
+        else clearSelection({ caretAt: pendingRef.current.end });
       }
       return;
     }
@@ -1288,8 +1387,8 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ do
       )}
       <div className="wb-tools" role="group" aria-label={t('workbench.header.viewTools')}>
         <IconButton icon={Search} label={t('workbench.find.label')} shortcut={key('F')} pressed={findOpen} onClick={() => (findOpen ? closeFind() : openFind())} data-testid="toggle-find" />
-        <IconButton icon={ListTree} label={t('workbench.segments.title')} pressed={drawer === 'segments'} onClick={() => setDrawer((d) => (d === 'segments' ? null : 'segments'))} data-testid="toggle-segments" />
-        <IconButton icon={StickyNote} label={t('workbench.memos.title')} pressed={drawer === 'memos'} onClick={() => setDrawer((d) => (d === 'memos' ? null : 'memos'))} data-testid="toggle-memos" />
+        <IconButton ref={segToggle} icon={ListTree} label={t('workbench.segments.title')} pressed={drawer === 'segments'} onClick={() => (drawer === 'segments' ? setDrawer(null) : openDrawer('segments', { kind: 'toggle' }))} data-testid="toggle-segments" />
+        <IconButton ref={memoToggle} icon={StickyNote} label={t('workbench.memos.title')} pressed={drawer === 'memos'} onClick={() => (drawer === 'memos' ? setDrawer(null) : openDrawer('memos', { kind: 'toggle' }))} data-testid="toggle-memos" />
         <MoreMenu items={moreItems} label={t('common.more')} />
       </div>
       {panelActions}
@@ -1410,10 +1509,10 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ do
                   meId={me.id}
                   onJump={(c) => jumpTo({ start: c.start, end: c.end })}
                   onRemove={(id) => removeCodings([id])}
-                  onClose={() => setDrawer(null)}
+                  onClose={closeDrawer}
                 />
               ) : drawer === 'memos' ? (
-                <MemosDrawer docId={docId} codings={codings} codes={codeMap} focusId={memoFocus} onJump={(c) => jumpTo({ start: c.start, end: c.end })} onClose={() => setDrawer(null)} />
+                <MemosDrawer docId={docId} codings={codings} codes={codeMap} focusId={memoFocus} onJump={(c) => jumpTo({ start: c.start, end: c.end })} onClose={closeDrawer} />
               ) : null}
             </div>
             {doc?.media ? (

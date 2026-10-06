@@ -39,3 +39,22 @@ export function withAlpha(hex: string, alpha: number): string {
   const [r, g, b] = [1, 3, 5].map((i) => parseInt(n.slice(i, i + 2), 16));
   return `rgba(${r}, ${g}, ${b}, ${Math.max(0, Math.min(1, alpha))})`;
 }
+
+/**
+ * `hex` darkened (on a light background) or lightened (on a dark one) just enough to reach
+ * `min` contrast against `background`, keeping its hue: a pale code colour (amber, lime) still
+ * needs 3:1 for its underline band and margin bar to be seen (WCAG 1.4.11).
+ */
+export function ensureContrast(hex: string, background: string, min = 3): string {
+  const n = normalizeHex(hex) ?? '#7a7f87';
+  if (contrast(n, background) >= min) return n;
+  const toward = luminance(background) > 0.18 ? 0 : 255;
+  const ch = [1, 3, 5].map((i) => parseInt(n.slice(i, i + 2), 16));
+  let out = n;
+  for (let step = 1; step <= 20; step++) {
+    const t = step / 20;
+    out = `#${ch.map((c) => Math.round(c + (toward - c) * t).toString(16).padStart(2, '0')).join('')}`;
+    if (contrast(out, background) >= min) break;
+  }
+  return out;
+}

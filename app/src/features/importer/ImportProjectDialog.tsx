@@ -4,9 +4,11 @@ import { importQdpx, type QdpxWarning } from '../../core/export/refi';
 import type { ProjectBundle } from '../../core/export/bundle';
 import type { TramaBundle, Unlock } from '../../core/export/trama';
 import { LIMITS } from '../../core/model/types';
-import { mergeTeammateCopy } from '../../services/datafile';
+import { mergeTeammateCopy, type MergeResult } from '../../services/datafile';
 import type { ProjectInfo } from '../../services/project';
 import { useAppState, useHold, useLibrary } from '../../shell/AppState';
+import type { Route } from '../../shell/router';
+import { MergeReport } from '../agreement/MergeReport';
 import { useI18n } from '../../ui/i18n';
 import { Button } from '../../ui/components/Button';
 import { RadioGroup } from '../../ui/components/Choice';
@@ -16,7 +18,7 @@ import { TextArea, TextField } from '../../ui/components/Field';
 import { useToast } from '../../ui/components/Toast';
 import { type IncomingFile, pickFiles } from './files';
 import { say } from './messages';
-import { importName, detectProjectFile, meIn, openTrama, projectFileError, sameProjectIn, summariseBundle, type BundleSummary } from './projectFile';
+import { importName, detectProjectFile, meForImport, openTrama, projectFileError, sameProjectIn, summariseBundle, type BundleSummary } from './projectFile';
 import { groupQdpxWarnings, type QdpxNote } from './qdpxWarnings';
 import './importer.css';
 
@@ -37,6 +39,8 @@ type Step =
       issues: QdpxWarning[];
     }
   | { name: 'imported'; info: ProjectInfo }
+  /** A teammate's copy merged into a project of this library: what came in, and what to check. */
+  | { name: 'merged'; info: ProjectInfo; result: MergeResult }
   | { name: 'error'; file: string; message: string };
 
 /**
@@ -47,7 +51,7 @@ type Step =
 export function ImportProjectDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { t, tp } = useI18n();
   const library = useLibrary();
-  const { platform, prefs, enterProject } = useAppState();
+  const { platform, prefs, enterProject, openProject } = useAppState();
   const toast = useToast();
   const [step, setStep] = useState<Step>({ name: 'idle' });
   const [secret, setSecret] = useState('');
@@ -153,18 +157,19 @@ export function ImportProjectDialog({ open, onClose }: { open: boolean; onClose:
     try {
       if (merging && step.same) {
         const project = await library.openProject(step.same.id);
+        let result: MergeResult;
         try {
-          const r = await mergeTeammateCopy(project, step.bundle);
-          toast.show({ message: r.added || r.updated ? t('importer.project.merged', { name: step.same.name, added: r.added, updated: r.updated }) : t('importer.project.mergedNothing', { name: step.same.name }), tone: 'success' });
-          enterProject(project);
-        } catch (e) {
+          result = await mergeTeammateCopy(project, step.bundle);
+        } finally {
+          // Closed while the researcher reads what the merge did; opening it is one click.
           await library.closeProject().catch(() => undefined);
-          throw e;
         }
+        setWorking(null);
+        setStep({ name: 'merged', info: step.same, result });
       } else {
         const id = step.bundle.project.id;
         const keepId = !!id && !step.same && !(await platform.projects.exists(id));
-        const me = step.ownMe ?? meIn(step.summary.coders, prefs.coderName);
+        const me = meForImport(step.type, step.ownMe, step.summary.coders, prefs.coderName);
         // Added to the library without leaving the screen: the researcher chooses to open it.
         const info = await library.importBundle(step.bundle, { name: clean, keepId, me, open: false });
         setWorking(null);
@@ -258,6 +263,58 @@ export function ImportProjectDialog({ open, onClose }: { open: boolean; onClose:
         <div className="imp-proj__done" data-testid="import-project-done">
           <CircleCheck size={20} strokeWidth={1.75} aria-hidden className="imp-proj__done-icon" />
           <p>{t('importer.project.importedBody')}</p>
+        </div>
+      </Dialog>
+    );
+  }
+
+  if (step.name === 'merged') {
+    const { info, result: r } = step;
+    const go = async (route?: Route) => {
+      setWorking('import');
+      try {
+        await openProject(info.id, route);
+      } catch (e) {
+        setWorking(null);
+        toast.error(e);
+      }
+    };
+    return (
+      <Dialog
+        open={open}
+        onClose={onClose}
+        dismissible={dismissible}
+        title={t('importer.project.mergedTitle', { name: info.name })}
+        size="md"
+        onSubmit={() => void go()}
+        data-testid="import-project-dialog"
+        footer={
+          <>
+            <Button variant="ghost" onClick={onClose} disabled={!dismissible} data-testid="import-project-later">
+              {t('importer.project.later')}
+            </Button>
+            <Button type="submit" variant="primary" icon={FolderOpen} busy={working === 'import'} data-autofocus data-testid="import-project-open">
+              {t('importer.project.openNow')}
+            </Button>
+          </>
+        }
+      >
+        <div className="imp-proj__merged" data-testid="import-project-merged">
+          <div className="imp-proj__done">
+            <CircleCheck size={20} strokeWidth={1.75} aria-hidden className="imp-proj__done-icon" />
+            <p>
+              {r.added || r.updated
+                ? t('agreement.merge.done', { added: r.added, updated: r.updated })
+                : t('importer.project.mergedNothing', { name: info.name })}
+            </p>
+          </div>
+          {r.rejected ? <Notice tone="warning">{tp('agreement.merge.doneRejected', r.rejected)}</Notice> : null}
+          <MergeReport
+            findings={r}
+            stage="done"
+            onOpenDocument={(docId) => void go({ name: 'workbench', docId })}
+            onPseudonymise={() => void go({ name: 'pseudonyms' })}
+          />
         </div>
       </Dialog>
     );

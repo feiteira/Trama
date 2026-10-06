@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { OpenerTracker } from './focus';
+import { OpenerTracker, overflowsY } from './focus';
 
 describe('OpenerTracker', () => {
   it('keeps what had the focus when the dialog opened, not the field it focused itself', () => {
@@ -19,5 +19,15 @@ describe('OpenerTracker', () => {
     t.update(false, () => 'x');
     t.update(true, () => 'b');
     expect(t.opener).toBe('b');
+  });
+});
+
+describe('overflowsY', () => {
+  it('tells a dialog body that scrolls (and must join the Tab order) from one that fits', () => {
+    // The shortcuts dialog at 1000×660: 615 px of content in a 524 px body.
+    expect(overflowsY({ scrollHeight: 615, clientHeight: 524 })).toBe(true);
+    expect(overflowsY({ scrollHeight: 524, clientHeight: 524 })).toBe(false);
+    // Sub-pixel rounding at fractional scales is not overflow.
+    expect(overflowsY({ scrollHeight: 525, clientHeight: 524 })).toBe(false);
   });
 });

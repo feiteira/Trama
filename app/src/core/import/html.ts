@@ -265,9 +265,9 @@ export function htmlToText(html: string): string {
  * Decodes an HTML file: UTF-8 or UTF-16 when the bytes say so, otherwise the charset its
  * <meta> declares (when the engine knows it), otherwise Windows-1252.
  */
-export function decodeHtml(bytes: Uint8Array): { text: string; legacy: boolean } {
+export function decodeHtml(bytes: Uint8Array): { text: string; legacy: boolean; invalid?: number } {
   const d = decodeTextWithInfo(bytes);
-  if (d.encoding !== 'windows-1252') return { text: d.text, legacy: false };
+  if (d.encoding !== 'windows-1252') return { text: d.text, legacy: false, ...(d.invalid ? { invalid: d.invalid } : {}) };
   const head = fromWindows1252(bytes.subarray(0, 4096));
   const label = /<meta[^>]+charset\s*=\s*["']?\s*([\w.:-]+)/i.exec(head)?.[1]?.toLowerCase();
   if (label && label !== 'utf-8' && label !== 'utf8') {

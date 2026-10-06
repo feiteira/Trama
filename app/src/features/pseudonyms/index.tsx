@@ -3,7 +3,7 @@ import { DateTime } from 'luxon';
 import { ArrowRight, Eye, FileDown, KeyRound, Pencil, Plus, ShieldCheck, Sparkles, Trash2, VenetianMask, Wand2 } from 'lucide-react';
 import type { Pseudonym } from '../../core/model/types';
 import { csvBytes } from '../../core/export/office/csv';
-import { deletePseudonym, listPseudonyms, preview as previewKey, type Preview } from '../../services/pseudonyms';
+import { deletePseudonym, listPseudonyms, preview as previewKey, type Preview, type PreviewSample } from '../../services/pseudonyms';
 import { usePlatform, useProject } from '../../shell/AppState';
 import { ScreenHeader } from '../../shell/ScreenHeader';
 import type { ScreenProps } from '../../shell/router';
@@ -15,12 +15,12 @@ import { useI18n } from '../../ui/i18n';
 import { Button, IconButton } from '../../ui/components/Button';
 import { Checkbox } from '../../ui/components/Choice';
 import { useConfirm } from '../../ui/components/Confirm';
-import { EmptyState, Spinner } from '../../ui/components/Feedback';
+import { EmptyState, Notice, Spinner } from '../../ui/components/Feedback';
 import { useToast } from '../../ui/components/Toast';
 import { csvDelimiter, saveExport, stamp } from '../log/exportFile';
 import { ApplyDialog } from './ApplyDialog';
 import { EntryDialog } from './EntryDialog';
-import { keyRows, trimContext } from './key';
+import { fieldName, groupFields, keyRows, trimContext } from './key';
 import { SuggestDialog } from './SuggestDialog';
 import './pseudonyms.css';
 
@@ -324,8 +324,26 @@ export default function PseudonymsScreen(_props: ScreenProps<'pseudonyms'>) {
   );
 }
 
-function PreviewPanel({ preview, replacementOf, onClose }: { preview: Preview; replacementOf: (id: string) => string; onClose: () => void }) {
+export function PreviewPanel({ preview, replacementOf, onClose }: { preview: Preview; replacementOf: (id: string) => string; onClose: () => void }) {
   const { t, tp } = useI18n();
+  const elsewhere = preview.total - preview.textTotal;
+  const groups = groupFields(preview.fields);
+  const words = (s: PreviewSample) => {
+    const ctx = trimContext(s.before, s.after);
+    return (
+      <>
+        <span className="pprev__ctx">{ctx.before}</span>
+        <del className="pprev__old">{s.match}</del>
+        <ins className="pprev__new">{replacementOf(s.pseudonymId)}</ins>
+        <span className="pprev__ctx">{ctx.after}</span>
+      </>
+    );
+  };
+  const sample = (s: PreviewSample, key: React.Key) => (
+    <li key={key} className="pprev__sample">
+      {words(s)}
+    </li>
+  );
   return (
     <section className="pprev" aria-labelledby="pprev-title" data-testid="pseudonyms-preview-panel">
       <div className="pprev__bar">
@@ -333,12 +351,24 @@ function PreviewPanel({ preview, replacementOf, onClose }: { preview: Preview; r
           {t('pseudonyms.preview.title')}
         </h2>
         <span className="pprev__total" data-testid="preview-total">
-          {preview.total ? t('pseudonyms.preview.total', { replacements: tp('pseudonyms.apply.replacements', preview.total), documents: tp('common.count.documents', preview.documents.length) }) : t('pseudonyms.preview.nothing')}
+          {preview.total
+            ? [
+                preview.textTotal ? t('pseudonyms.preview.total', { replacements: tp('pseudonyms.apply.replacements', preview.textTotal), documents: tp('common.count.documents', preview.documents.length) }) : null,
+                elsewhere ? (preview.textTotal ? tp('pseudonyms.preview.elsewhere', elsewhere) : tp('pseudonyms.apply.replacements', elsewhere)) : null,
+              ]
+                .filter(Boolean)
+                .join(' · ')
+            : t('pseudonyms.preview.nothing')}
         </span>
         <Button size="sm" variant="ghost" onClick={onClose} className="pprev__close" data-testid="preview-close">
           {t('common.close')}
         </Button>
       </div>
+      {preview.logEntries ? (
+        <Notice tone="warning" title={tp('pseudonyms.preview.logTitle', preview.logEntries)} data-testid="preview-log-warning">
+          {t('pseudonyms.preview.logBody')}
+        </Notice>
+      ) : null}
       {preview.documents.length ? (
         <ul className="pprev__docs">
           {preview.documents.map((d) => (
@@ -348,23 +378,44 @@ function PreviewPanel({ preview, replacementOf, onClose }: { preview: Preview; r
                 <span className="pprev__doc-n">{tp('pseudonyms.apply.replacements', d.count)}</span>
               </div>
               <ul className="pprev__samples">
-                {d.samples.map((s, i) => {
-                  const ctx = trimContext(s.before, s.after);
-                  return (
-                    <li key={i} className="pprev__sample">
-                      <span className="pprev__ctx">{ctx.before}</span>
-                      <del className="pprev__old">{s.match}</del>
-                      <ins className="pprev__new">{replacementOf(s.pseudonymId)}</ins>
-                      <span className="pprev__ctx">{ctx.after}</span>
-                    </li>
-                  );
-                })}
+                {d.samples.map((s, i) => sample(s, i))}
                 {d.count > d.samples.length ? <li className="pprev__more">{tp('pseudonyms.preview.more', d.count - d.samples.length)}</li> : null}
               </ul>
             </li>
           ))}
         </ul>
       ) : null}
+      {groups.length ? (
+        <div className="pprev__fields" data-testid="preview-fields">
+          <h3 className="pprev__subtitle">{t('pseudonyms.preview.elsewhereTitle')}</h3>
+          <p className="pprev__hint">{t('pseudonyms.preview.elsewhereHint')}</p>
+          <ul className="pprev__docs">
+            {groups.map((g) => (
+              <li key={g.kind} className="pprev__doc" data-testid={`preview-fields-${g.kind}`}>
+                <div className="pprev__doc-head">
+                  <span className="pprev__doc-name">{t(`pseudonyms.preview.fieldKinds.${g.kind}`)}</span>
+                  <span className="pprev__doc-n">{tp('pseudonyms.apply.replacements', g.count)}</span>
+                </div>
+                <ul className="pprev__samples">
+                  {g.fields.slice(0, FIELDS_SHOWN).map((f) => (
+                    <li key={`${f.id}:${f.field}`} className="pprev__field">
+                      <span className="pprev__field-where">
+                        {f.label ? <span className="pprev__field-label">{f.label}</span> : null}
+                        <span className="pprev__field-name">{t(`pseudonyms.preview.fieldNames.${fieldName(f.field)}`)}</span>
+                      </span>
+                      <div className="pprev__sample">{words(f.sample)}</div>
+                    </li>
+                  ))}
+                  {g.fields.length > FIELDS_SHOWN ? <li className="pprev__more">{tp('pseudonyms.preview.moreFields', g.fields.length - FIELDS_SHOWN)}</li> : null}
+                </ul>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
     </section>
   );
 }
+
+// Places listed per kind of record; the rest are counted.
+const FIELDS_SHOWN = 8;

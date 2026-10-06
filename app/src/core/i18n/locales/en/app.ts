@@ -59,6 +59,10 @@ export const app = {
     redoneBare: 'Redone.',
     nothingToUndo: 'Nothing to undo.',
     nothingToRedo: 'Nothing to redo.',
+    refusedUndo: 'Can’t undo: {what}. Part of it was changed afterwards (a recording attached, a teammate’s copy merged…), so this step has been taken off the undo list.',
+    refusedRedo: 'Can’t redo: {what}. Part of it was changed afterwards (a recording attached, a teammate’s copy merged…), so this step has been taken off the redo list.',
+    refusedUndoBare: 'Can’t undo this step: part of it was changed afterwards (a recording attached, a teammate’s copy merged…), so it has been taken off the undo list.',
+    refusedRedoBare: 'Can’t redo this step: part of it was changed afterwards (a recording attached, a teammate’s copy merged…), so it has been taken off the redo list.',
   },
   example: {
     badge: 'Example',

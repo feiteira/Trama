@@ -17,6 +17,7 @@ import { Badge, Notice } from '../../ui/components/Feedback';
 import { Select } from '../../ui/components/Field';
 import { useToast } from '../../ui/components/Toast';
 import { baseName } from '../log/exportFile';
+import { say, tableWarnings } from '../importer/messages';
 import { countMatches, guessNameColumn, planColumns, tableToImport } from './importTable';
 
 const PREVIEW_ROWS = 6;
@@ -32,7 +33,7 @@ interface Loaded {
 
 /** Attributes from a spreadsheet (one row per case): pick, preview, choose columns, import. */
 export function ImportAttributes({ onClose }: { onClose: () => void }) {
-  const { t, tp } = useI18n();
+  const { t, tp, meta } = useI18n();
   const project = useProject();
   const platform = usePlatform();
   const { record } = useUndo();
@@ -41,6 +42,8 @@ export function ImportAttributes({ onClose }: { onClose: () => void }) {
   const [nameColumn, setNameColumn] = useState(0);
   const [columns, setColumns] = useState<ReadonlySet<number>>(new Set());
   const [createMissing, setCreateMissing] = useState(true);
+  // A file whose quotes do not balance is imported only once the researcher says they checked it.
+  const [quotesChecked, setQuotesChecked] = useState(false);
   const [busy, setBusy] = useState(false);
   const [readError, setReadError] = useState<string | null>(null);
   const [result, setResult] = useState<AttributeImport | null>(null);
@@ -73,6 +76,7 @@ export function ImportAttributes({ onClose }: { onClose: () => void }) {
         return;
       }
       setLoaded(next);
+      setQuotesChecked(false);
       choose(next.table);
     } catch (e) {
       console.error(e);
@@ -87,6 +91,7 @@ export function ImportAttributes({ onClose }: { onClose: () => void }) {
     try {
       const r = readXlsx(loaded.bytes, loaded.file, { sheet: index });
       setLoaded({ ...loaded, sheet: r.sheet, table: r.table });
+      setQuotesChecked(false);
       choose(r.table);
     } catch (e) {
       setReadError(t('cases.import.readFailed', { message: e instanceof Error ? e.message : String(e) }));
@@ -96,9 +101,11 @@ export function ImportAttributes({ onClose }: { onClose: () => void }) {
   const plan = useMemo(() => (loaded ? planColumns(loaded.table.headers, loaded.table.rows, nameColumn, ctx?.attrs ?? []) : []), [loaded, nameColumn, ctx]);
   const counts = useMemo(() => (loaded ? countMatches(loaded.table.rows, nameColumn, caseNames) : { matched: 0, missing: 0 }), [loaded, nameColumn, caseNames]);
   const chosen = plan.filter((p) => columns.has(p.index));
+  const notes = useMemo(() => tableWarnings(loaded?.table.warnings, meta.bcp47, 'cases.import.malformedQuotes'), [loaded, meta.bcp47]);
+  const blocked = !!notes.quotes && !quotesChecked;
 
   const run = async () => {
-    if (!loaded || !chosen.length) return;
+    if (!loaded || !chosen.length || blocked) return;
     setBusy(true);
     try {
       const table = tableToImport(
@@ -198,6 +205,17 @@ export function ImportAttributes({ onClose }: { onClose: () => void }) {
           </Button>
         </div>
         {readError ? <Notice tone="danger">{readError}</Notice> : null}
+        {notes.quotes ? (
+          <Notice tone="warning" data-testid="import-quotes-warning">
+            <p>{say(notes.quotes, t, tp)}</p>
+            <Checkbox checked={quotesChecked} onChange={setQuotesChecked} label={t('cases.import.quotesConfirm')} data-testid="import-quotes-confirm" />
+          </Notice>
+        ) : null}
+        {notes.others.map((m, i) => (
+          <Notice key={i} tone="info">
+            {say(m, t, tp)}
+          </Notice>
+        ))}
         <div className="imp__controls">
           {loaded.sheets.length > 1 ? (
             <Select<string>
@@ -283,7 +301,7 @@ export function ImportAttributes({ onClose }: { onClose: () => void }) {
         <Button variant="ghost" onClick={onClose} disabled={busy}>
           {t('common.cancel')}
         </Button>
-        <Button variant="primary" onClick={() => void run()} disabled={!chosen.length} busy={busy} data-testid="import-run">
+        <Button variant="primary" onClick={() => void run()} disabled={!chosen.length || blocked} busy={busy} data-testid="import-run">
           {chosen.length ? tp('cases.import.run', chosen.length) : t('cases.import.runNone')}
         </Button>
       </>

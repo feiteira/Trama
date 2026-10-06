@@ -4,16 +4,23 @@ import type { TramaBundle } from '../../core/export/trama';
 import { UnlockRequiredError, type Unlock } from '../../core/export/trama';
 import { DataFileError, mergeTeammateCopy, type MergePreview, type MergeResult, openProjectFile, previewMerge } from '../../services/datafile';
 import { useHold, useProject } from '../../shell/AppState';
+import { useRouter } from '../../shell/router';
+import { useUndo } from '../../shell/undo';
+import { takeTeammateText } from '../../services/documents';
+import type { TextConflict } from '../../services/reconcile';
+import { useToast } from '../../ui/components/Toast';
 import { inkOn } from '../../ui/color';
 import { initial } from '../../shell/initial';
 import { Button } from '../../ui/components/Button';
 import { Dialog } from '../../ui/components/Dialog';
 import { Notice, Spinner } from '../../ui/components/Feedback';
 import { TextField } from '../../ui/components/Field';
-import { useI18n } from '../../ui/i18n';
+import { type MessageKey, useI18n } from '../../ui/i18n';
+import { problemKey } from '../../ui/problems';
 import { fmtInt } from './model';
 import { baseName } from './files';
 import { fileProblem, type FileProblem, PREVIEW_KINDS, previewRows, sameProject } from './team';
+import { MergeReport } from './MergeReport';
 
 type Stage =
   | { name: 'pick' }
@@ -22,12 +29,27 @@ type Stage =
   | { name: 'preview'; bundle: TramaBundle; preview: MergePreview }
   | { name: 'merging'; preview: MergePreview }
   | { name: 'done'; result: MergeResult }
-  | { name: 'error'; problem: FileProblem; message: string; fileProject?: string };
+  | { name: 'error'; problem: FileProblem; message: string; known: MessageKey | null; fileProject?: string };
 
 /** Pick a teammate's .trama copy, see what it brings, merge it. */
 export function MergeDialog({ open, onClose, onCompare }: { open: boolean; onClose: () => void; onCompare: () => void }) {
   const { t, tp, meta } = useI18n();
   const project = useProject();
+  const { go } = useRouter();
+  const { record } = useUndo();
+  const toast = useToast();
+  // Conflicts resolved in the done stage with the teammate's text.
+  const [taken, setTaken] = useState<ReadonlySet<string>>(new Set());
+  const takeTheirs = async (c: TextConflict) => {
+    if (c.theirText === undefined || taken.has(c.documentId)) return;
+    try {
+      const r = await takeTeammateText(project, c.documentId, c.theirText, c.theirRevs ?? []);
+      record(r.undo);
+      setTaken((cur) => new Set([...cur, c.documentId]));
+    } catch (e) {
+      toast.error(e);
+    }
+  };
   const [stage, setStage] = useState<Stage>({ name: 'pick' });
   const [password, setPassword] = useState('');
   const busy = stage.name === 'reading' || stage.name === 'merging';
@@ -37,13 +59,14 @@ export function MergeDialog({ open, onClose, onCompare }: { open: boolean; onClo
     if (open) {
       setStage({ name: 'pick' });
       setPassword('');
+      setTaken(new Set());
     }
   }, [open]);
 
   const fail = (e: unknown, fileProject?: string) => {
     const problem = fileProblem(e);
     if (problem === 'unknown') console.error('reading a teammate copy failed', e);
-    setStage({ name: 'error', problem, message: e instanceof Error ? e.message : String(e), ...(fileProject ? { fileProject } : {}) });
+    setStage({ name: 'error', problem, message: e instanceof Error ? e.message : String(e), known: problemKey(e), ...(fileProject ? { fileProject } : {}) });
   };
 
   async function openBytes(bytes: Uint8Array, file: string, unlock: Unlock) {
@@ -185,6 +208,7 @@ export function MergeDialog({ open, onClose, onCompare }: { open: boolean; onClo
               </tbody>
             </table>
           )}
+          <MergeReport findings={p} stage="preview" />
           {p.rejected ? <Notice tone="warning">{tp('agreement.merge.previewRejected', p.rejected)}</Notice> : null}
           {p.newCoders.length ? (
             <div className="agr-merge__coders">
@@ -223,6 +247,20 @@ export function MergeDialog({ open, onClose, onCompare }: { open: boolean; onClo
           <p>{t('agreement.merge.done', { added: fmtInt(r.added, meta.bcp47), updated: fmtInt(r.updated, meta.bcp47) })}</p>
           {r.blobs ? <p className="t-secondary">{tp('agreement.merge.doneFiles', r.blobs)}</p> : null}
           {r.rejected ? <Notice tone="warning">{tp('agreement.merge.doneRejected', r.rejected)}</Notice> : null}
+          <MergeReport
+            findings={r}
+            stage="done"
+            onOpenDocument={(docId) => {
+              onClose();
+              go({ name: 'workbench', docId });
+            }}
+            onPseudonymise={() => {
+              onClose();
+              go({ name: 'pseudonyms' });
+            }}
+            onTakeTheirs={(c) => void takeTheirs(c)}
+            taken={taken}
+          />
         </div>
       );
       footer = (
@@ -238,10 +276,11 @@ export function MergeDialog({ open, onClose, onCompare }: { open: boolean; onClo
     case 'error': {
       const msg: Record<FileProblem, React.ReactNode> = {
         differentProject: t('agreement.merge.different', { project: project.info.name, name: stage.fileProject ?? '' }),
+        newer: t('common.problems.newerFile'),
         notTrama: t('agreement.merge.notTrama'),
         wrongPassword: t('agreement.merge.wrongPassword'),
         backup: t('agreement.merge.backup'),
-        unknown: t('agreement.merge.unknown', { message: stage.message }),
+        unknown: t('agreement.merge.unknown', { message: stage.known ? t(stage.known) : stage.message }),
       };
       body = (
         <Notice

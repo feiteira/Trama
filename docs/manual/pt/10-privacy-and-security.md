@@ -75,18 +75,20 @@ Quem conseguir abrir a pasta das cópias vê que existem ficheiros de cópia, as
 
 ## Pseudonimização
 
-A **pseudonimização** substitui nomes e outros dados identificativos de forma coerente em todos os documentos — «Ana Lima» passa a «[Participante 1]» em todo o lado —, enquanto os segmentos codificados, os comentários e as marcas de tempo das transcrições acompanham o texto alterado.
+A **pseudonimização** substitui nomes e outros dados identificativos de forma coerente em todos os documentos — «Ana Lima» passa a «[Participante 1]» em todo o lado —, enquanto os segmentos codificados e as marcas de tempo das transcrições acompanham o texto alterado. As mesmas substituições são feitas nos nomes de documentos, casos, códigos e grupos, nos nomes de ficheiros, nas descrições e atributos de texto dos casos, nos memorandos, nos comentários aos segmentos codificados e nas definições dos códigos.
 
 1. **Construa a chave.** Acrescente entradas uma a uma (o original, exatamente como aparece, e a sua substituição), ou escolha **Sugerir nomes**: o Trama lista palavras e expressões com maiúscula dos seus documentos que podem ser nomes ou lugares, e numera as substituições por si (`[Participante 1]`, `[Lugar 2]`…). As sugestões são só um ponto de partida: alcunhas, ruas, locais de trabalho e pormenores raros podem identificar alguém da mesma forma. Leia também os seus documentos.
 2. **Defina as opções de cada entrada.** **Palavra inteira** deixa em paz «Ana» dentro de «Anabela». **Maiúsculas** substitui «Rosa» o nome, e não «rosa» a flor.
-3. **Pré-visualizar** mostra todas as substituições, documento a documento, antes de qualquer alteração.
+3. **Pré-visualizar** mostra todas as substituições antes de qualquer alteração: documento a documento e, depois, em todo o resto do projeto (nomes, nomes de ficheiros, memorandos, comentários, definições), agrupadas por tipo.
 4. **Aplicar aos documentos.** Os originais são substituídos nos próprios documentos, e não só nas exportações. Os segmentos codificados que cobriam apenas um nome substituído são removidos. Pode aplicar a chave inteira ou só as entradas que assinalar.
 
 Aplicar só se pode anular com **Anular logo a seguir**; quando continua a trabalhar, a alteração torna-se permanente. Faça antes uma cópia de segurança.
 
 **A chave** (o que substituiu o quê) é a ligação a quem são os seus participantes. Fica dentro do projeto cifrado, fica de fora de todas as exportações e cópias a menos que a inclua explicitamente, e está sempre nas cópias de segurança cifradas. **Exportar chave** guarda-a como tabela CSV para os seus registos — guarde esse ficheiro cifrado e separado do material pseudonimizado, como as aprovações éticas costumam exigir. Eliminar uma entrada apaga de imediato o nome original do projeto; não se pode anular.
 
-Os ficheiros PDF e Word originais ficam como foram importados. Quando o texto de um documento foi editado (pseudonimizado, por exemplo), as exportações REFI-QDA deixam sempre de fora o PDF original, porque o original continuaria a mostrar o que foi removido.
+Os ficheiros PDF e Word originais ficam como foram importados. Quando o texto de um documento foi editado (pseudonimizado, por exemplo), as exportações REFI-QDA e as cópias .trama deixam de fora o PDF original, porque o original continuaria a mostrar o que foi removido (as cópias de segurança guardam tudo).
+
+**O registo de auditoria não é pseudonimizado.** Nunca é editado, por isso as entradas escritas antes de aplicar a chave («Adicionou o documento «Entrevista — Ana Lima»») mantêm os nomes. A pré-visualização e a janela Aplicar dizem quantas entradas o fazem. O registo viaja nas cópias .trama do projeto e na sua exportação CSV: partilhe-as só com quem pode ver os nomes.
 
 <a id="audit-trail"></a>
 

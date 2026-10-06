@@ -412,6 +412,51 @@
   }
 }
 
+/* Reduced motion: the mark where the reader arrived shows without fading in or out; the viewer
+   removes it after 2.2 s. (The global rule would otherwise cut the animation to its last frame,
+   which is invisible.) */
+@media (prefers-reduced-motion: reduce) {
+  .wb-flash {
+    animation: none;
+    opacity: 1;
+  }
+}
+
+/* Forced colours (Windows High Contrast): backgrounds become Canvas, so the tints, bands and
+   bars that show coding would vanish, and so would the caret. Coded text gets an underline in
+   the system highlight colour, the margin bars keep their code colour, and focus, the caret,
+   our drawn selection and the arrival mark use system colours. */
+@media (forced-colors: active) {
+  .wb-r--coded {
+    text-decoration: underline 2px Highlight;
+    text-underline-offset: 0.22em;
+    text-decoration-skip-ink: none;
+  }
+  .wb-stripe__bar {
+    forced-color-adjust: none;
+    width: 4px;
+    outline: 1px solid CanvasText;
+  }
+  .wb-caret {
+    forced-color-adjust: none;
+    width: 2px;
+    background: CanvasText;
+  }
+  .wb-text:focus-visible {
+    outline: 2px solid Highlight;
+    outline-offset: 6px;
+  }
+  .wb-sel {
+    mix-blend-mode: normal;
+    background: transparent;
+    outline: 2px solid Highlight;
+  }
+  .wb-flash {
+    background: transparent;
+    outline: 3px solid Highlight;
+  }
+}
+
 /* ── Bars over the text: find, adjusting a coding ───────────────────────────────────── */
 
 .wb-find,

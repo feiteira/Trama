@@ -94,7 +94,9 @@ function sniffMedia(b: Uint8Array): string | null {
 }
 
 const SRT_CUE = /^\s*\d+\s*\n\s*\d{1,2}:\d{2}:\d{2}[,.]\d{1,3}\s*-->\s*\d{1,2}:\d{2}:\d{2}[,.]\d{1,3}/;
-const HTML_START = /^\s*(?:<\?xml[^>]*>\s*)?(?:<!--[\s\S]*?-->\s*)*(?:<!doctype\s+html|<html[\s>]|<head[\s>]|<body[\s>])/i;
+// Each comment's body cannot contain "-->", so a run of comments splits only one way (a lazy
+// [\s\S]*? could run across "--><!--" and backtrack through 2^n splits when no <html> follows).
+const HTML_START = /^\s*(?:<\?xml[^>]*>\s*)?(?:<!--(?:(?!-->)[\s\S])*-->\s*)*(?:<!doctype\s+html|<html[\s>]|<head[\s>]|<body[\s>])/i;
 
 function sniffText(head: string, fromExt: ImportFormat | null): ImportFormat {
   const t = head.replace(/^\u{feff}/u, '').replace(/\r\n?/g, '\n');

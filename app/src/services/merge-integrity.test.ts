@@ -147,7 +147,7 @@ describe('merging keeps derived and paired records in step', () => {
     expect(rows[0]!.codings).toBe(1);
   });
 
-  it('A3: a teammate\'s coding with a code deleted here is not counted anywhere', async () => {
+  it('A3: a teammate\'s coding with a code deleted here brings the code back (newer work wins), counted everywhere', async () => {
     const { c, pa, pr, doc, code } = await twoCopies();
     await deleteCode(pa, code.id, { withChildren: 'delete' });
     c.advance();
@@ -155,10 +155,12 @@ describe('merging keeps derived and paired records in step', () => {
     await applyCode(pr, { documentId: doc.id, start: s, end: s + 16, codeId: code.id });
     c.advance();
     const r = await mergeTeammateCopy(pa, await copyOf(pr));
-    expect(r.removedCodings).toBeGreaterThanOrEqual(1);
-    expect((await listDocuments(pa))[0]!.codings).toBe(0);
-    expect((await projectSummary(pa)).codings).toBe(0);
-    expect(await allCodings(pa)).toHaveLength(0);
+    expect(r.revived).toEqual([{ kind: 'code', id: code.id, name: 'Trust' }]);
+    expect((await pa.store.get('code', code.id))!.deleted).toBe(false);
+    // Rui's coding and Ana's own (taken by her delete) are both back, and counted alike.
+    expect((await listDocuments(pa))[0]!.codings).toBe(2);
+    expect((await projectSummary(pa)).codings).toBe(2);
+    expect(await allCodings(pa)).toHaveLength(2);
   });
 
   it('A4: codings in a document deleted here are not counted in the codebook or the overview', async () => {

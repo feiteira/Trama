@@ -56,17 +56,36 @@ export function DocumentGroups({
     return m;
   }, [items]);
 
-  const create = async (name: string) => {
+  // The name field goes away with the focus in it. Finished from the keyboard (Enter, Esc),
+  // the focus goes to the group named, or back to 'New document group' when nothing was made;
+  // finished by clicking elsewhere, it stays where the click put it.
+  const box = useRef<HTMLDivElement>(null);
+  const newButton = useRef<HTMLButtonElement>(null);
+  const focusAfter = (groupId: string | null, tries = 20) =>
+    requestAnimationFrame(() => {
+      const row = groupId ? box.current?.querySelector<HTMLElement>(`[data-testid="group-${CSS.escape(groupId)}"] [data-testid="group-filter"]`) : null;
+      // A group just created shows once the list reloads: wait a few frames for it.
+      if (groupId && !row && tries > 0) return void focusAfter(groupId, tries - 1);
+      (row ?? newButton.current)?.focus({ preventScroll: true });
+    });
+  const create = async (name: string, byKey: boolean) => {
     setEditing(null);
-    if (!name.trim()) return;
+    if (!name.trim()) {
+      if (byKey) focusAfter(null);
+      return;
+    }
     try {
-      record((await groupsService.createGroup(project, { name })).undo);
+      const made = await groupsService.createGroup(project, { name });
+      record(made.undo);
+      if (byKey) focusAfter(made.group.id);
     } catch (e) {
       fail(e);
+      if (byKey) focusAfter(null);
     }
   };
-  const rename = async (id: string, name: string) => {
+  const rename = async (id: string, name: string, byKey: boolean) => {
     setEditing(null);
+    if (byKey) focusAfter(id);
     const g = groups.find((x) => x.id === id);
     if (!g || !name.trim() || name.trim() === g.name) return;
     try {
@@ -115,7 +134,7 @@ export function DocumentGroups({
   const colourGroup = colour ? groups.find((g) => g.id === colour.id) : undefined;
 
   return (
-    <div className={cx('dgroups', open && 'dgroups--open')} data-testid="doc-groups">
+    <div ref={box} className={cx('dgroups', open && 'dgroups--open')} data-testid="doc-groups">
       <div className="dgroups__head">
         <button type="button" className="dgroups__toggle" aria-expanded={open} onClick={() => onOpenChange(!open)} data-testid="doc-groups-toggle">
           <ChevronRight size={13} className={cx('dpanel__section-chevron', open && 'dpanel__section-chevron--open')} aria-hidden />
@@ -123,6 +142,7 @@ export function DocumentGroups({
           <span className="dpanel__section-count">{groups.length}</span>
         </button>
         <IconButton
+          ref={newButton}
           icon={Plus}
           label={t('documents.groups.new')}
           size="sm"
@@ -165,7 +185,15 @@ export function DocumentGroups({
               data-testid={`group-${g.id}`}
             >
               {editing === g.id ? (
-                <InlineName initial={g.name} label={t('documents.groups.name')} onDone={(n) => void rename(g.id, n)} onCancel={() => setEditing(null)} />
+                <InlineName
+                  initial={g.name}
+                  label={t('documents.groups.name')}
+                  onDone={(n, byKey) => void rename(g.id, n, byKey)}
+                  onCancel={(byKey) => {
+                    setEditing(null);
+                    if (byKey) focusAfter(g.id);
+                  }}
+                />
               ) : (
                 <button
                   type="button"
@@ -211,7 +239,12 @@ export function DocumentGroups({
           ))}
           {editing === 'new' ? (
             <li className="dgroup">
-              <InlineName initial="" placeholder={t('documents.groups.namePlaceholder')} label={t('documents.groups.name')} onDone={(n) => void create(n)} onCancel={() => setEditing(null)} />
+              <InlineName initial="" placeholder={t('documents.groups.namePlaceholder')} label={t('documents.groups.name')} onDone={(n, byKey) => void create(n, byKey)}
+                onCancel={(byKey) => {
+                  setEditing(null);
+                  if (byKey) focusAfter(null);
+                }}
+              />
             </li>
           ) : null}
           {!groups.length && editing !== 'new' ? <li className="dgroups__empty">{t('documents.groups.empty')}</li> : null}
@@ -225,14 +258,27 @@ export function DocumentGroups({
   );
 }
 
-function InlineName({ initial, label, placeholder, onDone, onCancel }: { initial: string; label: string; placeholder?: string; onDone: (name: string) => void; onCancel: () => void }) {
+function InlineName({
+  initial,
+  label,
+  placeholder,
+  onDone,
+  onCancel,
+}: {
+  initial: string;
+  label: string;
+  placeholder?: string;
+  /** `byKey`: finished with Enter or Esc (the focus is the caller's to place), not by a blur. */
+  onDone: (name: string, byKey: boolean) => void;
+  onCancel: (byKey: boolean) => void;
+}) {
   const [value, setValue] = useState(initial);
   const done = useRef(false);
-  const finish = (ok: boolean) => {
+  const finish = (ok: boolean, byKey: boolean) => {
     if (done.current) return;
     done.current = true;
-    if (ok && value.trim()) onDone(value);
-    else onCancel();
+    if (ok && value.trim()) onDone(value, byKey);
+    else onCancel(byKey);
   };
   return (
     <input
@@ -247,14 +293,14 @@ function InlineName({ initial, label, placeholder, onDone, onCancel }: { initial
       onKeyDown={(e) => {
         if (e.key === 'Enter') {
           e.preventDefault();
-          finish(true);
+          finish(true, true);
         } else if (e.key === 'Escape') {
           e.preventDefault();
           e.stopPropagation();
-          finish(false);
+          finish(false, true);
         }
       }}
-      onBlur={() => finish(true)}
+      onBlur={() => finish(true, false)}
       data-testid="group-name-input"
     />
   );

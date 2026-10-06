@@ -89,7 +89,7 @@ export function validate<K extends Kind>(kind: K, draft: Draft<K>): Draft<K> {
       });
       sync.sort((a, b) => a.pos - b.pos || a.ms - b.ms);
       if (d.revs === undefined) return { ...draft, text, sync } as Draft<K>;
-      const revs = Array.isArray(d.revs) ? (d.revs as unknown[]).filter((r): r is string => typeof r === 'string' && /^[0-9a-f]{16}$/.test(r)) : [];
+      const revs = Array.isArray(d.revs) ? (d.revs as unknown[]).filter((r): r is string => typeof r === 'string' && /^~?[0-9a-f]{16}$/.test(r)) : [];
       return { ...draft, text, sync, revs: revs.slice(-REVS_MAX) } as Draft<K>;
     }
 

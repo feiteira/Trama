@@ -5,7 +5,7 @@ import { utf8 } from '../../bytes';
 import type { Entity, Kind } from '../../model/types';
 import { validate } from '../../model/validate';
 import type { ProjectBundle } from '../bundle';
-import { forgeSize } from '../forgeZip.testutil';
+import { forgeName, forgeSize } from '../forgeZip.testutil';
 import { buildDocx } from '../office/docx';
 import { RefiError } from './common';
 import { importQdpx, QDPX_WARNING_CODES, type QdpxBundle, type QdpxImportOptions } from './qdpx-import';
@@ -555,6 +555,28 @@ describe('decoding and data that must not be lost or misattributed', () => {
     expect(all(none, 'coder').map((c) => c.name)).toEqual(['Eu']);
   });
 
+  it('a known project creator never takes over the codings of an unlisted second coder', async () => {
+    const text = 'Interviewer: How are you?\nP1: I feel calm in the garden.';
+    const s = cpIndex(text, 'I feel calm');
+    const AA = 'a0000000-0000-4000-8000-0000000000aa';
+    const BB = 'b0000000-0000-4000-8000-0000000000bb';
+    const users = `<Users><User guid="${AA}" name="Ana"/></Users>`;
+    const xml = project(users + CODE + textSource(sel(s, s + 19, 'x', AA) + sel(s, s + 19, 'x', BB)), `creatingUserGUID="${AA}"`);
+    const b = await importQdpx(zip({ 'project.qde': xml, 't.txt': text }), OPTS);
+    expectValid(b);
+    expect(all(b, 'coder').map((c) => c.name).sort()).toEqual(['Ana', 'User b0000000']);
+    expect(codingsOf(b)).toEqual(['T|Calm|Ana|I feel calm in the ', 'T|Calm|User b0000000|I feel calm in the ']);
+    expect(b.issues.find((i) => i.code === 'unknownUser')?.count).toBe(1);
+    expect(b.issues.find((i) => i.code === 'duplicateCoding')).toBeUndefined();
+    // A known selection user does not take over a Coding whose own (unlisted) creatingUser differs.
+    const mixed = `<PlainTextSelection guid="${uuidLike()}" startPosition="${s}" endPosition="${s + 19}" creatingUser="${AA}"><Coding guid="${uuidLike()}" creatingUser="${BB}"><CodeRef targetGUID="a0000000-0000-4000-8000-000000000001"/></Coding></PlainTextSelection>`;
+    const m = await importQdpx(zip({ 'project.qde': project(users + CODE + textSource(mixed), `creatingUserGUID="${AA}"`), 't.txt': text }), OPTS);
+    expect(codingsOf(m)).toEqual(['T|Calm|User b0000000|I feel calm in the ']);
+    // No user on the coding or selection: the project creator is the coder.
+    const anon = await importQdpx(zip({ 'project.qde': project(users + CODE + textSource(sel(s, s + 19, 'x')), `creatingUserGUID="${AA}"`), 't.txt': text }), OPTS);
+    expect(codingsOf(anon)).toEqual(['T|Calm|Ana|I feel calm in the ']);
+  });
+
   it('keeps the descriptions of document groups and transcripts as memos', async () => {
     const xml = project(
       `<Sources>
@@ -595,5 +617,17 @@ describe('decoding and data that must not be lost or misattributed', () => {
     await expect(importQdpx(bomb, OPTS)).rejects.toThrow(/too large/);
     const bigSource = forgeSize(zip({ 'project.qde': qde, 't.txt': 'abc' }), 't.txt', 0xf0000000);
     await expect(importQdpx(bigSource, OPTS)).rejects.toThrow(RefiError);
+  });
+
+  it('refuses an archive holding one entry name twice (also differing only in case or path spelling)', async () => {
+    const qde = project(textSource(''));
+    // Each duplicate of project.qde would be inflated, while the budget counted the name once.
+    let bomb = zip({ 'project.qde': qde, 'project.qdX': qde, 'project.qdY': qde, 't.txt': 'abc' });
+    bomb = forgeName(forgeName(bomb, 'project.qdX', 'project.qde'), 'project.qdY', 'project.qde');
+    const t0 = Date.now();
+    await expect(importQdpx(forgeSize(bomb, 'project.qde', 250 * 1024 * 1024), OPTS)).rejects.toThrow(/more than once/);
+    expect(Date.now() - t0).toBeLessThan(2000);
+    // Lookups ignore case and "./": two spellings of one path are as ambiguous.
+    await expect(importQdpx(zip({ 'project.qde': qde, 'T.TXT': 'abc', './t.txt': 'abd' }), OPTS)).rejects.toThrow(/more than once/);
   });
 });

@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { CircleAlert, CircleCheck, X } from 'lucide-react';
 import { cx } from '../cx';
 import { useI18n } from '../i18n';
+import { problemKey } from '../problems';
 import './toast.css';
 
 // One short message at a time at the bottom of the window, often with an action ("Code
@@ -53,8 +54,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       error: (e) => {
         const id = ++seq;
         console.error(e);
+        const known = problemKey(e);
         const message = e instanceof Error ? e.message : String(e);
-        setToast({ message: t('common.unknownError', { message }), tone: 'danger', id });
+        setToast({ message: known ? t(known) : t('common.unknownError', { message }), tone: 'danger', id });
         return id;
       },
       dismiss: (id) => setToast((cur) => (id === undefined || cur?.id === id ? null : cur)),

@@ -74,3 +74,26 @@ export function filterCandidates<T extends { text: string }>(list: readonly T[],
   const q = fold(query);
   return q ? list.filter((c) => fold(c.text).includes(q)) : [...list];
 }
+
+/** The kinds of record a preview lists outside document texts, in the order shown. */
+export const FIELD_KINDS = ['document', 'case', 'code', 'docgroup', 'coding', 'memo'] as const;
+export type PreviewFieldKind = (typeof FIELD_KINDS)[number];
+
+export type FieldName = 'name' | 'description' | 'comment' | 'title' | 'body' | 'inclusion' | 'exclusion' | 'example' | 'value' | 'filename' | 'other';
+
+/** Which field of a record a hit is in, as the preview names it ("values.<id>" is an attribute value). */
+export function fieldName(field: string): FieldName {
+  if (field.startsWith('values.')) return 'value';
+  if (field.endsWith('filename')) return 'filename';
+  return (['name', 'description', 'comment', 'title', 'body', 'inclusion', 'exclusion', 'example'] as const).find((f) => f === field) ?? 'other';
+}
+
+/** Hits outside document texts by kind of record (kinds without hits left out), with their replacements counted. */
+export function groupFields<F extends { kind: string; count: number }>(fields: readonly F[]): { kind: PreviewFieldKind; count: number; fields: F[] }[] {
+  const out: { kind: PreviewFieldKind; count: number; fields: F[] }[] = [];
+  for (const kind of FIELD_KINDS) {
+    const list = fields.filter((f) => f.kind === kind);
+    if (list.length) out.push({ kind, count: list.reduce((n, f) => n + f.count, 0), fields: list });
+  }
+  return out;
+}

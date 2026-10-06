@@ -177,6 +177,11 @@ export const codes: Messages['codes'] = {
     confirm: 'Criar subcódigo',
   },
   import: {
+    malformedQuotes: {
+      one: 'Uma célula entre aspas na linha {lines} nunca é fechada, por isso os códigos das linhas seguintes podem ter sido lidos como parte de uma só célula e ficariam em falta. Verifique o ficheiro numa folha de cálculo antes de importar.',
+      other: 'Há células entre aspas nas linhas {lines} que nunca são fechadas, por isso os códigos das linhas seguintes podem ter sido lidos como parte de uma só célula e ficariam em falta. Verifique o ficheiro numa folha de cálculo antes de importar.',
+    },
+    quotesConfirm: 'Verifiquei o ficheiro: importar mesmo assim',
     title: 'Importar um livro de códigos',
     confirm: 'Juntar ao livro de códigos',
     new: { one: 'código novo', other: 'códigos novos' },

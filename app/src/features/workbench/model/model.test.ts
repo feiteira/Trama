@@ -5,7 +5,9 @@ import { formatTime, paragraphAtTime, paragraphIndexAt, speakerLabelLength, spli
 import { boundaryOffset, cleanSelection, type NodeLike, pointIn, rangeOffsets, splitsSurrogate } from './offsets';
 import { findAll, firstMatchFrom } from './find';
 import { codeOptions, exactCode, favourites, pushRecent, recentCodes, searchCodes } from './codeSearch';
-import { filterByCoder, markStyles, parseCoderFilter, coderFilterKey, runPaint } from './highlight';
+import { filterByCoder, markColor, markStyles, parseCoderFilter, coderFilterKey, READING_PAPER, runPaint } from './highlight';
+import { contrast } from '../../../ui/color';
+import { PALETTE } from '../../../core/model/types';
 import { code as mkCode } from '../../../core/qda/fixtures';
 
 // ---------------------------------------------------------------------------------------------
@@ -401,5 +403,30 @@ describe('highlight', () => {
     const two = runPaint(['x', 'y'], s).background!;
     expect(two.match(/linear-gradient/g)).toHaveLength(4);
     expect(two).toContain('calc(100% - 2px)');
+  });
+});
+
+describe('mark colours (WCAG 1.4.11)', () => {
+  it('draws every palette colour’s band and bar at 3:1 or more on the reading page, in both themes', () => {
+    for (const dark of [false, true]) {
+      const paper = dark ? READING_PAPER.dark : READING_PAPER.light;
+      for (const c of PALETTE) {
+        for (const state of ['normal', 'active'] as const) expect(contrast(markColor(c, state, dark), paper)).toBeGreaterThanOrEqual(3);
+      }
+    }
+    // The reported cases: amber and lime on light paper, violet and magenta on dark.
+    expect(contrast(markColor('#f3a712', 'normal'), READING_PAPER.light)).toBeGreaterThanOrEqual(3);
+    expect(contrast(markColor('#6c4ab6', 'normal', true), READING_PAPER.dark)).toBeGreaterThanOrEqual(3);
+  });
+
+  it('keeps colours that already contrast, and the band uses the corrected colour', () => {
+    expect(markColor('#3a6ea5', 'normal')).toBe('#3a6ea5');
+    const s = markStyles([{ id: 'x', code_id: 'A', start: 0, end: 5 }], () => '#f3a712', { activeCodeIds: null, activeOnly: false });
+    const bg = runPaint(['x'], s).background!;
+    expect(bg).toContain(markColor('#f3a712', 'normal'));
+    expect(markColor('#f3a712', 'normal')).not.toBe('#f3a712');
+    // Hue kept: still more red than blue.
+    const m = markColor('#f3a712', 'normal');
+    expect(parseInt(m.slice(1, 3), 16)).toBeGreaterThan(parseInt(m.slice(5, 7), 16));
   });
 });

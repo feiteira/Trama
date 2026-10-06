@@ -359,7 +359,8 @@ export async function listBackups(platform: Platform, folder: string, tag?: stri
  * overwritten. A backup made by this library opens with its key; one from elsewhere needs the
  * passphrase or recovery phrase of the library that made it (the backup carries that keyring).
  * The restored project keeps the original id when this library does not hold it already, so
- * teammates' copies still merge with it.
+ * teammates' copies still merge with it; otherwise it gets a new id and carries the original's
+ * for copies (`Project.copyId`), which merge both ways as before.
  */
 export interface RestoreOptions {
   now?: Date;
@@ -409,6 +410,8 @@ export async function restoreBackup(library: Library, bytes: Uint8Array, slot?: 
   const name = restoredProjectName(bundle.project.name, opts.now ?? new Date(), opts.restoredName);
   const id = bundle.project.id;
   const free = !!id && !library.projects.some((p) => p.id === id) && !(await library.platform.projects.exists(id));
-  const options = { name, keepId: free, me: bundle.manifest.me ?? null };
+  // Restored next to the original, it gets a new id but keeps the original's for copies: the
+  // team's copies still merge into it, and its copies into theirs.
+  const options = { name, keepId: free, me: bundle.manifest.me ?? null, lineage: free ? null : id };
   return opts.open === false ? library.importBundle(bundle, { ...options, open: false }) : library.importBundle(bundle, options);
 }

@@ -27,3 +27,23 @@ export function forgeSize(zip: Uint8Array, name: string | RegExp, size: number):
   if (!hits) throw new Error(`no entry ${String(name)}`);
   return out;
 }
+
+/**
+ * Renames every entry called `from` to `to` (same length), in the local headers and the central
+ * directory, so an archive can hold one name twice, as a zip bomb's may.
+ */
+export function forgeName(zip: Uint8Array, from: string, to: string): Uint8Array {
+  const a = new TextEncoder().encode(from);
+  const b = new TextEncoder().encode(to);
+  if (a.length !== b.length) throw new Error('names must have the same length');
+  const out = zip.slice();
+  let hits = 0;
+  for (let i = 0; i + a.length <= out.length; i++) {
+    if (a.every((x, j) => out[i + j] === x)) {
+      out.set(b, i);
+      hits++;
+    }
+  }
+  if (!hits) throw new Error(`no entry ${from}`);
+  return out;
+}

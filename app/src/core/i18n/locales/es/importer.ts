@@ -266,6 +266,7 @@ export const importer: Messages['importer'] = {
 
   warnings: {
     legacyEncoding: 'Este archivo no está en UTF-8, así que se ha leído como Europa occidental (Windows-1252). Compruebe que las letras acentuadas se ven bien.',
+    damagedUtf8: { one: '{n} carácter no se ha podido leer (el archivo está dañado en ese punto) y aparece como �. El resto del texto se ha leído con normalidad.', other: '{n} caracteres no se han podido leer (el archivo está dañado en esos puntos) y aparecen como �. El resto del texto se ha leído con normalidad.' },
     pdfImagePages: { one: 'La página {pages} parece una imagen; el OCR todavía no está disponible, así que falta su texto.', other: 'Las páginas {pages} parecen imágenes; el OCR todavía no está disponible, así que falta su texto.' },
     pdfNoText: 'Este PDF no tiene capa de texto: probablemente está escaneado. El OCR todavía no está disponible, así que el documento quedará vacío, pero el PDF se conserva.',
     imagesSkipped: { one: 'Se ha dejado fuera {n} imagen: Trama importa el texto.', other: 'Se han dejado fuera {n} imágenes: Trama importa el texto.' },
@@ -313,7 +314,7 @@ export const importer: Messages['importer'] = {
     sameTitle: 'Ya tiene este proyecto',
     sameBody: '«{name}», en su biblioteca, es el mismo proyecto. Este archivo puede ser la copia de un compañero.',
     merge: 'Fusionar con «{name}»',
-    mergeHint: 'Añade el trabajo de este archivo a su proyecto. Se conserva la versión más reciente de cada elemento; no se quita nada suyo.',
+    mergeHint: 'Añade el trabajo de este archivo a su proyecto. Se conserva la versión más reciente de cada elemento, salvo el texto de un documento editado en ambos lados: se conserva el suyo, y Trama le dice cuál.',
     separate: 'Importar como copia aparte',
     separateHint: 'Crea un proyecto nuevo junto al que ya tiene. Los dos ya no se podrán fusionar.',
     nothingLost: 'Todo lo que contiene este archivo se puede traer.',
@@ -329,7 +330,7 @@ export const importer: Messages['importer'] = {
     importing: 'Importando el proyecto…',
     mergeAction: 'Fusionar',
     merging: 'Fusionando…',
-    merged: 'Fusionado con «{name}»: {added} nuevos, {updated} actualizados.',
+    mergedTitle: 'Copia fusionada con «{name}»',
     mergedNothing: '«{name}» ya tenía todo lo que contiene este archivo.',
     errorTitle: 'Este archivo no se puede importar',
     importedTitle: '«{name}» está en su biblioteca',

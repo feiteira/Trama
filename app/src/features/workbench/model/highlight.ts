@@ -1,5 +1,5 @@
 import type { Coding } from '../../../core/model/types';
-import { withAlpha } from '../../../ui/color';
+import { ensureContrast, withAlpha } from '../../../ui/color';
 import { assignLanes } from './lanes';
 
 // How codings look inside the text. Each coding tints its passage with its code's colour at a
@@ -60,8 +60,20 @@ export interface RunPaint {
 
 const FILL: Record<MarkState, number> = { normal: 0.15, active: 0.3, dim: 0.035 };
 const FILL_DARK: Record<MarkState, number> = { normal: 0.22, active: 0.4, dim: 0.06 };
-const BAND: Record<MarkState, number> = { normal: 0.75, active: 1, dim: 0.22 };
 export const BAND_PX = 2;
+
+/** The reading page (--paper-reading in ui/tokens.css), which bands and margin bars sit on. */
+export const READING_PAPER = { light: '#fdfcf9', dark: '#22211e' } as const;
+
+/**
+ * The colour a coding's band and margin bar are drawn in: the code's colour, deepened (light
+ * theme) or lifted (dark theme) to at least 3:1 against the page so that every palette colour
+ * stays visible (WCAG 1.4.11); dimmed codings fade on purpose. The tint keeps the plain colour.
+ */
+export function markColor(color: string, state: MarkState, dark = false): string {
+  if (state === 'dim') return withAlpha(color, 0.22);
+  return ensureContrast(color, dark ? READING_PAPER.dark : READING_PAPER.light, 3);
+}
 
 /** The paint of a run covered by `ids` (empty object for plain text). */
 export function runPaint(ids: readonly string[], styles: ReadonlyMap<string, MarkStyle>, dark = false): RunPaint {
@@ -76,7 +88,7 @@ export function runPaint(ids: readonly string[], styles: ReadonlyMap<string, Mar
     if (!s) continue;
     const c = withAlpha(s.color, fill[s.state] * damp);
     fills.push(`linear-gradient(${c}, ${c})`);
-    if (s.band < MAX_BANDS) bands.push({ band: s.band, css: withAlpha(s.color, BAND[s.state]) });
+    if (s.band < MAX_BANDS) bands.push({ band: s.band, css: markColor(s.color, s.state, dark) });
   }
   if (!fills.length) return {};
   bands.sort((a, b) => a.band - b.band);

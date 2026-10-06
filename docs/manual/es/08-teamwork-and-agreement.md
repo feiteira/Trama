@@ -58,9 +58,9 @@ Los resultados muestran estadísticos de resumen, una tabla **por código** y **
 Los desacuerdos son la parte útil: cada uno es un pasaje en el que el libro de códigos puede afinarse. La lista muestra todos los segmentos sin equivalente: codificados por un solo codificador, o con **límites distintos** en exceso. Seleccione uno para leer el pasaje con las codificaciones de los dos, una junto a otra. Después:
 
 - **Aceptar a A** o **Aceptar a B**: conservar la codificación de uno y quitar la del otro;
-- **Mantener ambas**: dejar las dos y marcar el desacuerdo como revisado.
+- **Mantener ambas**: dejar las dos y marcar el desacuerdo como resuelto.
 
-**Ocultar los revisados** ayuda a no perderse en una lista larga. Cada decisión se puede deshacer.
+**Ocultar los resueltos** ayuda a no perderse en una lista larga. Cada decisión se puede deshacer.
 
 <a id="report"></a>
 

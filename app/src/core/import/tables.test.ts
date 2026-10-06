@@ -77,6 +77,26 @@ describe('csv helpers', () => {
   it('tidyHeaders treats case-variants as duplicates', () => {
     expect(tidyHeaders(['Idade', 'idade ', ' '], 3)).toEqual(['Idade', 'idade (2)', 'C']);
   });
+  it('rowsToTable leaves out columns no row uses, whatever their position', () => {
+    expect(rowsToTable('t', [['a', '', 'c', ''], ['1', '', '', ''], ['2', '', '3', '']])).toMatchObject({ headers: ['a', 'c'], rows: [['1', ''], ['2', '3']], warnings: [] });
+    // A headerless column with data keeps its letter in the file.
+    expect(rowsToTable('t', [['a', '', ''], ['1', '', 'x']]).headers).toEqual(['a', 'C']);
+  });
+  it('a CSV saved from a sheet whose used range reaches column XFD keeps only the used columns', () => {
+    // Excel writes every row out to the used range: one stray value in XFD1 is 16 383 commas a row.
+    const lines = ['id,idade,resposta' + ','.repeat(16380) + ',x'];
+    for (let i = 0; i < 300; i++) lines.push(`R${i},${20 + (i % 50)},"Resposta ${i} sobre a horta"` + ','.repeat(16381));
+    const t0 = performance.now();
+    const t = parseCsv(lines.join('\r\n'), 'inquerito');
+    expect(t.headers).toEqual(['id', 'idade', 'resposta', 'x']);
+    expect(t.rows).toHaveLength(300);
+    expect(t.rows[299]).toEqual(['R299', '69', 'Resposta 299 sobre a horta', '']);
+    expect(t.warnings).toEqual([]);
+    // With nothing past the third column, only the three remain.
+    const plain = parseCsv(['id,idade,resposta' + ','.repeat(16381), ...lines.slice(1)].join('\n'), 'inquerito');
+    expect(plain.headers).toEqual(['id', 'idade', 'resposta']);
+    expect(performance.now() - t0).toBeLessThan(5000); // guards against the 16 384-column table, not a benchmark
+  });
   it('rowsToTable drops empty rows before the header', () => {
     expect(rowsToTable('t', [[], ['', ''], ['h1', 'h2'], ['a', 'b']])).toMatchObject({ headers: ['h1', 'h2'], rows: [['a', 'b']] });
   });

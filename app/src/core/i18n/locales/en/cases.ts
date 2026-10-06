@@ -115,6 +115,11 @@ export const cases = {
     noneBody: 'Documents already linked to a case are left as they are.',
   },
   import: {
+    malformedQuotes: {
+      one: 'A quoted cell on line {lines} is never closed, so the rows after it may have been read as part of one cell: those cases would get nothing, and their values would go to the case above. Check the file in a spreadsheet before importing.',
+      other: 'Quoted cells on lines {lines} are never closed, so the rows after them may have been read as part of one cell: those cases would get nothing, and their values would go to the case above. Check the file in a spreadsheet before importing.',
+    },
+    quotesConfirm: 'I have checked the rows: import anyway',
     menu: 'Import attributes from a spreadsheet…',
     title: 'Import attributes',
     intro: 'Choose a CSV or Excel file with one row per case: a column with the case names, and one column per attribute.',

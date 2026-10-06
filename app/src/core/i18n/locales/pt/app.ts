@@ -60,6 +60,10 @@ export const app: Messages['app'] = {
     redoneBare: 'Refeito.',
     nothingToUndo: 'Não há nada para anular.',
     nothingToRedo: 'Não há nada para refazer.',
+    refusedUndo: 'Não é possível anular: {what}. Parte deste passo foi alterada depois (uma gravação associada, a cópia de um colega integrada…), por isso foi retirado da lista de anulação.',
+    refusedRedo: 'Não é possível refazer: {what}. Parte deste passo foi alterada depois (uma gravação associada, a cópia de um colega integrada…), por isso foi retirado da lista de refazer.',
+    refusedUndoBare: 'Não é possível anular este passo: parte dele foi alterada depois (uma gravação associada, a cópia de um colega integrada…), por isso foi retirado da lista de anulação.',
+    refusedRedoBare: 'Não é possível refazer este passo: parte dele foi alterada depois (uma gravação associada, a cópia de um colega integrada…), por isso foi retirado da lista de refazer.',
   },
   example: {
     badge: 'Exemplo',

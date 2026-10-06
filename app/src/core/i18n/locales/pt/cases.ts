@@ -116,6 +116,11 @@ export const cases: Messages['cases'] = {
     noneBody: 'Os documentos já associados a um caso ficam como estão.',
   },
   import: {
+    malformedQuotes: {
+      one: 'Uma célula entre aspas na linha {lines} nunca é fechada, por isso as linhas seguintes podem ter sido lidas como parte de uma só célula: esses casos ficariam sem nada e os seus valores iriam para o caso de cima. Verifique o ficheiro numa folha de cálculo antes de importar.',
+      other: 'Há células entre aspas nas linhas {lines} que nunca são fechadas, por isso as linhas seguintes podem ter sido lidas como parte de uma só célula: esses casos ficariam sem nada e os seus valores iriam para o caso de cima. Verifique o ficheiro numa folha de cálculo antes de importar.',
+    },
+    quotesConfirm: 'Verifiquei as linhas: importar mesmo assim',
     menu: 'Importar atributos de uma folha de cálculo…',
     title: 'Importar atributos',
     intro: 'Escolha um ficheiro CSV ou Excel com uma linha por caso: uma coluna com os nomes dos casos e uma coluna por atributo.',

@@ -8,7 +8,7 @@
 // stack, so consecutive saves of one memo become one entry, until anything else touches the
 // stack (another operation recorded, an undo, a redo).
 
-import type { UndoManager, Undoable } from '../../services/undo';
+import { spanUndo, type UndoManager, type Undoable } from '../../services/undo';
 
 export class MemoSaveUndo {
   private open: { memoId: string; first: Undoable; last: Undoable } | null = null;
@@ -40,6 +40,8 @@ export class MemoSaveUndo {
       return;
     }
     const held = { memoId, first: undo, last: undo };
+    let span: { last: Undoable; step: Undoable } | null = null;
+    const spanned = () => (span?.last === held.last ? span.step : (span = { last: held.last, step: spanUndo(held.first, held.last) }).step);
     const entry: Undoable = {
       label: undo.label,
       get detail() {
@@ -49,9 +51,10 @@ export class MemoSaveUndo {
         return held.first.weight + (held.last === held.first ? 0 : held.last.weight);
       },
       // The first save's "before" is the text before this run of typing; the last save's
-      // "after" is the text as it ended.
-      undo: () => held.first.undo(),
-      redo: () => held.last.redo(),
+      // "after" is the text as it ended. One step spanning both (each step only writes over
+      // the records as it left them itself).
+      undo: () => spanned().undo(),
+      redo: () => spanned().redo(),
     };
     this.recording = true;
     try {

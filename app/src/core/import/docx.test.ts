@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { strToU8, unzipSync, zipSync } from 'fflate';
 import { describe, expect, it } from 'vitest';
-import { forgeSize } from '../export/forgeZip.testutil';
+import { forgeName, forgeSize } from '../export/forgeZip.testutil';
 import { type MammothLike, docxToText, loadMammoth } from './docx';
 
 const fixture = (name: string) => new Uint8Array(readFileSync(new URL(`../../../test-fixtures/import/${name}`, import.meta.url)));
@@ -79,7 +79,7 @@ describe('docxToText', () => {
       },
       images: { imgElement: () => ({}) },
     };
-    expect((await docxToText(new Uint8Array([1, 2, 3]), fake)).text).toBe('T\na\tb');
+    expect((await docxToText(fixture('report.docx'), fake)).text).toBe('T\na\tb');
     expect(seen.arrayBuffer).toBeInstanceOf(ArrayBuffer);
     expect(seen.buffer).toBe(seen.arrayBuffer);
   });
@@ -103,5 +103,63 @@ describe('zip bombs', () => {
     };
     await expect(docxToText(forged, fake)).rejects.toMatchObject({ code: 'TOO_LARGE' });
     expect(called).toBe(false);
+  });
+
+  /** A mammoth stand-in that records the archive it is given. */
+  function spy(): { fake: MammothLike; seen: () => Uint8Array | null } {
+    let seen: Uint8Array | null = null;
+    return {
+      fake: {
+        convertToHtml: (input) => {
+          seen = new Uint8Array(input.arrayBuffer);
+          return Promise.resolve({ value: '<p>ok</p>', messages: [] });
+        },
+        images: { imgElement: () => ({}) },
+      },
+      seen: () => seen,
+    };
+  }
+
+  it('stops a part that inflates past the size it declares (JSZip would trust the data, not the size)', async () => {
+    const files = unzipSync(fixture('report.docx'));
+    const doc = new TextDecoder().decode(files['word/document.xml']);
+    files['word/document.xml'] = strToU8(doc.replace('<w:body>', `<w:body>${' '.repeat(64 << 20)}`));
+    const forged = forgeSize(zipSync(files, { level: 9 }), 'word/document.xml', 4096);
+    const s = spy();
+    const t0 = performance.now();
+    await expect(docxToText(forged, s.fake)).rejects.toMatchObject({ code: 'DAMAGED', detail: 'docx' });
+    expect(performance.now() - t0).toBeLessThan(2000);
+    expect(s.seen()).toBeNull();
+  });
+
+  it('counts every part whatever its name: a main part renamed to .bin is still bounded', async () => {
+    const files = unzipSync(fixture('report.docx'));
+    const dec = (n: string) => new TextDecoder().decode(files[n]);
+    files['word/main.bin'] = files['word/document.xml']!;
+    delete files['word/document.xml'];
+    files['_rels/.rels'] = strToU8(dec('_rels/.rels').replace('word/document.xml', 'word/main.bin'));
+    const forged = forgeSize(zipSync(files), 'word/main.bin', 600 * 1024 * 1024);
+    const s = spy();
+    await expect(docxToText(forged, s.fake)).rejects.toMatchObject({ code: 'TOO_LARGE', detail: 'word/main.bin' });
+    expect(s.seen()).toBeNull();
+    // An honest renamed part still reads.
+    expect((await docxToText(zipSync(files))).text.startsWith('Relatório de campo')).toBe(true);
+  });
+
+  it('refuses a part stored twice, and hands mammoth only stored, verified parts with media left empty', async () => {
+    const dup = forgeName(zipSync({ 'word/document.xml': strToU8('<a/>'), 'word/documenX.xml': strToU8('<b/>') }), 'word/documenX.xml', 'word/document.xml');
+    await expect(docxToText(dup, spy().fake)).rejects.toMatchObject({ code: 'DAMAGED' });
+
+    const s = spy();
+    await docxToText(withImage(), s.fake);
+    const given = unzipSync(s.seen()!);
+    expect(given['word/media/image1.png']).toEqual(new Uint8Array(0));
+    expect(new TextDecoder().decode(given['word/document.xml']!)).toContain('<w:body>');
+    // Every entry is stored (method 0): nothing is left for JSZip to inflate.
+    const view = new DataView(s.seen()!.buffer);
+    for (let at = 0; view.getUint32(at, true) === 0x04034b50; ) {
+      expect(view.getUint16(at + 8, true)).toBe(0);
+      at += 30 + view.getUint16(at + 26, true) + view.getUint16(at + 28, true) + view.getUint32(at + 18, true);
+    }
   });
 });

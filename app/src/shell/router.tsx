@@ -1,4 +1,5 @@
 import React, { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from 'react';
+import { selectorFor } from './arrival';
 
 // Where the researcher is inside the open project. A plain history stack in memory: the app
 // has no URL bar, and nothing about where one was is ever written to disk.
@@ -105,6 +106,11 @@ export interface RouterValue {
   canGoBack: boolean;
   /** Forgets places that no longer exist, so Back never lands on a deleted record. */
   drop: (predicate: (r: Route) => boolean) => void;
+  /**
+   * Arriving at the place `key` by going Back: a selector for the control that had the focus
+   * when the researcher left it (a segment card), to give the focus back to. Asked once.
+   */
+  takeReturnFocus: (key: number) => string | null;
 }
 
 const RouterContext = createContext<RouterValue | null>(null);
@@ -112,17 +118,40 @@ const RouterContext = createContext<RouterValue | null>(null);
 export function RouterProvider({ initial, children }: { initial: Route; children: ReactNode }) {
   const seq = useRef(0);
   const [stack, setStack] = useState<Entry[]>(() => [{ key: 0, route: initial }]);
-  const go = useCallback((route: Route) => setStack((s) => pushEntry(s, route, ++seq.current)), []);
+  const stackRef = useRef(stack);
+  stackRef.current = stack;
+  // What had the focus on each place when it was left, and the place Back is returning to.
+  const leftFocus = useRef(new Map<number, string>());
+  const returning = useRef<number | null>(null);
+  const go = useCallback((route: Route) => {
+    const top = stackRef.current[stackRef.current.length - 1];
+    const sel = typeof document === 'undefined' ? null : selectorFor(document.activeElement);
+    if (top) {
+      if (sel) leftFocus.current.set(top.key, sel);
+      else leftFocus.current.delete(top.key);
+    }
+    returning.current = null;
+    setStack((s) => pushEntry(s, route, ++seq.current));
+  }, []);
   const replace = useCallback((route: Route) => setStack((s) => replaceTop(s, route, ++seq.current)), []);
-  const back = useCallback(() => setStack(popEntry), []);
+  const back = useCallback(() => {
+    const s = stackRef.current;
+    returning.current = s.length > 1 ? s[s.length - 2]!.key : null;
+    setStack(popEntry);
+  }, []);
+  const takeReturnFocus = useCallback((key: number) => {
+    if (returning.current !== key) return null;
+    returning.current = null;
+    return leftFocus.current.get(key) ?? null;
+  }, []);
   const drop = useCallback(
     (predicate: (r: Route) => boolean) => setStack((s) => dropEntries(s, predicate, { key: ++seq.current, route: { name: 'workbench' } })),
     [],
   );
   const value = useMemo<RouterValue>(() => {
     const top = stack[stack.length - 1]!;
-    return { route: top.route, routeKey: top.key, go, replace, back, drop, canGoBack: stack.length > 1 };
-  }, [stack, go, replace, back, drop]);
+    return { route: top.route, routeKey: top.key, go, replace, back, drop, takeReturnFocus, canGoBack: stack.length > 1 };
+  }, [stack, go, replace, back, drop, takeReturnFocus]);
   return <RouterContext.Provider value={value}>{children}</RouterContext.Provider>;
 }
 

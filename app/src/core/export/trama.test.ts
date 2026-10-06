@@ -8,7 +8,7 @@ import { createKeyring, newLibraryKey, newRecoveryPhrase, WrongSecretError } fro
 import { formatHlc } from '../hlc';
 import type { Entity, Kind } from '../model/types';
 import type { BundleRecord, ProjectBundle } from './bundle';
-import { forgeSize } from './forgeZip.testutil';
+import { forgeName, forgeSize } from './forgeZip.testutil';
 import {
   buildTramaZip, decryptTrama, encryptWithLibraryKey, encryptWithPassword, isSafePath, keyringOf, NotTramaFileError,
   protectionOf, readTramaZip, safeName, UnlockRequiredError,
@@ -188,6 +188,20 @@ describe('reading refuses damaged or forged files', () => {
     expect(reason(() => readTramaZip(forgeSize(many, /^blobs\/b\d$/, 512 * 1024 * 1024)))).toBe('too-large');
     // A large readable copy costs nothing: it is never inflated.
     expect(reason(() => readTramaZip(forgeSize(good(), 'readable/codebook.md', 0xf0000000)))).toBe('accepted');
+    expect(Date.now() - t0).toBeLessThan(2000);
+  });
+
+  it('refuses an archive repeating an entry name: each copy would be inflated, each counted once', () => {
+    const t0 = Date.now();
+    // Eight records named manifest.json, each declaring 500 MiB: 4 GiB of inflation from one name.
+    const files: Zippable = { 'manifest.json': utf8('{}') };
+    for (let i = 1; i < 8; i++) files[`manifest.jso${i}`] = utf8('{}');
+    let zip: Uint8Array = zipSync(files);
+    for (let i = 1; i < 8; i++) zip = forgeName(zip, `manifest.jso${i}`, 'manifest.json');
+    expect(reason(() => readTramaZip(forgeSize(zip, 'manifest.json', 500 * 1024 * 1024)))).toBe('duplicate-entry');
+    // Even a well-sized duplicate is refused: a reader could take either copy.
+    const two = forgeName(rezip(good(), (f) => (f['data/code.jsonX'] = f['data/code.jsonl']!)), 'data/code.jsonX', 'data/code.jsonl');
+    expect(reason(() => readTramaZip(two))).toBe('duplicate-entry');
     expect(Date.now() - t0).toBeLessThan(2000);
   });
 

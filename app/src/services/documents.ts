@@ -8,7 +8,8 @@ import { appendRev, capRevs, newRevId, revsOf } from './revs';
 import { applyEdits, computeEdits, mapOffset, mapRange, normalizeEdits, splitsPair, type Assoc, type TextEdit } from '../core/qda/ranges';
 import { orderAfterLast, placeBefore } from '../core/qda/tree';
 import { reanchorRestored } from './anchor';
-import { reapplyKey } from './pseudonyms';
+import { settleReferences } from './reconcile';
+import { keyApplied, reapplyKey } from './pseudonyms';
 import type { ProjectContext } from './context';
 import { stopper } from './jobs';
 import {
@@ -449,12 +450,22 @@ export async function restoreDocuments(ctx: ProjectContext, batch: string): Prom
   const restored = await restoreBatch(ctx, batch, ['document', 'doctext', 'coding', 'memo']);
   const fixed = await reanchorRestored(ctx, restored.get('coding') ?? [], batch);
   const docIds = restored.get('document') ?? [];
+  // Logged as the names read once the key is applied again below: never a name it replaced.
+  const named = await keyApplied(ctx);
   for (const id of docIds) {
     const d = await ctx.store.get('document', id);
-    if (d) await ctx.log('document.restore', q(d.name), { kind: 'document', id });
+    if (d) await ctx.log('document.restore', q(named(d.name)), { kind: 'document', id });
   }
+  // What came back without what it belongs to (a coding whose document was deleted again since,
+  // in another delete) goes back to the trash with it.
+  const settled = await settleReferences(ctx.store, batch);
   const pseudonymised = (await reapplyKey(ctx, restoredKeys(restored), 'restore')).replacements;
-  return { documents: docIds.length, codings: (restored.get('coding')?.length ?? 0) - fixed.removed, memos: restored.get('memo')?.length ?? 0, pseudonymised };
+  return {
+    documents: docIds.length,
+    codings: (restored.get('coding')?.length ?? 0) - fixed.removed - settled.codings,
+    memos: (restored.get('memo')?.length ?? 0) - settled.memos,
+    pseudonymised,
+  };
 }
 
 /** `kind:id` of what a restore brought back (a text counts as its document). */
@@ -489,6 +500,30 @@ export async function editDocumentText(ctx: ProjectContext, id: string, newText:
 }
 
 /**
+ * Adds to `plan` the edits of a document in the trash (its text, sync points and codings, which
+ * stay deleted): pseudonymisation reaches the trash too, so that restoring a document never brings
+ * back a name the key replaced, even once its entry is erased. Codings the edit leaves without
+ * text are emptied where they are.
+ */
+export async function planTrashedTextEdits(ctx: ProjectContext, plan: Plan, doc: Document, dt: DocText, rawEdits: readonly TextEdit[]): Promise<void> {
+  if (!doc.deleted || !dt.deleted) return;
+  const edits = normalizeEdits(rawEdits);
+  const text = applyEdits(dt.text, edits);
+  if (!edits.length || text === dt.text || text.length > LIMITS.textMax) return;
+  const sync = dt.sync.map((s) => ({ pos: Math.min(text.length, mapOffset(s.pos, edits, 'before')), ms: s.ms }));
+  plan.changeDeleted('doctext', dt, { text, sync, revs: nextRevs(dt, text) });
+  plan.changeDeleted('document', doc, { chars: text.length });
+  const codings = await ctx.store.list('coding', { includeDeleted: true, where: 'deleted = 1 AND document_id = ?', params: [doc.id] });
+  for (const c of codings) {
+    const r = mapRange(c, edits);
+    if (r) {
+      const t = text.slice(r.start, r.end);
+      if (r.start !== c.start || r.end !== c.end || t !== c.text) plan.changeDeleted('coding', c, { start: r.start, end: r.end, text: t });
+    } else if (c.text) plan.changeDeleted('coding', c, { text: '' });
+  }
+}
+
+/**
  * Applies edits (in the coordinates of the current text) to a document, remapping codings and
  * sync points. Used by `editDocumentText` and by pseudonymisation, which knows its edits.
  * `log: false` leaves the logging to the caller.
@@ -510,7 +545,7 @@ export async function applyTextEdits(
   const plan = new Plan();
   const sync = dt.sync.map((s) => ({ pos: Math.min(text.length, mapOffset(s.pos, edits, 'before')), ms: s.ms }));
   plan.change('doctext', dt, { text, sync, revs: opts.revs ?? nextRevs(dt, text) });
-  plan.change('document', doc, { chars: text.length });
+  plan.change('document', doc, { chars: text.length }, { derived: true });
 
   const codings = await ctx.store.list('coding', { where: 'document_id = ?', params: [id] });
   const removed: Coding[] = [];
@@ -524,7 +559,7 @@ export async function applyTextEdits(
     }
     const t = text.slice(r.start, r.end);
     if (r.start !== c.start || r.end !== c.end || t !== c.text) {
-      plan.change('coding', c, { start: r.start, end: r.end, text: t });
+      plan.change('coding', c, { start: r.start, end: r.end, text: t }, { derived: true });
       remapped++;
     }
   }

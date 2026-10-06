@@ -4,7 +4,7 @@ import { formatHlc, parseHlc } from '../hlc';
 import type { Coding, Draft, Kind } from '../model/types';
 import { ValidationError } from '../model/validate';
 import { SCHEMA_VERSION } from './schema';
-import { ErasedRecordError, Store } from './store';
+import { compareVersions, ErasedRecordError, Store, type Versioned } from './store';
 
 /** A clock the test moves by hand. */
 function clock(start = '2026-10-05T12:00:00Z') {
@@ -364,5 +364,52 @@ describe('batched lookups and erased records', () => {
     const { id: _i, created_at: _c, updated_at_hlc: _h, deleted: _d, ...draft } = p;
     await expect(store.put('pseudonym', { ...draft, id: p.id })).rejects.toBeInstanceOf(ErasedRecordError);
     expect((await store.get('pseudonym', p.id))!.original).toBe('∅');
+  });
+});
+
+describe('meaningful changes and writes that only follow (sem)', () => {
+  it('a derived write keeps the record\'s sem; an edit, a delete and a restore set it; a change in the trash keeps the delete\'s', async () => {
+    const { store, clock: c } = await open();
+    const ana = await store.put('coder', coder());
+    const d = await store.put('document', doc('Interview'));
+    const k = await store.put('code', code('Trust'));
+    const made = (await store.put('coding', coding(d.id, k.id, ana.id, 0, 1))) as Coding & Versioned;
+    expect(made.sem).toBe(made.updated_at_hlc);
+    c.advance(1000);
+    const [moved] = (await store.write({ puts: [{ kind: 'coding', draft: { ...coding(d.id, k.id, ana.id, 2, 3), id: made.id }, derived: true }] })).saved as (Coding & Versioned)[];
+    expect(moved!.sem).toBe(made.sem);
+    expect(moved!.updated_at_hlc > made.updated_at_hlc).toBe(true);
+    c.advance(1000);
+    await store.remove('coding', [made.id]);
+    const gone = (await store.get('coding', made.id)) as Coding & Versioned;
+    expect(gone.sem).toBe(gone.updated_at_hlc);
+    c.advance(1000);
+    await store.write({ tombstones: [{ kind: 'coding', draft: { ...coding(d.id, k.id, ana.id, 4, 5), id: made.id } }] });
+    const followed = (await store.get('coding', made.id)) as Coding & Versioned;
+    expect(followed.sem).toBe(gone.sem);
+    c.advance(1000);
+    await store.restore('coding', [made.id]);
+    const back = (await store.get('coding', made.id)) as Coding & Versioned;
+    expect(back.sem).toBe(back.updated_at_hlc);
+  });
+
+  it('a merge keeps the later meaningful change over a later write that only followed', async () => {
+    const { store } = await open();
+    const ana = await store.put('coder', coder());
+    const d = await store.put('document', doc('Interview'));
+    const k = await store.put('code', code('Trust'));
+    const c = await store.put('coding', coding(d.id, k.id, ana.id, 0, 1));
+    const t = (n: number) => formatHlc({ ms: 1_800_000_000_000 + n, counter: 0, device: 'aaaaaaaa' });
+    // Here: moved along with an edit at 3 (meaning unchanged since 1). There: commented at 2.
+    await store.merge([{ kind: 'coding', record: { ...c, start: 5, end: 6, updated_at_hlc: t(3), sem: t(1) } as Coding }]);
+    expect(await store.merge([{ kind: 'coding', record: { ...c, comment: 'mine', updated_at_hlc: t(2), sem: t(2) } as Coding }])).toBe(1);
+    expect((await store.get('coding', c.id))!.comment).toBe('mine');
+    // A delete at 4 that was then only moved in the trash at 6 loses to a restore at 5.
+    await store.merge([{ kind: 'coding', record: { ...c, deleted: true, updated_at_hlc: t(6), sem: t(4) } as Coding }]);
+    expect((await store.get('coding', c.id))!.deleted).toBe(true);
+    expect(await store.merge([{ kind: 'coding', record: { ...c, comment: 'back', updated_at_hlc: t(5), sem: t(5) } as Coding }])).toBe(1);
+    expect((await store.get('coding', c.id))!).toMatchObject({ deleted: false, comment: 'back' });
+    expect(compareVersions({ updated_at_hlc: t(6), sem: t(4) }, { updated_at_hlc: t(5) })).toBeLessThan(0);
+    expect(compareVersions({ updated_at_hlc: t(6) }, { updated_at_hlc: t(5) })).toBeGreaterThan(0);
   });
 });

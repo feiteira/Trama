@@ -41,6 +41,10 @@ export interface Planned {
  * original inside its own replacement ("Rui" → "Rui P." must not become "Rui P. P.").
  */
 export function planText(text: string, rules: readonly Pseudonym[], opts: { protect?: boolean } = {}): Planned {
+  return planWith(text, rules, findMatches, opts);
+}
+
+function planWith(text: string, rules: readonly Pseudonym[], find: (text: string, rule: Rule) => { start: number; end: number }[], opts: { protect?: boolean } = {}): Planned {
   const taken = new Uint8Array(text.length);
   if (opts.protect) {
     for (const r of rules) {
@@ -53,7 +57,7 @@ export function planText(text: string, rules: readonly Pseudonym[], opts: { prot
   const matches: Planned['matches'] = [];
   const ordered = [...rules].sort((a, b) => tidy(b.original).length - tidy(a.original).length || (a.created_at < b.created_at ? -1 : 1));
   for (const p of ordered) {
-    for (const m of findMatches(text, p)) {
+    for (const m of find(text, p)) {
       let free = true;
       for (let i = m.start; i < m.end && free; i++) if (taken[i]) free = false;
       if (!free) continue;
@@ -66,7 +70,6 @@ export function planText(text: string, rules: readonly Pseudonym[], opts: { prot
   const byId = new Map(rules.map((r) => [r.id, r]));
   return { edits: matches.map((m) => ({ start: m.start, end: m.end, insert: byId.get(m.pseudonymId)!.replacement })), counts, matches };
 }
-
 
 /** `text` with the rules' originals replaced (longest first, never overlapping). */
 export function pseudonymiseText(text: string, rules: readonly Pseudonym[], opts: { protect?: boolean } = {}): string {
@@ -85,20 +88,68 @@ export function pseudonymiseText(text: string, rules: readonly Pseudonym[], opts
 /** File names write words apart with separators instead ("Maria_Silva-interview.pdf"): one space each, so positions stay. */
 export const fileWords = (name: string): string => name.replace(/[_.+-]/g, ' ');
 
-/** A rule as it matches inside file names: any case, inside words too, separators as spaces. */
-const fileRule = <R extends Rule>(p: R): R => ({ ...p, original: fileWords(p.original), whole_word: false, case_sensitive: false });
+const RE_WORD_CHAR = new RegExp(`^${WORD_CHAR}$`, 'u');
+const RE_LOWER = /^\p{Ll}$/u;
+const RE_UPPER = /^[\p{Lu}\p{Lt}]$/u;
+const RE_DIGIT = /^\p{N}$/u;
+const RE_LETTER = /^\p{L}$/u;
 
-/** Where the rules' originals occur in a file name (see `fileWords`). */
-export function planFileName(name: string, rules: readonly Pseudonym[]): Planned {
+/**
+ * Whether a word of a file name (as `fileWords` writes it) may start or end at `i`: beside a
+ * separator or the ends, and where file names join words without one — "MartaSousa" (a capital
+ * after a small letter) and "Marta2" (letters beside digits).
+ */
+function fileBoundary(words: string, i: number): boolean {
+  if (i <= 0 || i >= words.length) return true;
+  const a = words[i - 1]!;
+  const b = words[i]!;
+  if (!RE_WORD_CHAR.test(a) || !RE_WORD_CHAR.test(b)) return true;
+  if (RE_LOWER.test(a) && RE_UPPER.test(b)) return true;
+  return (RE_LETTER.test(a) && RE_DIGIT.test(b)) || (RE_DIGIT.test(a) && RE_LETTER.test(b));
+}
+
+/**
+ * Where `rule.original` occurs in a file name, in any case. A space in the original matches any
+ * run of separators or none ("Marta Sousa" finds "Marta_Sousa" and "MartaSousa"). With
+ * `whole_word`, a match must start and end on a word boundary of the file name (`fileBoundary`),
+ * so "Ana" stays out of "Analysis.docx" but is found in "AnaLima.docx".
+ */
+function fileMatches(name: string, rule: Rule): { start: number; end: number }[] {
+  const original = fileWords(tidy(rule.original)).replace(/\s+/g, ' ').trim();
+  if (!original) return [];
   const words = fileWords(name);
-  // Whole words as the rule says ("Ana" stays out of "Analysis.docx"), in any case.
-  const planned = planText(words, rules.map((p) => ({ ...p, original: fileWords(p.original), case_sensitive: false })));
+  const re = new RegExp(original.split(' ').map(escapeRe).join('[ \\t\\u00A0]*'), 'giu');
+  const out: { start: number; end: number }[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(words))) {
+    const start = m.index;
+    const end = start + m[0].length;
+    if (end === start) {
+      re.lastIndex++;
+      continue;
+    }
+    if (rule.whole_word && !(fileBoundary(words, start) && fileBoundary(words, end))) {
+      // The next try starts one character on: a later, overlapping match may sit on boundaries.
+      re.lastIndex = start + 1;
+      continue;
+    }
+    out.push({ start, end });
+  }
+  return out;
+}
+
+/** Where the rules' originals occur in a file name (see `fileMatches`). */
+export function planFileName(name: string, rules: readonly Pseudonym[]): Planned {
+  const planned = planWith(name, rules, fileMatches);
   const byId = new Map(rules.map((r) => [r.id, r]));
   // A replacement as file-name words: spaces become underscores, characters file systems refuse go.
   const asFile = (s: string) => s.replace(/[\\/:*?"<>|\u0000-\u001f]/g, '').replace(/\s+/g, '_');
   return { ...planned, edits: planned.matches.map((m) => ({ start: m.start, end: m.end, insert: asFile(byId.get(m.pseudonymId)!.replacement) })) };
 }
 
-/** True when an original of the rules occurs in the file name (see `planFileName`). */
+/**
+ * True when an original of the rules occurs in the file name, inside words too ("marta" in
+ * "consent_martasousa.docx"): exports blank such names, even where `planFileName` leaves them.
+ */
 export const fileNameHolds = (name: string, rules: readonly Rule[]): boolean =>
-  !!name && rules.some((p) => findMatches(fileWords(name), fileRule(p)).length > 0);
+  !!name && rules.some((p) => fileMatches(name, { ...p, whole_word: false }).length > 0);

@@ -5,7 +5,7 @@
 import type { Document, MediaRef } from '../core/model/types';
 import { finishPendingMerge } from './datafile';
 import type { Project } from './project';
-import { logInterruptedApply } from './pseudonyms';
+import { eraseDeletedKeyEntries, logInterruptedApply } from './pseudonyms';
 import { checkIntegrity } from './reconcile';
 
 export async function afterOpen(project: Project): Promise<void> {
@@ -13,6 +13,7 @@ export async function afterOpen(project: Project): Promise<void> {
     ['finishing an interrupted merge', () => finishPendingMerge(project)],
     ['checking documents and codings', () => checkIntegrity(project.store)],
     ['noting an interrupted pseudonymisation', () => logInterruptedApply(project)],
+    ['erasing deleted key entries', () => eraseDeletedKeyEntries(project)],
     ['removing files nothing points to', () => sweepBlobs(project)],
   ];
   for (const [what, run] of steps) {

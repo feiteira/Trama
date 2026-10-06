@@ -3,7 +3,7 @@
 import type { Coding } from '../../../core/model/types';
 import type { SearchHit } from '../../../core/qda/search';
 import type { Span } from '../../../core/qda/util';
-import { codedTexts, type KeywordRow, maskMarkup, type TextInput, type WordFrequencyOptions, wordHits } from '../../../core/qda/wordfreq';
+import { type KeywordRow, type TextInput, type WordFrequencyOptions, wordHits, wordsWithin } from '../../../core/qda/wordfreq';
 import type { Cell } from './format';
 import { countPerDocument, hitsWithin } from './kwic';
 
@@ -18,28 +18,32 @@ export function documentInputs(docs: readonly KindedDoc[], texts: ReadonlyMap<st
   return docs.map((d) => ({ id: d.id, text: texts.get(d.id) ?? '', ...(d.kind !== undefined ? { kind: d.kind } : {}) }));
 }
 
-// Coded pieces are counted as plain text: any kind but 'transcript' (no label guessing on pieces).
+// Coded words are counted as plain text: any kind but 'transcript' (no label guessing on them).
 const PIECES = 'coded';
 
 /**
- * The coded text of the codes, for word counts. Markup is taken out of each whole document
- * first (unless `includeMarkup`), so a speaker label inside a coded segment goes whatever the
- * segments look like: a whole coded turn is one piece with one label, too few to be guessed.
+ * The coded text of the codes, for word counts: per document, the words its segments of the
+ * codes hold (`wordsWithin`), so a word's count is exactly what its sheet lists (`wordSheet`
+ * with `codeSpans`), even for a segment that starts or ends inside a word. Markup is taken out
+ * of each whole document first (unless `includeMarkup`), so a speaker label inside a coded
+ * segment goes whatever the segments look like.
  */
-export function codedInputs(codings: readonly Coding[], codeIds: readonly string[], docs: readonly KindedDoc[], texts: ReadonlyMap<string, string>, includeMarkup = false): TextInput[] {
-  let source = texts;
-  if (!includeMarkup) {
-    const ids = new Set(codeIds);
-    const kinds = new Map(docs.map((d) => [d.id, d.kind]));
-    const masked = new Map<string, string>();
-    for (const c of codings) {
-      if (!ids.has(c.code_id) || masked.has(c.document_id)) continue;
-      const text = texts.get(c.document_id);
-      if (text !== undefined) masked.set(c.document_id, maskMarkup(text, kinds.get(c.document_id)));
-    }
-    source = masked;
+export function codedInputs(
+  codings: readonly Coding[],
+  codeIds: readonly string[],
+  docs: readonly KindedDoc[],
+  texts: ReadonlyMap<string, string>,
+  opts: Pick<WordFrequencyOptions, 'includeMarkup' | 'language'> = {},
+): TextInput[] {
+  const kinds = new Map(docs.map((d) => [d.id, d.kind]));
+  const out: TextInput[] = [];
+  for (const [docId, spans] of codeSpans(codings, codeIds)) {
+    const text = texts.get(docId);
+    if (text === undefined) continue;
+    const kind = kinds.get(docId);
+    out.push({ id: docId, text: wordsWithin(text, spans, { ...opts, ...(kind !== undefined ? { kind } : {}) }), kind: PIECES });
   }
-  return codedTexts(codings, codeIds, { texts: source }).map((x) => ({ ...x, kind: PIECES }));
+  return out;
 }
 
 /** Where the given codes were applied, per document. */
@@ -100,6 +104,26 @@ export function compareCorpora<D extends GroupedDoc>(documents: readonly D[], gr
     else if (y) b.push(d);
   }
   return { a, b, shared };
+}
+
+/**
+ * Where a word's sheet looks, so its total is the count shown: the compared sides in the compare
+ * view (a document in both groups, or in neither, is in no count), else the scope's documents,
+ * inside the code's segments for the code scope.
+ */
+export function sheetScope<D extends GroupedDoc & KindedDoc>(
+  s: { view: string; scope: string; groupId: string; groupA: string; groupB: string },
+  documents: readonly D[],
+  codings: readonly Coding[],
+  codeIds: readonly string[],
+): { docs: D[]; within: Map<string, Span[]> | null } {
+  if (s.view === 'compare') {
+    if (!s.groupA) return { docs: [...documents], within: null };
+    const { a, b } = compareCorpora(documents, s.groupA, s.groupB);
+    return { docs: [...a, ...b], within: null };
+  }
+  if (s.scope === 'group') return { docs: documents.filter((d) => d.group_ids.includes(s.groupId)), within: null };
+  return { docs: [...documents], within: s.scope === 'code' ? codeSpans(codings, codeIds) : null };
 }
 
 const round = (v: number, digits: number) => {

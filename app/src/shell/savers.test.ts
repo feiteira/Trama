@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { oneAtATime, SAVE_STAGE, Savers } from './savers';
+import { oneAtATime, SAVE_STAGE, Savers, waitForRunning } from './savers';
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -36,6 +36,28 @@ describe('Savers', () => {
     await expect(savers.run()).resolves.toBeUndefined();
     expect(done).toEqual(['later']);
     expect(log).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('waitForRunning', () => {
+  it('holds a lock until the running work settles, failed or not, and passes at once when idle', async () => {
+    const savers = new Savers();
+    let current: Promise<unknown> | null = null;
+    savers.register(waitForRunning(() => current), { limitMs: 5_000 });
+    await savers.run();
+
+    let finish: () => void = () => undefined;
+    current = new Promise<void>((resolve) => (finish = resolve));
+    let locked = false;
+    const lock = savers.run().then(() => (locked = true));
+    await new Promise((r) => setTimeout(r, 20));
+    expect(locked).toBe(false);
+    finish();
+    await lock;
+    expect(locked).toBe(true);
+
+    current = Promise.reject(new Error('the project is closed'));
+    await expect(savers.run()).resolves.toBeUndefined();
   });
 });
 

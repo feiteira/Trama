@@ -550,3 +550,16 @@
 .papply .notice__body p + p {
   margin-top: 6px;
 }
+
+/* An interrupted apply: on a narrow screen the button goes under the text instead of squeezing it. */
+.pseudo__interrupted {
+  flex-wrap: wrap;
+}
+
+.pseudo__interrupted .notice__content {
+  flex: 1 1 12rem;
+}
+
+.pseudo__interrupted .notice__actions {
+  margin-left: auto;
+}

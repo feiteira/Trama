@@ -30,6 +30,31 @@ export interface TombstoneInfo {
 export type Tombstone<K extends Kind> = Entity<K> & TombstoneInfo;
 
 /**
+ * What every stored record carries besides its stamp: `sem`, the stamp of the last write that
+ * changed what the record means (created, edited, deleted, restored). A write that only follows
+ * another record keeps it: codings moved along with a text edit, a document's `chars`, a coding
+ * in the trash kept on its words (`WriteOp` `derived`). A record without it (from an older
+ * Trama) counts its stamp.
+ */
+export interface Versioned {
+  updated_at_hlc: string;
+  sem?: string;
+}
+
+/** The stamp of the last meaningful change of a record (see `Versioned`). */
+export const semOf = (r: Versioned): string => r.sem ?? r.updated_at_hlc;
+
+/**
+ * Which of two versions of a record wins a merge (> 0: `a`): the later meaningful change, then
+ * the later write. So a write that only moved a coding along with a text edit (or only moved it
+ * in the trash) never wins over a teammate's edit, delete or restore of it made meanwhile. A
+ * total order (each version is the pair), so merging in any order ends alike.
+ */
+export function compareVersions(a: Versioned, b: Versioned): number {
+  return compareHlc(semOf(a), semOf(b)) || compareHlc(a.updated_at_hlc, b.updated_at_hlc);
+}
+
+/**
  * A write that would bring back a record whose content was erased for good (a scrubbed
  * tombstone, e.g. a deleted entry of the pseudonymisation key). Nothing of the batch is written.
  */
@@ -45,7 +70,11 @@ export class ErasedRecordError extends Error {
 
 /** What `Store.write` writes, all in one transaction. */
 export interface WriteOp {
-  puts?: { kind: Kind; draft: Draft<Kind> }[];
+  /**
+   * Records created or replaced. `derived`: the write only follows another record (offsets moved
+   * along with a text edit, `chars`), so a live record keeps its `sem` (see `Versioned`).
+   */
+  puts?: { kind: Kind; draft: Draft<Kind>; derived?: boolean }[];
   /** Deleted records written with this content (kept deleted, under `batch` when given). */
   tombstones?: { kind: Kind; draft: Draft<Kind>; batch?: string }[];
   removes?: { kind: Kind; ids: string[]; batch?: string }[];
@@ -69,6 +98,14 @@ export class NewerSchemaError extends Error {
     super('This project was saved by a newer version of Trama. Please update Trama.');
     this.name = 'NewerSchemaError';
   }
+}
+
+/** What `Store.stamps` reads of a record. */
+export interface RecordStamps extends Versioned {
+  created_at: string;
+  hlc: string;
+  deleted: boolean;
+  scrubbed: boolean;
 }
 
 /** Lookups by id are batched: SQLite limits bound parameters, so `IN (…)` takes this many at a time. */
@@ -165,17 +202,19 @@ export class Store {
     return out;
   }
 
-  /** Creation time, stamp and erasure of several records, without reading their data. */
-  async stamps(kind: Kind, ids: Iterable<string>): Promise<Map<string, { created_at: string; hlc: string; scrubbed: boolean }>> {
-    const out = new Map<string, { created_at: string; hlc: string; scrubbed: boolean }>();
+  /** Creation time, stamps, deletion and erasure of several records, without reading their data. */
+  async stamps(kind: Kind, ids: Iterable<string>): Promise<Map<string, RecordStamps>> {
+    const out = new Map<string, RecordStamps>();
     const unique = [...new Set(ids)];
     for (let i = 0; i < unique.length; i += ID_CHUNK) {
       const part = unique.slice(i, i + ID_CHUNK);
-      const rows = await this.db.query<{ id: string; created_at: string; hlc: string; scrubbed: number | null }>(
-        `SELECT id, created_at, hlc, json_extract(data, '$.scrubbed') AS scrubbed FROM ${TABLES[kind].table} WHERE id IN (${part.map(() => '?').join(', ')})`,
+      const rows = await this.db.query<{ id: string; created_at: string; hlc: string; deleted: number; scrubbed: number | null; sem: string | null }>(
+        `SELECT id, created_at, hlc, deleted, json_extract(data, '$.scrubbed') AS scrubbed, json_extract(data, '$.sem') AS sem FROM ${TABLES[kind].table} WHERE id IN (${part.map(() => '?').join(', ')})`,
         part,
       );
-      for (const r of rows) out.set(r.id, { created_at: r.created_at, hlc: r.hlc, scrubbed: !!r.scrubbed });
+      for (const r of rows) {
+        out.set(r.id, { created_at: r.created_at, hlc: r.hlc, updated_at_hlc: r.hlc, deleted: r.deleted === 1, scrubbed: !!r.scrubbed, ...(r.sem ? { sem: r.sem } : {}) });
+      }
     }
     return out;
   }
@@ -259,7 +298,7 @@ export class Store {
     const saved: Base[] = [];
     const restored = new Map<Kind, Entity<Kind>[]>();
     let removed = 0;
-    const puts = (op.puts ?? []).map(({ kind, draft }) => ({ kind, clean: validate(kind, draft) }));
+    const puts = (op.puts ?? []).map(({ kind, draft, derived }) => ({ kind, clean: validate(kind, draft), derived: !!derived }));
     const tombs = (op.tombstones ?? []).map(({ kind, draft, batch }) => ({ kind, clean: validate(kind, draft), batch }));
     // Existing records, looked up once per kind rather than once per record.
     const ids = new Map<Kind, Set<string>>();
@@ -268,20 +307,23 @@ export class Store {
     };
     for (const { kind, clean } of puts) want(kind, clean.id);
     for (const { kind, clean } of tombs) want(kind, clean.id);
-    const known = new Map<Kind, Map<string, { created_at: string; scrubbed: boolean; hlc: string }>>();
+    const known = new Map<Kind, Map<string, RecordStamps>>();
     for (const [kind, set] of ids) known.set(kind, await this.stamps(kind, set));
     const stampOf = (kind: Kind, record: { id: string; updated_at_hlc: string }) => stamps.set(`${kind}:${record.id}`, record.updated_at_hlc);
-    for (const { kind, clean } of puts) {
+    for (const { kind, clean, derived } of puts) {
       const id = clean.id ?? uuid();
       const existing = clean.id ? known.get(kind)?.get(id) : undefined;
       if (existing?.scrubbed) throw new ErasedRecordError(kind, id);
+      const hlc = this.hlc.tick();
       const record = {
         ...clean,
         id,
         created_at: existing?.created_at ?? this.now().toISOString(),
-        updated_at_hlc: this.hlc.tick(),
+        updated_at_hlc: hlc,
         deleted: false,
-      } as Entity<Kind>;
+        // A derived write of a live record keeps what it means as of before (see `Versioned`).
+        sem: derived && existing && !existing.deleted ? semOf(existing) : hlc,
+      } as unknown as Entity<Kind>;
       statements.push(upsert(kind, record));
       saved.push(record);
       stampOf(kind, record);
@@ -291,13 +333,16 @@ export class Store {
       const id = clean.id!;
       const existing = known.get(kind)?.get(id);
       if (existing?.scrubbed) throw new ErasedRecordError(kind, id);
+      const hlc = this.hlc.tick();
       const tomb: Tombstone<Kind> = {
         ...(clean as unknown as Entity<Kind>),
         id,
         created_at: existing?.created_at ?? this.now().toISOString(),
-        updated_at_hlc: this.hlc.tick(),
+        updated_at_hlc: hlc,
         deleted: true,
-      };
+        // A record already deleted, changed in the trash, is not deleted again.
+        sem: existing?.deleted ? semOf(existing) : hlc,
+      } as unknown as Tombstone<Kind>;
       if (batch) tomb.deleted_batch = batch;
       statements.push(upsert(kind, tomb));
       stampOf(kind, tomb);
@@ -312,7 +357,8 @@ export class Store {
           stampOf(kind, current);
           continue;
         }
-        const tomb: Tombstone<Kind> = { ...current, deleted: true, updated_at_hlc: this.hlc.tick() };
+        const hlc = this.hlc.tick();
+        const tomb = { ...current, deleted: true, updated_at_hlc: hlc, sem: hlc } as unknown as Tombstone<Kind>;
         if (batch) tomb.deleted_batch = batch;
         statements.push(upsert(kind, tomb));
         stampOf(kind, tomb);
@@ -330,9 +376,10 @@ export class Store {
           stampOf(kind, current);
           continue;
         }
-        const { created_at, updated_at_hlc: _h, deleted: _d, deleted_batch: _b, scrubbed: _s, ...rest } = current as Tombstone<Kind> & Base;
+        const { created_at, updated_at_hlc: _h, deleted: _d, deleted_batch: _b, scrubbed: _s, sem: _m, ...rest } = current as Tombstone<Kind> & Base & Versioned;
         const clean = validate(kind, { ...rest, id } as Draft<Kind>);
-        const record = { ...clean, id, created_at, updated_at_hlc: this.hlc.tick(), deleted: false } as Entity<Kind>;
+        const hlc = this.hlc.tick();
+        const record = { ...clean, id, created_at, updated_at_hlc: hlc, deleted: false, sem: hlc } as unknown as Entity<Kind>;
         statements.push(upsert(kind, record));
         out.push(record);
         stampOf(kind, record);
@@ -392,28 +439,36 @@ export class Store {
    * Erases the content of deleted records for good. `blank` returns the record's content
    * fields as valid empties (they are validated like any write); the id, creation time and
    * the delete itself are kept, so a later merge of an older copy cannot bring the content
-   * back. Live records are never touched. Returns how many records were scrubbed.
+   * back. Live records are never touched, unless `live` is set: then a live record is deleted
+   * and erased in the same write, so no tombstone ever holds its content (a lock between a
+   * delete and the scrub would leave one). `meta` keys go in the same write. Returns how many
+   * records were scrubbed.
    */
-  async scrub<K extends Kind>(kind: K, ids: string[], blank: (record: Entity<K>) => Draft<K>): Promise<number> {
+  async scrub<K extends Kind>(kind: K, ids: string[], blank: (record: Entity<K>) => Draft<K>, opts: { live?: boolean; meta?: { key: string; value: string | null }[] } = {}): Promise<number> {
     const statements: SqlStatement[] = [];
     const found = await this.getMany(kind, ids);
     for (const id of new Set(ids)) {
       const current = (found.get(id) ?? null) as Tombstone<K> | null;
-      if (!current || !current.deleted || current.scrubbed) continue;
+      if (!current || current.scrubbed || (!current.deleted && !opts.live)) continue;
       const clean = validate(kind, { ...blank(current), id } as Draft<K>) as Draft<Kind>;
       const info: TombstoneInfo = { scrubbed: true };
-      const record = { ...clean, ...info, id, created_at: current.created_at, updated_at_hlc: this.hlc.tick(), deleted: true } as Entity<Kind>;
+      const hlc = this.hlc.tick();
+      const record = { ...clean, ...info, id, created_at: current.created_at, updated_at_hlc: hlc, deleted: true, sem: hlc } as unknown as Entity<Kind>;
       statements.push(upsert(kind, record));
     }
-    if (!statements.length) return 0;
+    const scrubbed = statements.length;
+    for (const m of scrubbed ? (opts.meta ?? []) : []) {
+      statements.push(m.value === null ? { sql: 'DELETE FROM meta WHERE key = ?', params: [m.key] } : metaWrite(m.key, m.value));
+    }
+    if (!scrubbed) return 0;
     await this.db.batch(statements);
     this.emit([kind]);
-    return statements.length;
+    return scrubbed;
   }
 
   /**
-   * Writes records that came from elsewhere (a `.sala` file), keeping whichever version of
-   * each record is newer. Returns how many records were written.
+   * Writes records that came from elsewhere (a teammate's copy), keeping whichever version of
+   * each record wins (`compareVersions`). Returns how many records were written.
    */
   async merge(records: { kind: Kind; record: Entity<Kind> }[]): Promise<number> {
     const statements: SqlStatement[] = [];
@@ -423,18 +478,18 @@ export class Store {
     for (const { kind, record } of records) {
       if (KINDS.includes(kind)) (byKind.get(kind) ?? byKind.set(kind, []).get(kind)!).push(record.id);
     }
-    const here = new Map<Kind, Map<string, { hlc: string }>>();
+    const here = new Map<Kind, Map<string, Versioned>>();
     for (const [kind, ids] of byKind) here.set(kind, await this.stamps(kind, ids));
-    // Within one call the newest version of an id wins too.
-    const written = new Map<string, string>();
+    // Within one call the winning version of an id wins too.
+    const written = new Map<string, Versioned>();
     for (const { kind, record } of records) {
       if (!KINDS.includes(kind)) continue;
       this.hlc.observe(record.updated_at_hlc);
       const key = `${kind}\u0000${record.id}`;
-      const current = written.get(key) ?? here.get(kind)?.get(record.id)?.hlc;
-      if (current !== undefined && compareHlc(current, record.updated_at_hlc) >= 0) continue;
+      const current = written.get(key) ?? here.get(kind)?.get(record.id);
+      if (current !== undefined && compareVersions(current, record as Versioned) >= 0) continue;
       statements.push(upsert(kind, record));
-      written.set(key, record.updated_at_hlc);
+      written.set(key, { updated_at_hlc: record.updated_at_hlc, ...((record as Versioned).sem ? { sem: (record as Versioned).sem } : {}) });
       kinds.add(kind);
     }
     // Large imports are written in chunks so one transaction never holds everything.

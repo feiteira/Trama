@@ -88,7 +88,7 @@ Applying can be undone only with **Undo straight afterwards**; once you carry on
 
 Original PDF and Word files are kept as imported. When a document’s text has been edited (pseudonymised, say), REFI-QDA exports and .trama copies leave out its original PDF, because the original would still show what was removed (backups keep everything).
 
-**The audit trail is not pseudonymised.** It is never edited, so entries written before you applied the key (“Added document “Interview — Ana Lima””) keep the names. The preview and the Apply dialog say how many entries do. The trail travels in .trama copies of the project and in its CSV export: share those only with people allowed to see the names.
+**The audit trail is not pseudonymised.** It is never edited, so entries written before you applied the key (“Added document “Interview — Ana Lima””) keep the names. The preview and the Apply dialog say how many entries do. Those entries stay as they are inside the project and in its backups. Exports, copies for a teammate and the trail’s CSV export leave their names out (the entry reads “…” (names left out)), and every other entry is written with the key applied — also after you delete the key entry.
 
 <a id="audit-trail"></a>
 

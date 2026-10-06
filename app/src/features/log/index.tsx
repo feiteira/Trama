@@ -4,6 +4,7 @@ import { FileDown, FileText, Filter, Folders, Highlighter, History, type LucideI
 import { ATTRIBUTE_TYPES, type AttributeType, type LogEntry } from '../../core/model/types';
 import { csvBytes } from '../../core/export/office/csv';
 import { listLog, logAsRows } from '../../services/log';
+import { logRedactor } from '../../services/pseudonyms';
 import { listCoders, type CoderRow } from '../../services/queries';
 import { usePlatform, useProject } from '../../shell/AppState';
 import { ScreenHeader } from '../../shell/ScreenHeader';
@@ -152,7 +153,10 @@ export default function LogScreen(_props: ScreenProps<'log'>) {
     setExporting(true);
     try {
       // What the screen shows, with the search as typed (it may not have been applied yet).
-      const all = await listLog(project, { ...query, text: filter.text, limit: 10_000_000 });
+      const found = await listLog(project, { ...query, text: filter.text, limit: 10_000_000 });
+      // The file leaves the project: entries never name what the pseudonymisation key replaced.
+      const redact = await logRedactor(project);
+      const all = found.map((e) => ({ ...e, summary: redact(e) }));
       const kept = all
         .map(toRow)
         .sort((a, b) => (a.entry.at < b.entry.at ? -1 : a.entry.at > b.entry.at ? 1 : a.entry.updated_at_hlc < b.entry.updated_at_hlc ? -1 : 1));

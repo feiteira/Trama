@@ -7,8 +7,9 @@ import { TABLES } from '../core/store/schema';
 import { buildTree, orderAfterLast, placeBefore } from '../core/qda/tree';
 import type { ProjectContext } from './context';
 import { reanchorRestored } from './anchor';
+import { settleReferences } from './reconcile';
 import { restoredKeys } from './documents';
-import { reapplyKey } from './pseudonyms';
+import { keyApplied, reapplyKey } from './pseudonyms';
 import { recentlyLogged } from './log';
 import { commit, listIn, need, noopUndo, Plan, q, restoreBatch, ServiceError, type LogSpec, type Undoable } from './undo';
 
@@ -299,14 +300,18 @@ export async function restoreCodes(ctx: ProjectContext, batch: string): Promise<
   const restored = await restoreBatch(ctx, batch, ['code', 'coding', 'memo']);
   // The text may have changed since the delete (a typo fix, pseudonymisation).
   const fixed = await reanchorRestored(ctx, restored.get('coding') ?? [], batch);
+  // Codings whose document was deleted since go back to the trash with that document.
+  const settled = await settleReferences(ctx.store, batch);
   const ids = restored.get('code') ?? [];
+  // Logged as the names read once the key is applied again below: never a name it replaced.
+  const named = await keyApplied(ctx);
   for (const id of ids) {
     const c = await ctx.store.get('code', id);
-    if (c) await ctx.log('code.restore', q(c.name), { kind: 'code', id });
+    if (c) await ctx.log('code.restore', q(named(c.name)), { kind: 'code', id });
   }
   // Deleted before the pseudonymisation key was applied: names, definitions, comments, memos.
   const pseudonymised = (await reapplyKey(ctx, restoredKeys(restored), 'restore')).replacements;
-  return { codes: ids.length, codings: (restored.get('coding')?.length ?? 0) - fixed.removed, pseudonymised };
+  return { codes: ids.length, codings: (restored.get('coding')?.length ?? 0) - fixed.removed - settled.codings, pseudonymised };
 }
 
 export interface MergeResult {

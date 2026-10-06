@@ -71,7 +71,7 @@ export async function reanchorRestored(ctx: ProjectContext, codingIds: readonly 
   const byDoc = new Map<string, Coding[]>();
   for (const c of codings) (byDoc.get(c.document_id) ?? byDoc.set(c.document_id, []).get(c.document_id)!).push(c);
   const texts = await ctx.store.getMany('doctext', byDoc.keys());
-  const writes: { kind: Kind; draft: Draft<Kind> }[] = [];
+  const writes: { kind: Kind; draft: Draft<Kind>; derived: boolean }[] = [];
   const lost: string[] = [];
   for (const [docId, list] of byDoc) {
     const t = texts.get(docId);
@@ -88,10 +88,10 @@ export async function reanchorRestored(ctx: ProjectContext, codingIds: readonly 
         continue;
       }
       const text = t.text.slice(r.start, r.end);
-      if (r.start !== c.start || r.end !== c.end || text !== c.text) writes.push({ kind: 'coding', draft: { ...draftOf(c), start: r.start, end: r.end, text } as Draft<Kind> });
+      if (r.start !== c.start || r.end !== c.end || text !== c.text) writes.push({ kind: 'coding', draft: { ...draftOf(c), start: r.start, end: r.end, text } as Draft<Kind>, derived: true });
     }
   }
-  if (writes.length) await ctx.store.putMany(writes);
+  if (writes.length) await ctx.store.write({ puts: writes });
   const removed = lost.length ? await ctx.store.remove('coding', lost, { batch }) : 0;
   return { moved: writes.length, removed };
 }

@@ -222,8 +222,11 @@ describe('a merge never brings back names the key replaced', () => {
     const r = await mergeTeammateCopy(pa, await copyOf(pr));
     expect((await pa.store.get('document', d2.id))!.deleted).toBe(false);
     expect(await textOf(pa, d2.id)).toBe('[P2] was here too.');
+    expect((await pa.store.get('doctext', d2.id))!.deleted).toBe(false);
     expect(await textOf(pa, doc.id)).not.toContain('Rui');
-    expect(r.repseudonymised.some((h) => h.kind === 'text' && h.id === d2.id)).toBe(true);
+    // Apply reached the trash too, so the text came back pseudonymised with nothing left to redo.
+    expect(r.repseudonymised.some((h) => h.kind === 'text' && h.id === d2.id)).toBe(false);
+    expect(JSON.stringify(r.repseudonymised)).not.toContain('Rui');
   });
 });
 

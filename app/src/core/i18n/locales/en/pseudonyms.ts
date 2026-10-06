@@ -107,7 +107,12 @@ export const pseudonyms = {
       other: 'other field',
     },
     logTitle: { one: 'The audit trail keeps {n} entry with these names', other: 'The audit trail keeps {n} entries with these names' },
-    logBody: 'The audit trail is never edited, so pseudonymisation does not change it. It travels in .trama copies of the project and in its CSV export: share those only with people allowed to see the names.',
+    logBody: 'The audit trail is never edited, so they keep the names inside this project and its backups. Exports, copies for a teammate and the audit trail’s CSV leave those names out, also after you delete the key entry.',
+  },
+  interrupted: {
+    title: 'Pseudonymisation was interrupted',
+    body: { one: 'It stopped after changing {n} document. Names and the other documents were not changed. Apply the key again to finish.', other: 'It stopped after changing {n} documents. Names and the other documents were not changed. Apply the key again to finish.' },
+    again: 'Apply again',
   },
   apply: {
     button: 'Apply to documents',
@@ -118,7 +123,7 @@ export const pseudonyms = {
     point1: 'The originals are replaced in the documents themselves, not only in exports.',
     point2: 'Coded segments and transcript timings follow the changed text. Names of documents, cases, codes and groups, file names, descriptions, memos, comments and code definitions are changed too.',
     point3: 'It can be undone only with Undo straight afterwards. Once you keep working, the change is permanent.',
-    point4: 'Not changed: the audit trail, and the original files (PDF, Word…) of edited documents, which stay in this project as imported. Exports and copies leave such originals out; backups keep them.',
+    point4: 'Not changed: the audit trail, and the original files (PDF, Word…) of edited documents, which stay in this project as imported. Exports and copies leave such originals, and the names in the audit trail, out; backups keep them.',
     bodyFields: { one: 'It will also make {n} replacement in names, file names, memos, comments and other fields.', other: 'It will also make {n} replacements in names, file names, memos, comments and other fields.' },
     doneFields: { one: '{n} more in names, memos, comments and other fields.', other: '{n} more in names, memos, comments and other fields.' },
     understand: 'I understand that the document text will change',

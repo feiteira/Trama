@@ -4,12 +4,13 @@
 // The key is personal data. It never goes into the audit log (which is exported): logs say how
 // many replacements were made in which documents, never what was replaced.
 
-import type { Case, Document, Pseudonym } from '../core/model/types';
+import type { Case, Document, Kind, Pseudonym } from '../core/model/types';
 import { LIMITS } from '../core/model/types';
-import { findMatches, planFileName, planText, pseudonymiseText } from '../core/qda/pseudonymise';
+import { fileNameHolds, findMatches, planFileName, planText, pseudonymiseText } from '../core/qda/pseudonymise';
+import type { Tombstone } from '../core/store/store';
 import { replaceAll } from '../core/qda/ranges';
 import type { ProjectContext } from './context';
-import { applyTextEdits, uniqueName } from './documents';
+import { applyTextEdits, planTrashedTextEdits, uniqueName } from './documents';
 import { combineUndo, commit, need, noopUndo, Plan, q, ServiceError, undoKey, type Undoable } from './undo';
 
 // ---------------------------------------------------------------------------------------------
@@ -75,20 +76,116 @@ export async function updatePseudonym(
  */
 export async function deletePseudonym(ctx: ProjectContext, id: string, opts: { erase?: boolean } = {}): Promise<Undoable> {
   const p = await need(ctx, 'pseudonym', id);
-  const plan = new Plan();
-  plan.remove('pseudonym', p);
-  const { undo } = await commit(ctx, plan, { label: 'pseudonym.edit', detail: '', logs: [] });
-  if (!opts.erase) return undo;
-  await ctx.store.scrub('pseudonym', [id], (r) => ({
-    original: '∅',
-    replacement: '∅',
-    note: '',
-    whole_word: r.whole_word,
-    case_sensitive: r.case_sensitive,
-    applied_at: null,
-    applied_count: 0,
-  }));
+  if (!opts.erase) {
+    const plan = new Plan();
+    plan.remove('pseudonym', p);
+    return (await commit(ctx, plan, { label: 'pseudonym.edit', detail: '', logs: [] })).undo;
+  }
+  // Deleted and wiped in one write: a tombstone written first would keep the name if a lock or
+  // a closed window came between. What still holds the name and is never rewritten (audit-trail
+  // entries, file names apply could not reach) is noted in the same write, by id only.
+  await ctx.store.scrub('pseudonym', [id], erasedEntry, { live: true, meta: await mentionWrites(ctx, [p]) });
   return { ...noopUndo('pseudonym.edit'), forget: [undoKey('pseudonym', id)] };
+}
+
+const erasedEntry = (r: Pseudonym) => ({
+  original: '∅',
+  replacement: '∅',
+  note: '',
+  whole_word: r.whole_word,
+  case_sensitive: r.case_sensitive,
+  applied_at: null,
+  applied_count: 0,
+});
+
+/**
+ * Wipes key entries that were deleted without being erased (undoing their creation, a delete cut
+ * short before its erase, an older Trama): a deleted entry must not keep the original name.
+ * Called when a project opens. Returns how many were wiped.
+ */
+export async function eraseDeletedKeyEntries(ctx: ProjectContext): Promise<number> {
+  const all = (await ctx.store.list('pseudonym', { includeDeleted: true, where: 'deleted = 1' })) as Tombstone<'pseudonym'>[];
+  const left = all.filter((p) => !p.scrubbed);
+  if (!left.length) return 0;
+  return ctx.store.scrub('pseudonym', left.map((p) => p.id), erasedEntry, { meta: await mentionWrites(ctx, left) });
+}
+
+// ---------------------------------------------------------------------------------------------
+// What keeps a name after the key entry is gone
+
+/**
+ * Meta key: ids of audit-trail entries that named an original of the key when it was applied or
+ * erased. The trail is never edited; exports and the audit trail's CSV leave those entries'
+ * names out (`logRedactor`), also once the entry is erased and nothing is left to look for.
+ */
+export const LOG_MENTIONS = 'pseudonym.logMentions';
+/**
+ * Meta key: ids of documents whose file names (source, original, recording) held an original
+ * that apply could not rewrite (inside a word: "consent_martasousa.docx"). Exports blank them.
+ */
+export const FILE_MENTIONS = 'pseudonym.fileMentions';
+
+/** The ids stored at a mentions key. */
+export async function mentionIds(ctx: ProjectContext, key: typeof LOG_MENTIONS | typeof FILE_MENTIONS): Promise<Set<string>> {
+  const raw = await ctx.store.getMeta(key);
+  if (!raw) return new Set();
+  try {
+    const ids = JSON.parse(raw) as unknown;
+    return new Set(Array.isArray(ids) ? ids.filter((x): x is string => typeof x === 'string') : []);
+  } catch {
+    return new Set();
+  }
+}
+
+type FileNamesOf = (d: Document) => (string | undefined)[];
+const storedFileNames: FileNamesOf = (d) => [d.source?.filename, d.original?.filename, d.media?.filename];
+
+/**
+ * Meta writes adding to `LOG_MENTIONS` and `FILE_MENTIONS` the audit-trail entries and the live
+ * documents (file names as `fileNames` gives them) that hold an original of `rules`. Empty when
+ * nothing new is found.
+ */
+async function mentionWrites(ctx: ProjectContext, rules: readonly Pseudonym[], fileNames: FileNamesOf = storedFileNames): Promise<{ key: string; value: string }[]> {
+  const usable = rules.filter((r) => tidy(r.original) && r.original !== '∅');
+  if (!usable.length) return [];
+  const out: { key: string; value: string }[] = [];
+  const logs = await mentionIds(ctx, LOG_MENTIONS);
+  const n = logs.size;
+  for (const l of await ctx.store.list('log')) if (!logs.has(l.id) && usable.some((r) => findMatches(l.summary, r).length > 0)) logs.add(l.id);
+  if (logs.size > n) out.push({ key: LOG_MENTIONS, value: JSON.stringify([...logs]) });
+  const files = await mentionIds(ctx, FILE_MENTIONS);
+  const m = files.size;
+  for (const d of await ctx.store.list('document')) {
+    if (!files.has(d.id) && fileNames(d).some((f) => !!f && fileNameHolds(f, usable))) files.add(d.id);
+  }
+  if (files.size > m) out.push({ key: FILE_MENTIONS, value: JSON.stringify([...files]) });
+  return out;
+}
+
+/** What an audit-trail entry noted in `LOG_MENTIONS` reads as outside the project. */
+export const NAMES_LEFT_OUT = '"…" (names left out)';
+
+/**
+ * How audit-trail summaries read outside the project (exports, copies, the trail's CSV): an
+ * entry noted in `LOG_MENTIONS` keeps only its undo mark, every other one has the applied
+ * entries of the key applied. Backups keep the trail as it is.
+ */
+export async function logRedactor(ctx: ProjectContext): Promise<(entry: { id: string; summary: string }) => string> {
+  const noted = await mentionIds(ctx, LOG_MENTIONS);
+  const rules = (await ctx.store.list('pseudonym')).filter((p) => p.applied_at !== null);
+  return ({ id, summary }) => {
+    if (noted.has(id)) return `${/^[↶↷] ?/.exec(summary)?.[0] ?? ''}${NAMES_LEFT_OUT}`;
+    return pseudonymiseText(summary, rules, { protect: true });
+  };
+}
+
+/**
+ * Text as it reads with the applied entries of the key applied: what a restore logs, so a
+ * fresh audit-trail entry never names what the key replaced.
+ */
+export async function keyApplied(ctx: ProjectContext): Promise<(text: string) => string> {
+  const rules = (await ctx.store.list('pseudonym')).filter((p) => p.applied_at !== null);
+  return (text) => pseudonymiseText(text, rules, { protect: true });
 }
 
 /** The key, sorted by original. */
@@ -172,33 +269,42 @@ interface FieldHit {
  * descriptions, comments, memos, definitions, and the file names a document keeps (its source
  * file, original and recording). `only` limits it to some records (`kind:id`).
  */
-async function fieldHits(ctx: ProjectContext, rules: readonly Pseudonym[], opts: { only?: ReadonlySet<string>; protect?: boolean } = {}): Promise<FieldHit[]> {
+async function fieldHits(
+  ctx: ProjectContext,
+  rules: readonly Pseudonym[],
+  opts: { only?: ReadonlySet<string>; protect?: boolean; trash?: boolean } = {},
+): Promise<FieldHit[]> {
   const out: FieldHit[] = [];
-  const { only, protect } = opts;
+  const { only, protect, trash } = opts;
+  // With `trash`, the records in the trash instead (never the erased ones): see `pseudonymise`.
+  const list = async <K extends Kind>(kind: K, o: { where?: string; order?: string } = {}) =>
+    trash
+      ? ((await ctx.store.list(kind, { ...o, includeDeleted: true, where: o.where ? `deleted = 1 AND (${o.where})` : 'deleted = 1' })) as Tombstone<K>[]).filter((r) => !r.scrubbed)
+      : ctx.store.list(kind, o);
   const look = (kind: FieldKind, record: { id: string }, label: string, field: string, value: unknown) => {
     if (typeof value !== 'string' || !value) return;
     if (only && !only.has(`${kind}:${record.id}`)) return;
     const planned = field.endsWith('filename') ? planFileName(value, rules) : planText(value, rules, { protect });
     if (planned.matches.length) out.push({ kind, record, field, label, value, planned });
   };
-  for (const d of await ctx.store.list('document', { order: 'sort, id' })) {
+  for (const d of await list('document', { order: 'sort, id' })) {
     look('document', d, d.name, 'name', d.name);
     look('document', d, d.name, 'source.filename', d.source?.filename);
     look('document', d, d.name, 'original.filename', d.original?.filename);
     look('document', d, d.name, 'media.filename', d.media?.filename);
   }
   const textAttributes = new Set((await ctx.store.list('attribute')).filter((a) => a.type === 'text').map((a) => a.id));
-  for (const c of await ctx.store.list('case')) {
+  for (const c of await list('case')) {
     look('case', c, c.name, 'name', c.name);
     look('case', c, c.name, 'description', c.description);
     for (const [k, v] of Object.entries(c.values)) if (textAttributes.has(k)) look('case', c, c.name, `values.${k}`, v);
   }
-  for (const c of await ctx.store.list('code')) {
+  for (const c of await list('code')) {
     for (const f of ['name', 'description', 'inclusion', 'exclusion', 'example'] as const) look('code', c, c.name, f, c[f]);
   }
-  for (const g of await ctx.store.list('docgroup')) look('docgroup', g, g.name, 'name', g.name);
-  for (const c of await ctx.store.list('coding', { where: "json_extract(data, '$.comment') != ''" })) look('coding', c, c.text.slice(0, 60), 'comment', c.comment);
-  for (const m of await ctx.store.list('memo')) {
+  for (const g of await list('docgroup')) look('docgroup', g, g.name, 'name', g.name);
+  for (const c of await list('coding', { where: "json_extract(data, '$.comment') != ''" })) look('coding', c, c.text.slice(0, 60), 'comment', c.comment);
+  for (const m of await list('memo')) {
     look('memo', m, m.title, 'title', m.title);
     look('memo', m, m.title, 'body', m.body);
   }
@@ -374,6 +480,20 @@ export async function logInterruptedApply(ctx: ProjectContext): Promise<boolean>
   return true;
 }
 
+/** Puts a field's new text into a record's pending patch. */
+function patchField(entry: { record: { id: string }; patch: Record<string, unknown> }, h: FieldHit, text: string): void {
+  if (h.field.startsWith('values.')) {
+    const current = (entry.patch.values as Record<string, unknown> | undefined) ?? { ...(h.record as Case).values };
+    current[h.field.slice('values.'.length)] = text;
+    entry.patch.values = current;
+  } else if (h.field.endsWith('.filename')) {
+    // source, original or media: the reference stays, only the name it shows changes.
+    const slot = h.field.slice(0, -'.filename'.length) as 'source' | 'original' | 'media';
+    const current = (entry.patch[slot] as Record<string, unknown> | undefined) ?? (h.record as Document)[slot];
+    entry.patch[slot] = { ...current, filename: text };
+  } else entry.patch[h.field] = text;
+}
+
 async function pseudonymise(
   ctx: ProjectContext,
   rules: Pseudonym[],
@@ -416,6 +536,19 @@ async function pseudonymise(
   const plan = new Plan();
   let fieldReplacements = 0;
   const hits = await fieldHits(ctx, rules, { only, protect });
+  // Applying the key reaches the trash too, quietly (it is not counted, as the preview does not
+  // show it): a restore would otherwise bring back a name the key replaced, even once its entry
+  // is erased and the restore has nothing left to apply.
+  const trashHits: FieldHit[] = [];
+  if (opts.markApplied && !only) {
+    for (const doc of await ctx.store.list('document', { includeDeleted: true, where: 'deleted = 1' })) {
+      const dt = await ctx.store.get('doctext', doc.id);
+      if (!dt?.deleted || (dt as Tombstone<'doctext'>).scrubbed) continue;
+      const planned = planText(dt.text, rules);
+      if (planned.matches.length) await planTrashedTextEdits(ctx, plan, doc, dt, replaceAll(dt.text, planned.edits).edits);
+    }
+    trashHits.push(...(await fieldHits(ctx, rules, { trash: true })));
+  }
   const docNamesTaken = new Set((await ctx.store.list('document')).map((d) => d.name));
   const patches = new Map<string, { kind: FieldKind; record: { id: string }; patch: Record<string, unknown> }>();
   for (const h of hits) {
@@ -424,17 +557,20 @@ async function pseudonymise(
     fieldReplacements += h.planned.matches.length;
     const key = `${h.kind}:${h.record.id}`;
     const entry = patches.get(key) ?? patches.set(key, { kind: h.kind, record: h.record, patch: {} }).get(key)!;
-    if (h.field.startsWith('values.')) {
-      const current = (entry.patch.values as Record<string, unknown> | undefined) ?? { ...(h.record as Case).values };
-      current[h.field.slice('values.'.length)] = text;
-      entry.patch.values = current;
-    } else if (h.field.endsWith('.filename')) {
-      // source, original or media: the reference stays, only the name it shows changes.
-      const slot = h.field.slice(0, -'.filename'.length) as 'source' | 'original' | 'media';
-      const current = (entry.patch[slot] as Record<string, unknown> | undefined) ?? (h.record as Document)[slot];
-      entry.patch[slot] = { ...current, filename: text };
-    } else entry.patch[h.field] = text;
+    patchField(entry, h, text);
     opts.hits?.push({ kind: h.kind, id: h.record.id, field: h.field, label: pseudonymiseText(h.label, rules, { protect }) });
+  }
+  const trashPatches = new Map<string, { kind: FieldKind; record: { id: string }; patch: Record<string, unknown> }>();
+  for (const h of trashHits) {
+    const { text } = replaceAll(h.value, h.planned.edits);
+    const key = `${h.kind}:${h.record.id}`;
+    const entry = trashPatches.get(key) ?? trashPatches.set(key, { kind: h.kind, record: h.record, patch: {} }).get(key)!;
+    patchField(entry, h, text);
+  }
+  for (const { kind, record, patch } of trashPatches.values()) {
+    if (kind === 'code' && typeof patch.name === 'string') patch.name = patch.name.slice(0, LIMITS.codeNameMax);
+    if (kind === 'coding' && typeof patch.comment === 'string') patch.comment = patch.comment.slice(0, LIMITS.commentMax);
+    plan.changeDeleted(kind, record as never, patch as never);
   }
   for (const { kind, record, patch } of patches.values()) {
     if (kind === 'document' && typeof patch.name === 'string') {
@@ -458,12 +594,20 @@ async function pseudonymise(
   // The log never names what was replaced: document names are logged as they now read.
   const shown = shownNames();
   const summary = `${opts.reason ? '↻ ' : ''}×${replacements} → ${shown || '∅'}${opts.reason ? ` (${opts.reason})` : ''}`;
+  // What still holds an original afterwards and is never rewritten (audit-trail entries, file
+  // names with the name inside a word), noted by id so exports leave it out after an erase too.
+  const filePatch = (d: Document) => patches.get(`document:${d.id}`)?.patch as Partial<Document> | undefined;
+  const mentions = await mentionWrites(ctx, rules, (d) => {
+    const p = filePatch(d);
+    return [(p?.source ?? d.source)?.filename, (p?.original ?? d.original)?.filename, (p?.media ?? d.media)?.filename];
+  });
+  // Finished: the progress note goes in the same write.
+  const extraMeta = [...mentions, ...(opts.markApplied ? [{ key: APPLY_PENDING, value: null }] : [])];
   const { undo } = await commit(ctx, plan, {
     label: 'pseudonym.apply',
     detail: summary,
     logs: [{ action: 'pseudonym.apply', summary }],
-    // Finished: the progress note goes in the same write.
-    ...(opts.markApplied ? { extraMeta: [{ key: APPLY_PENDING, value: null }] } : {}),
+    ...(extraMeta.length ? { extraMeta } : {}),
   });
   parts.push(undo);
   await opts.onProgress?.(docs.length, docs.length);

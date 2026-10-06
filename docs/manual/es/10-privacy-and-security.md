@@ -88,7 +88,7 @@ Aplicarla solo se puede deshacer con **Deshacer justo después**; en cuanto sigu
 
 Los archivos PDF y Word originales se conservan tal como se importaron. Cuando el texto de un documento se ha editado (seudonimizado, por ejemplo), las exportaciones REFI-QDA y las copias .trama dejan fuera su PDF original, porque el original seguiría mostrando lo que se quitó (las copias de seguridad lo guardan todo).
 
-**El registro de auditoría no se seudonimiza.** Nunca se edita, así que las entradas escritas antes de aplicar la clave («Añadió el documento «Entrevista — Ana Lima»») conservan los nombres. La vista previa y la ventana Aplicar dicen cuántas entradas lo hacen. El registro viaja en las copias .trama del proyecto y en su exportación CSV: compártalas solo con quien pueda ver los nombres.
+**El registro de auditoría no se seudonimiza.** Nunca se edita, así que las entradas escritas antes de aplicar la clave («Añadió el documento «Entrevista — Ana Lima»») conservan los nombres. La vista previa y la ventana Aplicar dicen cuántas entradas lo hacen. Esas entradas se quedan como están dentro del proyecto y en sus copias de seguridad. Las exportaciones, las copias para un compañero y la exportación CSV del registro dejan fuera los nombres (la entrada se lee "…" (names left out)), y todas las demás entradas salen con la clave aplicada, también después de eliminar la entrada de la clave.
 
 <a id="audit-trail"></a>
 

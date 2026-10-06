@@ -1,9 +1,9 @@
 import React, { useMemo, useState } from 'react';
 import { DateTime } from 'luxon';
-import { ArrowRight, Eye, FileDown, KeyRound, Pencil, Plus, ShieldCheck, Sparkles, Trash2, VenetianMask, Wand2 } from 'lucide-react';
+import { ArrowRight, Eye, FileDown, KeyRound, Pencil, Plus, ShieldCheck, Sparkles, Trash2, TriangleAlert, VenetianMask, Wand2 } from 'lucide-react';
 import type { Pseudonym } from '../../core/model/types';
 import { csvBytes } from '../../core/export/office/csv';
-import { deletePseudonym, listPseudonyms, preview as previewKey, type Preview, type PreviewSample } from '../../services/pseudonyms';
+import { deletePseudonym, type InterruptedApply, interruptedApply, listPseudonyms, preview as previewKey, type Preview, type PreviewSample } from '../../services/pseudonyms';
 import { usePlatform, useProject } from '../../shell/AppState';
 import { ScreenHeader } from '../../shell/ScreenHeader';
 import type { ScreenProps } from '../../shell/router';
@@ -40,6 +40,9 @@ export default function PseudonymsScreen(_props: ScreenProps<'pseudonyms'>) {
   const [applying, setApplying] = useState(false);
 
   const { data: entries } = useLive(() => listPseudonyms(project), [], ['pseudonym']);
+  // An apply cut short (the app closed or crashed mid-way) left some documents changed and the
+  // rest, and every name, not: say so until the key is applied again to the end.
+  const { data: interrupted } = useLive(() => interruptedApply(project), [], ['pseudonym', 'doctext', 'log']);
   const byId = useMemo(() => new Map((entries ?? []).map((p) => [p.id, p])), [entries]);
   const live = useMemo(() => new Set([...checked].filter((id) => byId.has(id))), [checked, byId]);
   // With nothing ticked, preview and apply use the whole key.
@@ -186,6 +189,8 @@ export default function PseudonymsScreen(_props: ScreenProps<'pseudonyms'>) {
             </div>
           </div>
 
+          {interrupted && !applying ? <InterruptedNotice interrupted={interrupted} onAgain={entries?.length ? () => void startApply() : undefined} busy={previewing} /> : null}
+
           {!entries ? (
             <div className="pseudo__loading">
               <Spinner size={18} label={t('common.loading')} />
@@ -321,6 +326,29 @@ export default function PseudonymsScreen(_props: ScreenProps<'pseudonyms'>) {
         />
       ) : null}
     </>
+  );
+}
+
+/** An apply cut short: which part changed, and the way to finish it. */
+export function InterruptedNotice({ interrupted, onAgain, busy }: { interrupted: InterruptedApply; onAgain?: () => void; busy?: boolean }) {
+  const { t, tp } = useI18n();
+  return (
+    <Notice
+      tone="warning"
+      icon={TriangleAlert}
+      title={t('pseudonyms.interrupted.title')}
+      className="pseudo__interrupted"
+      data-testid="pseudonyms-interrupted"
+      actions={
+        onAgain ? (
+          <Button size="sm" icon={Wand2} onClick={onAgain} busy={busy} data-testid="pseudonyms-interrupted-again">
+            {t('pseudonyms.interrupted.again')}
+          </Button>
+        ) : undefined
+      }
+    >
+      {tp('pseudonyms.interrupted.body', interrupted.documents)}
+    </Notice>
   );
 }
 

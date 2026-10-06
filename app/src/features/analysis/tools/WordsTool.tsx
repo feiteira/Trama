@@ -17,7 +17,7 @@ import { WordCloud } from '../charts/WordCloud';
 import { formatFixed, formatP, formatPercent, formatValue } from '../lib/format';
 import { SERIES } from '../lib/heat';
 import { groupKwic } from '../lib/kwic';
-import { codedInputs, codeSpans, compareCorpora, documentInputs, keynessRows, wordSheet } from '../lib/words';
+import { codedInputs, compareCorpora, documentInputs, keynessRows, sheetScope, wordSheet } from '../lib/words';
 import { useAnalysisData, useDeferredCompute, useTexts, useTheme } from '../parts/data';
 import { useExporter } from '../parts/exporting';
 import { KwicList } from '../parts/KwicList';
@@ -79,10 +79,10 @@ export function WordsTool() {
 
   const inputs = useMemo((): TextInput[] | null => {
     if (!texts || !scopeReady) return null;
-    if (s.scope === 'code') return codedInputs(codings, codeIds, documents, texts, s.includeMarkup);
+    if (s.scope === 'code') return codedInputs(codings, codeIds, documents, texts, { includeMarkup: s.includeMarkup, language });
     return documentInputs(docsOf(s.scope, s.groupId), texts);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [texts, scopeReady, s.scope, s.groupId, codings, codeIds, documents, s.includeMarkup]);
+  }, [texts, scopeReady, s.scope, s.groupId, codings, codeIds, documents, s.includeMarkup, language]);
 
   const freq = useDeferredCompute(() => (inputs ? wordFrequencies(inputs, opts) : null), [inputs, opts]);
   const f = freq.value;
@@ -95,15 +95,15 @@ export function WordsTool() {
   }, [s.view, texts, s.groupA, s.groupB, documents, opts]);
 
   // KWIC for the word clicked: the word as the list counts it (wordSheet), in the scope's
-  // documents (inside the code's segments), so the sheet's total is the word's count.
+  // documents (inside the code's segments), or in the two compared sides (never a document in
+  // both groups or in neither), so the sheet's total is the word's count.
   const kwicGroups = useMemo(() => {
     if (!word || !texts) return null;
-    const docs = s.scope === 'group' && s.view !== 'compare' ? docsOf('group', s.groupId) : documents;
-    const within = s.scope === 'code' && s.view !== 'compare' ? codeSpans(codings, codeIds) : null;
+    const { docs, within } = sheetScope(s, documents, codings, codeIds);
     const r = wordSheet(word, docs, texts, opts, within);
     return { groups: groupKwic(kwic(r.hits, 70), docs, r.perDocument), total: r.total };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [word, texts, s.scope, s.groupId, s.view, codeIds, codings, documents, opts]);
+  }, [word, texts, s.scope, s.groupId, s.view, s.groupA, s.groupB, codeIds, codings, documents, opts]);
 
   const saveStops = async (list: string[]) => {
     const clean = [...new Set(list.map((w) => w.trim().toLowerCase()).filter(Boolean))];

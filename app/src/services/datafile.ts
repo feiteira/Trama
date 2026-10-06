@@ -4,17 +4,16 @@ import {
   buildTramaZip, decryptTrama, encryptWithPassword, type Protection, readTramaZip, type TramaBundle, type Unlock,
 } from '../core/export/trama';
 import type { Keyring } from '../core/crypto/keyring';
-import { compareHlc } from '../core/hlc';
 import type { Document, Entity, Kind, MediaRef } from '../core/model/types';
 import { KINDS } from '../core/model/types';
 import { TABLES } from '../core/store/schema';
-import type { Store, Tombstone, TombstoneInfo } from '../core/store/store';
+import { compareVersions, type Store, type Tombstone, type TombstoneInfo, type Versioned } from '../core/store/store';
 import type { Platform } from '../platform/types';
 import { JobStopped, stopper } from './jobs';
 import { type Library, sanitizeRecords } from './library';
 import { BLOB_ID, isLocked, type Project } from './project';
 import { textSha256 } from './documents';
-import { preview, reapplyKey, type ReappliedHit } from './pseudonyms';
+import { FILE_MENTIONS, logRedactor, mentionIds, preview, reapplyKey, type ReappliedHit } from './pseudonyms';
 import {
   MERGE_PENDING, type MergeTouches, mergeTouches, reconcile, repairImported, textConflicts, type TextConflict, touchesFromJson, touchesToJson,
 } from './reconcile';
@@ -118,6 +117,16 @@ export async function projectToBundle(project: Project, opts: BundleOptions): Pr
     records.push((omit ? { kind: r.kind, record: withoutContent(r.kind, r.record) } : r) as BundleRecord);
   }
   if (opts.omitEditedOriginals) await omitEditedOriginals(project, records);
+  // An export (not a backup): audit-trail entries never name what the key replaced.
+  if (opts.omitEditedOriginals || opts.omitDeletedContent) {
+    const redact = await logRedactor(project);
+    for (let i = 0; i < records.length; i++) {
+      const r = records[i]!;
+      if (r.kind !== 'log') continue;
+      const summary = redact(r.record);
+      if (summary !== r.record.summary) records[i] = { kind: 'log', record: { ...r.record, summary } };
+    }
+  }
   const blobs = new Map<string, Uint8Array>();
   const warnings: string[] = [];
   for (const r of records) {
@@ -149,8 +158,9 @@ export async function projectToBundle(project: Project, opts: BundleOptions): Pr
  * original whose text no longer matches the document is left out) for .trama files too. File
  * names (of the source file, the original and the recording) are blanked when they hold an
  * original of the key, and, once pseudonymisation was applied in this project (an entry applied,
- * or erased since), for every document whose text was edited: a name erased from the key can
- * no longer be looked for.
+ * or erased since), for every document whose text was edited, and for the documents noted in
+ * `FILE_MENTIONS` (a name inside a word that apply left): a name erased from the key can no
+ * longer be looked for.
  */
 async function omitEditedOriginals(project: Project, records: BundleRecord[]): Promise<void> {
   const texts = new Map<string, string>();
@@ -158,6 +168,8 @@ async function omitEditedOriginals(project: Project, records: BundleRecord[]): P
   const all = (await project.store.list('pseudonym', { includeDeleted: true })) as Tombstone<'pseudonym'>[];
   const key = all.filter((p) => !p.deleted);
   const used = all.some((p) => p.applied_at !== null || p.scrubbed);
+  // Documents whose file names held an original apply could not rewrite (noted when it ran).
+  const noted = await mentionIds(project, FILE_MENTIONS);
   const named = (filename: string | undefined) => !!filename && fileNameHolds(filename, key);
   for (let i = 0; i < records.length; i++) {
     const r = records[i]!;
@@ -166,7 +178,7 @@ async function omitEditedOriginals(project: Project, records: BundleRecord[]): P
     const text = texts.get(d.id);
     const textEdited = !d.source || text === undefined || d.source.text_sha256 !== textSha256(text);
     const edited = !!d.original && textEdited;
-    const blankNames = used && textEdited;
+    const blankNames = (used && textEdited) || noted.has(d.id);
     const leak = {
       source: !!d.source?.filename && (blankNames || named(d.source.filename)),
       original: !edited && !!d.original?.filename && (blankNames || named(d.original.filename)),
@@ -302,15 +314,16 @@ async function readyToMerge(store: Store, records: readonly BundleRecord[]): Pro
       continue;
     }
     const local = (await store.get(r.kind, r.record.id)) as Tombstone<Kind> | null;
-    const newer = !local || compareHlc(local.updated_at_hlc, r.record.updated_at_hlc) < 0;
+    const newer = !local || compareVersions(local as Versioned, r.record as Versioned) < 0;
     if (!newer || !local || local.scrubbed) {
       out.push(r);
       continue;
     }
     const incoming = r.record as Tombstone<Kind>;
-    const { deleted_batch: _b, ...kept } = local;
+    const { deleted_batch: _b, sem: _m, ...kept } = local as Tombstone<Kind> & Versioned;
     const batch = incoming.deleted_batch ? { deleted_batch: incoming.deleted_batch } : {};
-    out.push({ kind: r.kind, record: { ...kept, ...batch, deleted: true, updated_at_hlc: incoming.updated_at_hlc } } as BundleRecord);
+    const sem = (incoming as Versioned).sem ? { sem: (incoming as Versioned).sem } : {};
+    out.push({ kind: r.kind, record: { ...kept, ...batch, ...sem, deleted: true, updated_at_hlc: incoming.updated_at_hlc } } as BundleRecord);
   }
   return out;
 }
@@ -376,15 +389,18 @@ export interface MergePreview extends Omit<MergeResult, 'blobs' | 'reanchored' |
   newCoders: { id: string; name: string; color: string }[];
 }
 
-/** Write stamps of the records here (deleted ones too), by kind and id. */
-export type LocalStamps = ReadonlyMap<Kind, ReadonlyMap<string, string>>;
+/**
+ * Stamps of the records here (deleted ones too), by kind and id: the write stamp and the stamp of
+ * the last meaningful change (`Versioned`), or the write stamp alone.
+ */
+export type LocalStamps = ReadonlyMap<Kind, ReadonlyMap<string, string | Versioned>>;
 
-/** Reads only ids and stamps (no record data), so a large project is compared quickly. */
+/** Reads only ids and stamps (no record content), so a large project is compared quickly. */
 export async function localStamps(store: Store): Promise<LocalStamps> {
-  const out = new Map<Kind, Map<string, string>>();
+  const out = new Map<Kind, Map<string, Versioned>>();
   for (const kind of KINDS) {
-    const rows = await store.db.query<{ id: string; hlc: string }>(`SELECT id, hlc FROM ${TABLES[kind].table}`);
-    out.set(kind, new Map(rows.map((r) => [r.id, r.hlc])));
+    const rows = await store.db.query<{ id: string; hlc: string; sem: string | null }>(`SELECT id, hlc, json_extract(data, '$.sem') AS sem FROM ${TABLES[kind].table}`);
+    out.set(kind, new Map(rows.map((r) => [r.id, { updated_at_hlc: r.hlc, ...(r.sem ? { sem: r.sem } : {}) }])));
   }
   return out;
 }
@@ -407,7 +423,7 @@ export function classifyMerge(projectName: string, records: readonly BundleRecor
       // A record that arrives already deleted changes nothing anyone sees.
       if (!r.record.deleted) bucket.added++;
       if (r.kind === 'coder' && !r.record.deleted) newCoders.push({ id: r.record.id, name: r.record.name, color: r.record.color });
-    } else if (compareHlc(mine, r.record.updated_at_hlc) < 0) {
+    } else if (compareVersions(typeof mine === 'string' ? { updated_at_hlc: mine } : mine, r.record as Versioned) < 0) {
       updated++;
       bucket.updated++;
     } else unchanged++;

@@ -4,7 +4,8 @@ import type { Memo, MemoTarget } from '../core/model/types';
 import { LIMITS } from '../core/model/types';
 import type { ProjectContext } from './context';
 import { recentlyLogged } from './log';
-import { reapplyKey } from './pseudonyms';
+import { keyApplied, reapplyKey } from './pseudonyms';
+import { settleReferences } from './reconcile';
 import { commit, need, noopUndo, Plan, q, restoreBatch, type LogSpec, type Undoable } from './undo';
 
 export interface NewMemo {
@@ -74,10 +75,16 @@ export async function deleteMemo(ctx: ProjectContext, id: string): Promise<{ bat
 
 /** Brings back memos deleted together (from "recently deleted"). */
 export async function restoreMemos(ctx: ProjectContext, batch: string): Promise<number> {
-  const ids = (await restoreBatch(ctx, batch, ['memo'])).get('memo') ?? [];
+  const back = (await restoreBatch(ctx, batch, ['memo'])).get('memo') ?? [];
+  // A memo about something deleted since goes back to the trash with it.
+  await settleReferences(ctx.store, batch);
+  const live = await ctx.store.getMany('memo', back);
+  const ids = back.filter((id) => live.get(id)?.deleted === false);
+  // Logged as the titles read once the key is applied again below: never a name it replaced.
+  const named = await keyApplied(ctx);
   for (const id of ids) {
     const m = await ctx.store.get('memo', id);
-    if (m) await ctx.log('memo.create', `↶ ${memoLabel(m)}`, { kind: 'memo', id });
+    if (m) await ctx.log('memo.create', `↶ ${memoLabel({ title: named(m.title) })}`, { kind: 'memo', id });
   }
   // A memo written before the pseudonymisation key was applied comes back with it applied.
   await reapplyKey(ctx, ids.map((id) => `memo:${id}`), 'restore');

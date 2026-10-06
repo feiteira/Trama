@@ -192,8 +192,17 @@ export function sanitizeRecords(records: readonly BundleRecord[]): { records: Bu
       rejected++;
       continue;
     }
-    const { content_omitted: _o, ...rest } = r;
+    const { content_omitted: _o, sem, ...rest } = r as typeof r & { sem?: unknown };
     let clean = rest as Entity<Kind>;
+    // The stamp of the record's last meaningful change: a valid stamp, never after its write.
+    if (typeof sem === 'string' && sem <= r.updated_at_hlc) {
+      try {
+        parseHlc(sem);
+        clean = { ...clean, sem } as unknown as Entity<Kind>;
+      } catch {
+        // dropped: the write stamp stands for it
+      }
+    }
     try {
       const { id, created_at, updated_at_hlc, deleted, ...draft } = clean;
       const tidy = validate(kind, { ...draft, id } as never) as object;

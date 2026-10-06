@@ -2,11 +2,11 @@
 // tokens, same speaker-label rule, in every scope. Checked over the whole example project.
 import { describe, expect, it } from 'vitest';
 import { paragraphSpans } from '../../../core/qda/ranges';
-import { wordFrequencies, type WordFrequencyOptions } from '../../../core/qda/wordfreq';
+import { compareFrequencies, wordFrequencies, type WordFrequencyOptions } from '../../../core/qda/wordfreq';
 import { createExampleLibrary } from '../../../demo/exampleLibrary';
 import { createMemoryPlatform } from '../../../platform/memory';
 import { FAST_KDF } from '../../../services/testing';
-import { codedInputs, codeSpans, documentInputs, wordSheet } from './words';
+import { codedInputs, codeSpans, compareCorpora, documentInputs, sheetScope, wordSheet } from './words';
 
 async function example(locale: 'en' | 'pt' | 'es') {
   const { library, project } = await createExampleLibrary(createMemoryPlatform(), { locale, params: FAST_KDF });
@@ -44,13 +44,57 @@ describe('word list sheet', () => {
     const extra = { ...codings[0]!, id: 'whole-turn', code_id: code.id, document_id: transcript.id, start: turn.start, end: turn.end, deleted: false };
     const all = [...codings, extra];
     const opts: WordFrequencyOptions = { language: 'en', minLength: 1 };
-    const f = wordFrequencies(codedInputs(all, [code.id], documents, texts), opts);
+    const f = wordFrequencies(codedInputs(all, [code.id], documents, texts, { language: 'en' }), opts);
     expect(f.words.find((w) => w.word === label)).toBeUndefined();
-    const withLabels = wordFrequencies(codedInputs(all, [code.id], documents, texts, true), { ...opts, includeMarkup: true });
+    const withLabels = wordFrequencies(codedInputs(all, [code.id], documents, texts, { includeMarkup: true, language: 'en' }), { ...opts, includeMarkup: true });
     expect(withLabels.words.find((w) => w.word === label)?.count).toBeGreaterThan(0);
     const within = codeSpans(all, [code.id]);
     const off = f.words.filter((w) => wordSheet(w.word, documents, texts, opts, within, 5).total !== w.count).map((w) => `${w.word}:${w.count}`);
     expect(off).toEqual([]);
+    await library.lock();
+  });
+
+  it.each(['en', 'pt'] as const)('%s: segments that start or end inside a word count what the sheet lists', async (locale) => {
+    const { library, documents, texts, codings, codes } = await example(locale);
+    const code = codes.find((c) => c.codable)!;
+    // Imported .qdpx files and text edits leave such segments: a few letters into a word, to a few letters into another.
+    const odd = documents.slice(0, 6).map((d, n) => {
+      const text = texts.get(d.id)!;
+      const i = text.search(/\p{L}{8,}/u) + 3;
+      return { ...codings[0]!, id: `odd-${n}`, code_id: code.id, document_id: d.id, start: i, end: Math.min(text.length, i + 57 + n), deleted: false };
+    });
+    const all = [...codings, ...odd];
+    for (const includeMarkup of [false, true]) {
+      const opts: WordFrequencyOptions = { language: locale, minLength: 3, includeMarkup };
+      const f = wordFrequencies(codedInputs(all, [code.id], documents, texts, opts), opts);
+      const within = codeSpans(all, [code.id]);
+      const off = f.words.filter((w) => wordSheet(w.word, documents, texts, opts, within, 5).total !== w.count).map((w) => `${w.word}:${w.count}`);
+      expect(off).toEqual([]);
+      // And every word the sheet finds inside the segments is counted.
+      const counted = new Set(f.words.map((w) => w.word));
+      const sample = wordFrequencies(documentInputs(documents, texts), opts).words.slice(0, 300);
+      const missed = sample.filter((w) => !counted.has(w.word) && wordSheet(w.word, documents, texts, opts, within, 1).total > 0).map((w) => w.word);
+      expect(missed).toEqual([]);
+    }
+    await library.lock();
+  });
+
+  it('the compare view’s sheet looks only in the two compared sides', async () => {
+    const { library, documents, texts, codings } = await example('en');
+    const ids = [...new Set(documents.flatMap((d) => d.group_ids))];
+    expect(ids.length).toBeGreaterThanOrEqual(2);
+    const opts: WordFrequencyOptions = { language: 'en', minLength: 3 };
+    for (const [groupA, groupB] of [[ids[0]!, ids[1]!], [ids[0]!, '']] as [string, string][]) {
+      const s = { view: 'compare', scope: 'all', groupId: '', groupA, groupB };
+      const { a, b } = compareCorpora(documents, groupA, groupB);
+      const res = compareFrequencies(documentInputs(a, texts), documentInputs(b, texts), { ...opts, limit: 200, minCount: 3 });
+      expect(res.rows.length).toBeGreaterThan(0);
+      const { docs, within } = sheetScope(s, documents, codings, []);
+      // Two groups leave documents out of both sides: the sheet must not look in them.
+      if (groupB) expect(docs.length).toBeLessThan(documents.length);
+      const off = res.rows.filter((r) => wordSheet(r.word, docs, texts, opts, within, 5).total !== r.countA + r.countB).map((r) => r.word);
+      expect(off).toEqual([]);
+    }
     await library.lock();
   });
 });

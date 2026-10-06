@@ -225,6 +225,39 @@ function lookup(texts: WordsByCodeOptions['texts'], id: string): string | undefi
   return Object.prototype.hasOwnProperty.call(r, id) ? r[id] : undefined;
 }
 
+/**
+ * The words of `text` that `wordHits` would find inside `spans` (its counted part — without an
+ * elided article or a possessive — lying within one span, overlapping spans merged), joined by
+ * spaces: counting them gives exactly the hits a word's sheet lists within those spans. A span
+ * that starts or ends inside a word leaves that word out on both sides ("eeing" of "agreeing" is
+ * never a word of its own). `kind` and `includeMarkup` as for counting.
+ */
+export function wordsWithin(text: string, spans: readonly Span[], opts: Pick<WordFrequencyOptions, 'language' | 'includeMarkup'> & { kind?: string } = {}): string {
+  const merged = mergeSpans(spans.filter((s) => s.end > s.start));
+  if (!merged.length || !text) return '';
+  const masked = opts.includeMarkup ? text : maskMarkup(text, opts.kind);
+  const lower = masked.toLowerCase();
+  const same = lower.length === text.length;
+  const src = same ? lower.replace(APOS, "'").replace(HYPHENS, '-') : masked;
+  const normalise = makeNormaliser(opts.language, stopwordsFor(opts.language));
+  const kept: string[] = [];
+  const re = wordRegex();
+  let j = 0;
+  for (let m = re.exec(src); m; m = re.exec(src)) {
+    const tok = same ? m[0] : m[0].toLowerCase().replace(APOS, "'").replace(HYPHENS, '-');
+    const norm = normalise(tok);
+    let start = m.index;
+    let end = start + m[0].length;
+    if (norm.length < tok.length && tok.endsWith(norm)) start = end - norm.length;
+    else if (norm.length < tok.length && tok.startsWith(norm)) end = start + norm.length;
+    // Spans are sorted and apart, and so are the words: one pass.
+    while (j < merged.length && merged[j]!.end < end) j++;
+    if (j >= merged.length) break;
+    if (merged[j]!.start <= start) kept.push(masked.slice(m.index, m.index + m[0].length));
+  }
+  return kept.join(' ');
+}
+
 /** The coded text of the codes, one entry per document (pieces joined by line breaks). */
 export function codedTexts(codings: readonly Coding[], codeIds: readonly string[], opts: WordsByCodeOptions = {}): { id: string; text: string }[] {
   const rows = codeRows(codeIds, opts.includeChildren, opts.descendants);

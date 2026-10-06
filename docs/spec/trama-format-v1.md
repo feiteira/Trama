@@ -48,7 +48,7 @@ Readers must:
 
 ### Records
 
-Every record has `id`, `created_at` (ISO 8601 UTC), `updated_at_hlc` and `deleted`, plus the fields of its kind (see `app/src/core/model/types.ts` in Trama's source code). `updated_at_hlc` is a hybrid logical clock stamp — 15-digit milliseconds, a 5-character base-36 counter and a device id, joined by `-` — and orders versions of a record by plain string comparison. When two versions of a record meet (a merge), the one with the greater stamp wins.
+Every record has `id`, `created_at` (ISO 8601 UTC), `updated_at_hlc` and `deleted`, plus the fields of its kind (see `app/src/core/model/types.ts` in Trama's source code). `updated_at_hlc` is a hybrid logical clock stamp — 15-digit milliseconds, a 5-character base-36 counter and a device id, joined by `-` — and orders versions of a record by plain string comparison. A record may also carry `sem`, the stamp of its last meaningful change: writes that only carry a record along with a text edit (coding offsets, a document's length, codings in the trash) keep the previous `sem`. When two versions of a record meet (a merge), the one with the greater `sem` (or `updated_at_hlc` when `sem` is absent) wins; ties go to the greater `updated_at_hlc`.
 
 Text positions (`start`, `end` of a coding, `pos` of a transcript sync point) are UTF-16 code-unit offsets into the document's text (`doctext.text`), half-open `[start, end)`. The text is Unicode NFC with LF line endings and no byte-order mark. A `doctext` record has the same `id` as its `document`.
 
@@ -61,6 +61,8 @@ A deleted record may also carry:
 | `content_omitted` | `true` in an export, never in a backup: the deleted record was written without its content, so a file handed to someone never holds what was deleted. On merge, a copy of the record that is already there and older keeps its content, marked deleted. |
 
 Readers that do not know a field should ignore it.
+
+In an export (never in a backup), `log` records are written as they read outside the project: every summary has the applied entries of the pseudonymisation key applied, and an entry that named an original of the key when it was applied or erased has the summary `"…" (names left out)` (after its `↶` or `↷` mark, if any). The project's own audit trail is never edited.
 
 ## Encrypted file
 

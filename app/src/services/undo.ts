@@ -26,6 +26,8 @@
 import { uuid } from '../core/ids';
 import type { Base, Draft, Entity, Kind, LogAction } from '../core/model/types';
 import { appendRev } from './revs';
+import { computeEdits, mapRange } from '../core/qda/ranges';
+import { anchor } from './anchor';
 import { ErasedRecordError, type Store } from '../core/store/store';
 import { TABLES } from '../core/store/schema';
 import type { ProjectContext } from './context';
@@ -262,11 +264,11 @@ export class UndoManager {
 // Plans: what one operation writes
 
 type AnyEntity = Entity<Kind>;
-type TombstoneFields = { deleted_batch?: string; scrubbed?: boolean };
+type TombstoneFields = { deleted_batch?: string; scrubbed?: boolean; sem?: string };
 
 /** A record without its base and tombstone fields, ready to write back. */
 export function draftOf<K extends Kind>(record: Entity<K>): Draft<K> {
-  const { created_at: _c, updated_at_hlc: _h, deleted: _d, deleted_batch: _b, scrubbed: _s, ...rest } = record as Entity<K> &
+  const { created_at: _c, updated_at_hlc: _h, deleted: _d, deleted_batch: _b, scrubbed: _s, sem: _m, ...rest } = record as Entity<K> &
     Base &
     TombstoneFields;
   return rest as unknown as Draft<K>;
@@ -279,6 +281,8 @@ interface PutItem {
   before: AnyEntity | null;
   /** A deleted record changed in place: it stays deleted, in its delete batch. */
   tomb?: boolean;
+  /** Only follows another record (offsets moved with a text edit): see `WriteOp` `derived`. */
+  derived?: boolean;
 }
 
 const keyOf = undoKey;
@@ -294,13 +298,18 @@ export class Plan {
     return id;
   }
 
-  /** Changes fields of a stored record (several changes to one record merge). */
-  change<K extends Kind>(kind: K, record: Entity<K>, patch: Partial<Draft<K>>): Draft<K> {
+  /**
+   * Changes fields of a stored record (several changes to one record merge). `derived`: the
+   * change only follows another record (a coding's offsets moved along with a text edit, a
+   * document's `chars`), so a teammate's edit of the record meanwhile still wins a merge.
+   */
+  change<K extends Kind>(kind: K, record: Entity<K>, patch: Partial<Draft<K>>, opts: { derived?: boolean } = {}): Draft<K> {
     const key = keyOf(kind, record.id);
     if (this.dels.has(key)) throw new Error(`${key} is being deleted`);
     const prev = this.puts.get(key);
     const draft = { ...(prev ? prev.draft : draftOf(record)), ...patch, id: record.id } as Draft<Kind>;
-    this.puts.set(key, { kind, draft, before: prev ? prev.before : (record as AnyEntity) });
+    const derived = (prev ? !!prev.derived : true) && !!opts.derived;
+    this.puts.set(key, { kind, draft, before: prev ? prev.before : (record as AnyEntity), ...(derived ? { derived } : {}) });
     return draft as Draft<K>;
   }
 
@@ -368,6 +377,8 @@ interface Snap {
   after: AnyEntity | null;
   /** The delete batch for a record this step created and its undo deletes again. */
   batch: string;
+  /** The step only moved this record along with another (see `Plan.change`). */
+  derived?: boolean;
 }
 
 const INVERSE: Partial<Record<LogAction, LogAction>> = {
@@ -436,7 +447,7 @@ export async function commit(
   for (const p of puts) if (p.before) beforeStamps.set(keyOf(p.kind, p.before.id), p.before.updated_at_hlc);
   for (const d of dels) beforeStamps.set(keyOf(d.kind, d.record.id), d.record.updated_at_hlc);
   const res = await ctx.store.write({
-    puts: [...live.map((p) => ({ kind: p.kind, draft: p.draft })), ...(logs ?? [])],
+    puts: [...live.map((p) => ({ kind: p.kind, draft: p.draft, derived: !!p.derived })), ...(logs ?? [])],
     tombstones: tombs.map((p) => ({ kind: p.kind, draft: p.draft, batch: (p.before as (AnyEntity & TombstoneFields) | null)?.deleted_batch })),
     removes,
     ...(meta.extraMeta ? { meta: meta.extraMeta } : {}),
@@ -450,7 +461,7 @@ export async function commit(
     return { ...p.before, ...p.draft, deleted: true, ...(b ? { deleted_batch: b } : {}), updated_at_hlc: res.stamps.get(keyOf(p.kind, p.draft.id!)) } as unknown as AnyEntity;
   };
   const snaps: Snap[] = [
-    ...live.map((p) => ({ kind: p.kind, id: p.draft.id!, before: p.before, after: saved.find(p.kind, p.draft.id!) ?? null, batch })),
+    ...live.map((p) => ({ kind: p.kind, id: p.draft.id!, before: p.before, after: saved.find(p.kind, p.draft.id!) ?? null, batch, ...(p.derived ? { derived: true } : {}) })),
     ...tombs.map((p) => ({ kind: p.kind, id: p.draft.id!, before: p.before, after: tombAfter(p), batch })),
     ...dels.map((d) => ({ kind: d.kind, id: d.record.id, before: d.record, after: { ...d.record, deleted: true, deleted_batch: batch } as unknown as AnyEntity, batch })),
   ];
@@ -505,7 +516,7 @@ class Step {
       for (const sn of st.snaps) {
         const k = keyOf(sn.kind, sn.id);
         const prev = byKey.get(k);
-        byKey.set(k, prev ? { ...prev, after: sn.after } : { ...sn });
+        byKey.set(k, prev ? { ...prev, after: sn.after, derived: !!prev.derived && !!sn.derived } : { ...sn });
         if (!prev && st.beforeStamps.has(k)) before.set(k, st.beforeStamps.get(k)!);
         const h = st.stamps.get(k);
         if (h !== undefined) stamps.set(k, h);
@@ -535,7 +546,7 @@ class Step {
     // A text written back is a new revision of it, not the old one again: a teammate's copy
     // that holds the text from before must not pass for one made after (see `DocText.revs`).
     const texts = await store.getMany('doctext', this.snaps.filter((sn) => sn.kind === 'doctext').map((sn) => sn.id));
-    const puts: { kind: Kind; draft: Draft<Kind> }[] = [];
+    const puts: { kind: Kind; draft: Draft<Kind>; derived?: boolean }[] = [];
     const tombstones: { kind: Kind; draft: Draft<Kind>; batch?: string }[] = [];
     const removes = new Map<string, { kind: Kind; ids: string[]; batch: string }>();
     for (const sn of this.snaps) {
@@ -552,8 +563,36 @@ class Step {
         if (now) draft = { ...d, revs: d.text === now.text ? now.revs : appendRev(now) } as Draft<Kind>;
       }
       if (rec.deleted) tombstones.push({ kind: sn.kind, draft, batch: (rec as AnyEntity & TombstoneFields).deleted_batch ?? sn.batch });
-      else puts.push({ kind: sn.kind, draft });
+      else puts.push({ kind: sn.kind, draft, ...(sn.derived ? { derived: true } : {}) });
     }
+    // Codings this step does not hold (a teammate's, merged in since; ones whose own step was
+    // dropped) follow the text it writes back, as they follow any edit; one that would be left
+    // without words refuses the step rather than lose it.
+    const own = new Set(this.keys());
+    for (const sn of this.snaps) {
+      const rec = target(sn);
+      const now = texts.get(sn.id);
+      if (sn.kind !== 'doctext' || !rec || rec.deleted || !now || now.deleted) continue;
+      const next = (rec as Entity<'doctext'>).text;
+      if (next === now.text) continue;
+      const edits = computeEdits(now.text, next);
+      const codings = await store.list('coding', { includeDeleted: true, where: 'document_id = ?', params: [sn.id] });
+      for (const c of codings as (Entity<'coding'> & TombstoneFields)[]) {
+        if (own.has(keyOf('coding', c.id)) || c.scrubbed) continue;
+        const r = mapRange(c, edits);
+        if (!c.deleted) {
+          if (!r) throw new ServiceError('changed_since', `coding ${c.id} was made since and would lose its words; this step can no longer be undone or redone`);
+          const t = next.slice(r.start, r.end);
+          if (r.start !== c.start || r.end !== c.end || t !== c.text) puts.push({ kind: 'coding', draft: { ...draftOf(c), start: r.start, end: r.end, text: t } as Draft<Kind>, derived: true });
+        } else {
+          // In the trash: kept on its words for a restore, emptied when they are gone.
+          const moved = r ? { start: r.start, end: r.end, text: next.slice(r.start, r.end) } : { text: '' };
+          const changed = r ? r.start !== c.start || r.end !== c.end || moved.text !== c.text : !!c.text;
+          if (changed) tombstones.push({ kind: 'coding', draft: { ...draftOf(c), ...moved } as Draft<Kind>, batch: c.deleted_batch });
+        }
+      }
+    }
+    await this.checkReferences(puts, tombstones, [...removes.values()]);
     const logs = logPuts(this.ctx, this.logs, dir === 'undo' ? '↶ ' : '↷ ', dir === 'undo');
     const res = await store.write({ puts: [...puts, ...(logs ?? [])], tombstones, removes: [...removes.values()] });
     if (!logs) {
@@ -574,6 +613,86 @@ class Step {
     }
     this.stamps = next;
     this.state = dir === 'undo' ? 'undone' : 'done';
+  }
+
+  /**
+   * Refuses (ServiceError 'changed_since') a write back that would leave the project
+   * inconsistent with what was done since by other steps or merged in: a coding of a deleted
+   * document or code, or of a category, a memo about a deleted record, a code deleted or made a
+   * category while codings use it, a document deleted under live codings or memos, a cycle in the
+   * codebook. A coding written back where its text changed since is put back on its words (when
+   * they occur once), as a restore does. Adjusts `puts` in place.
+   */
+  private async checkReferences(
+    puts: { kind: Kind; draft: Draft<Kind> }[],
+    tombstones: { kind: Kind; draft: Draft<Kind> }[],
+    removes: { kind: Kind; ids: string[] }[],
+  ): Promise<void> {
+    const { store } = this.ctx;
+    const refuse = (why: string): never => {
+      throw new ServiceError('changed_since', `${why} since; this step can no longer be undone or redone`);
+    };
+    const post = new Map<string, { deleted: boolean; draft?: Record<string, unknown> }>();
+    for (const p of puts) post.set(keyOf(p.kind, p.draft.id!), { deleted: false, draft: p.draft as unknown as Record<string, unknown> });
+    for (const t of tombstones) post.set(keyOf(t.kind, t.draft.id!), { deleted: true });
+    for (const r of removes) for (const id of r.ids) post.set(keyOf(r.kind, id), { deleted: true });
+    const current = async <K extends Kind>(kind: K, id: string): Promise<Record<string, unknown> | null> => {
+      const p = post.get(keyOf(kind, id));
+      if (p) return p.deleted ? null : p.draft!;
+      const r = await store.get(kind, id);
+      return r && !r.deleted ? (r as unknown as Record<string, unknown>) : null;
+    };
+    const deletedHere = (kind: Kind, id: string) => post.get(keyOf(kind, id))?.deleted === true;
+    const livePuts = <K extends Kind>(kind: K) => puts.filter((p) => p.kind === kind).map((p) => p.draft as unknown as Entity<K>);
+
+    for (const c of livePuts('coding')) {
+      const doc = await current('document', c.document_id);
+      const dt = await current('doctext', c.document_id);
+      const code = await current('code', c.code_id);
+      if (!doc || !dt) refuse(`the document of coding ${c.id} was deleted`);
+      if (!code) refuse(`the code of coding ${c.id} was deleted`);
+      if (code!.codable === false) refuse(`the code of coding ${c.id} became a category`);
+      const text = dt!.text as string;
+      if (c.end > text.length || c.start >= c.end || text.slice(c.start, c.end) !== c.text) {
+        const r = anchor(c, text, [], () => [], { unique: true });
+        if (!r) refuse(`the text under coding ${c.id} changed`);
+        Object.assign(c, { start: r!.start, end: r!.end, text: text.slice(r!.start, r!.end) });
+      }
+    }
+    for (const m of livePuts('memo')) {
+      if (m.target.kind !== 'project' && !(await current(m.target.kind as Kind, m.target.id))) refuse(`what memo ${m.id} is about was deleted`);
+    }
+    // Records this write deletes, or codes it makes categories: nothing live may still use them.
+    const gone = [...post].filter(([, v]) => v.deleted).map(([k]) => k.split(':') as [Kind, string]);
+    const categories = livePuts('code').filter((c) => c.codable === false).map((c) => c.id);
+    const codingsOf = async (column: 'code_id' | 'document_id', id: string) => {
+      // What this write rewrites counts as written, not as stored.
+      const stored = (await store.list('coding', { where: `${column} = ?`, params: [id] })).filter((c) => !post.has(keyOf('coding', c.id)));
+      const written = livePuts('coding').filter((c) => c[column] === id);
+      return stored.length + written.length;
+    };
+    for (const [kind, id] of gone) {
+      if (kind === 'code' && (await codingsOf('code_id', id))) refuse(`code ${id} has codings made`);
+      if ((kind === 'document' || kind === 'doctext') && (await codingsOf('document_id', id))) refuse(`document ${id} has codings made`);
+      if (kind === 'document' || kind === 'code' || kind === 'coding' || kind === 'case') {
+        const memos = (await store.list('memo', { where: 'target_kind = ? AND target_id = ?', params: [kind, id] })).filter((m) => !post.has(keyOf('memo', m.id)));
+        if (memos.length || livePuts('memo').some((m) => m.target.kind === kind && m.target.id === id)) refuse(`${kind} ${id} has memos written`);
+      }
+    }
+    for (const id of categories) if (await codingsOf('code_id', id)) refuse(`code ${id} has codings made`);
+    const movedCodes = livePuts('code');
+    if (movedCodes.length) {
+      const parents = new Map<string, string | null>();
+      for (const c of await store.list('code')) if (!deletedHere('code', c.id)) parents.set(c.id, c.parent_id);
+      for (const c of movedCodes) parents.set(c.id, c.parent_id);
+      for (const c of movedCodes) {
+        const seen = new Set([c.id]);
+        for (let p = parents.get(c.id) ?? null; p !== null && parents.has(p); p = parents.get(p) ?? null) {
+          if (seen.has(p)) refuse(`codes were moved`);
+          seen.add(p);
+        }
+      }
+    }
   }
 
   /** Refuses (ServiceError 'changed_since') unless every record still carries this step's stamp. */

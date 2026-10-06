@@ -88,7 +88,7 @@ Aplicar só se pode anular com **Anular logo a seguir**; quando continua a traba
 
 Os ficheiros PDF e Word originais ficam como foram importados. Quando o texto de um documento foi editado (pseudonimizado, por exemplo), as exportações REFI-QDA e as cópias .trama deixam de fora o PDF original, porque o original continuaria a mostrar o que foi removido (as cópias de segurança guardam tudo).
 
-**O registo de auditoria não é pseudonimizado.** Nunca é editado, por isso as entradas escritas antes de aplicar a chave («Adicionou o documento «Entrevista — Ana Lima»») mantêm os nomes. A pré-visualização e a janela Aplicar dizem quantas entradas o fazem. O registo viaja nas cópias .trama do projeto e na sua exportação CSV: partilhe-as só com quem pode ver os nomes.
+**O registo de auditoria não é pseudonimizado.** Nunca é editado, por isso as entradas escritas antes de aplicar a chave («Adicionou o documento «Entrevista — Ana Lima»») mantêm os nomes. A pré-visualização e a janela Aplicar dizem quantas entradas o fazem. Essas entradas ficam como estão dentro do projeto e nas suas cópias de segurança. As exportações, as cópias para um colega e a exportação CSV do registo deixam os nomes de fora (a entrada lê-se "…" (names left out)), e todas as outras entradas saem com a chave aplicada — também depois de eliminar a entrada da chave.
 
 <a id="audit-trail"></a>
 

@@ -108,7 +108,12 @@ export const pseudonyms: Messages['pseudonyms'] = {
       other: 'outro campo',
     },
     logTitle: { one: 'O registo de auditoria guarda {n} entrada com estes nomes', other: 'O registo de auditoria guarda {n} entradas com estes nomes' },
-    logBody: 'O registo de auditoria nunca é editado, por isso a pseudonimização não o altera. Viaja nas cópias .trama do projeto e na sua exportação CSV: partilhe-as só com quem pode ver os nomes.',
+    logBody: 'O registo de auditoria nunca é editado, por isso essas entradas guardam os nomes dentro deste projeto e das suas cópias de segurança. As exportações, as cópias para um colega e o CSV do registo de auditoria deixam esses nomes de fora, também depois de eliminar a entrada da chave.',
+  },
+  interrupted: {
+    title: 'A pseudonimização foi interrompida',
+    body: { one: 'Parou depois de alterar {n} documento. Os nomes e os outros documentos não foram alterados. Aplique a chave de novo para terminar.', other: 'Parou depois de alterar {n} documentos. Os nomes e os outros documentos não foram alterados. Aplique a chave de novo para terminar.' },
+    again: 'Aplicar de novo',
   },
   apply: {
     button: 'Aplicar aos documentos',
@@ -119,7 +124,7 @@ export const pseudonyms: Messages['pseudonyms'] = {
     point1: 'Os originais são substituídos nos próprios documentos, não só nas exportações.',
     point2: 'Os segmentos codificados e os tempos das transcrições acompanham o texto alterado. Os nomes de documentos, casos, códigos e grupos, os nomes de ficheiros, as descrições, os memorandos, os comentários e as definições de códigos também são alterados.',
     point3: 'Só pode ser anulado com Anular logo a seguir. Assim que continuar a trabalhar, a alteração é definitiva.',
-    point4: 'Não são alterados: o registo de auditoria e os ficheiros originais (PDF, Word…) dos documentos editados, que ficam neste projeto tal como foram importados. As exportações e as cópias deixam esses originais de fora; as cópias de segurança guardam-nos.',
+    point4: 'Não são alterados: o registo de auditoria e os ficheiros originais (PDF, Word…) dos documentos editados, que ficam neste projeto tal como foram importados. As exportações e as cópias deixam de fora esses originais e os nomes no registo de auditoria; as cópias de segurança guardam-nos.',
     bodyFields: { one: 'Também vai fazer {n} substituição em nomes, nomes de ficheiros, memorandos, comentários e outros campos.', other: 'Também vai fazer {n} substituições em nomes, nomes de ficheiros, memorandos, comentários e outros campos.' },
     doneFields: { one: 'Mais {n} em nomes, memorandos, comentários e outros campos.', other: 'Mais {n} em nomes, memorandos, comentários e outros campos.' },
     understand: 'Compreendo que o texto dos documentos vai mudar',

@@ -75,3 +75,13 @@ export function oneAtATime<A extends unknown[]>(fn: (...args: A) => Promise<void
     return run;
   };
 }
+
+/**
+ * A saver that waits for the work `current` returns (if any) to settle, failed or not: a lock
+ * or the window closing then waits for an operation that must not be cut short half-way.
+ */
+export function waitForRunning(current: () => Promise<unknown> | null | undefined): Saver {
+  return async () => {
+    await current()?.catch(() => undefined);
+  };
+}

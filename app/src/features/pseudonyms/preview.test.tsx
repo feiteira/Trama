@@ -11,7 +11,7 @@ import { createMemo } from '../../services/memos';
 import { createPseudonym, preview } from '../../services/pseudonyms';
 import { FAST_KDF } from '../../services/testing';
 import { I18nProvider } from '../../ui/i18n';
-import { PreviewPanel } from './index';
+import { InterruptedNotice, PreviewPanel } from './index';
 import { fieldName, groupFields } from './key';
 
 describe('pseudonymisation preview', () => {
@@ -50,6 +50,25 @@ describe('pseudonymisation preview', () => {
     expect(pt).toContain('Memorandos');
     expect(pt).not.toMatch(/pseudonyms\.|\{\w+\}/);
     await library.lock();
+  });
+
+  it('says an apply was cut short, how far it got, and offers to finish it, in every language', () => {
+    const html = (locale: 'en' | 'pt' | 'es', onAgain?: () => void) =>
+      renderToStaticMarkup(
+        <I18nProvider locale={locale}>
+          <InterruptedNotice interrupted={{ at: '2026-10-05T10:30:00Z', documents: 4, logged: true }} onAgain={onAgain} />
+        </I18nProvider>,
+      );
+    const en = html('en', () => undefined);
+    expect(en).toContain('data-testid="pseudonyms-interrupted"');
+    expect(en).toContain('Pseudonymisation was interrupted');
+    expect(en).toContain('4 documents');
+    expect(en).toContain('data-testid="pseudonyms-interrupted-again"');
+    expect(html('pt', () => undefined)).toContain('Aplicar de novo');
+    expect(html('es', () => undefined)).toContain('Aplicar de nuevo');
+    for (const l of ['pt', 'es'] as const) expect(html(l)).not.toMatch(/pseudonyms\.|\{\w+\}/);
+    // With the key emptied there is nothing to apply again.
+    expect(html('en')).not.toContain('pseudonyms-interrupted-again');
   });
 
   it('names fields and groups them in a fixed order', () => {

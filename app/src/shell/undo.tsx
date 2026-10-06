@@ -16,8 +16,10 @@ export interface UndoValue {
   manager: UndoManager;
   state: UndoState;
   record: (entry: Undoable) => void;
-  undo: () => Promise<void>;
-  redo: () => Promise<void>;
+  /** Undoes the last step and says so on a toast; resolves true only when a step was undone. */
+  undo: () => Promise<boolean>;
+  /** Redoes the last undone step; resolves true only when a step was redone. */
+  redo: () => Promise<boolean>;
 }
 
 const Ctx = createContext<UndoValue | null>(null);
@@ -51,7 +53,7 @@ export function UndoProvider({ children }: { children: ReactNode }) {
   // Every undo and redo says what it did, on a toast (a polite live region) that offers the way
   // back: Ctrl+Z works from any screen, and a step reverted out of sight must not pass unnoticed.
   const step = useCallback(
-    async (kind: 'undo' | 'redo') => {
+    async (kind: 'undo' | 'redo'): Promise<boolean> => {
       // The step about to run, to name it if it is refused (the stack drops a refused step).
       const top = manager.labels[kind];
       let entry: Undoable | null;
@@ -62,17 +64,18 @@ export function UndoProvider({ children }: { children: ReactNode }) {
           console.warn(e);
           toast.show({ message: stepRefusedMessage(kind, top, i18n), tone: 'danger', durationMs: 12_000 });
         } else toast.error(e);
-        return;
+        return false;
       }
       if (!entry) {
         toast.show({ message: i18n.t(kind === 'undo' ? 'app.undo.nothingToUndo' : 'app.undo.nothingToRedo'), durationMs: 3_000 });
-        return;
+        return false;
       }
       const back = kind === 'undo' ? 'redo' : 'undo';
       toast.show({
         message: stepDoneMessage(kind, entry, i18n),
-        action: { label: i18n.t(back === 'undo' ? 'common.undo' : 'common.redo'), run: () => stepRef.current(back), testId: `toast-${back}` },
+        action: { label: i18n.t(back === 'undo' ? 'common.undo' : 'common.redo'), run: () => void stepRef.current(back), testId: `toast-${back}` },
       });
+      return true;
     },
     [manager, toast, i18n],
   );

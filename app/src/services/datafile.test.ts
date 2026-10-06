@@ -260,7 +260,7 @@ describe('merge preview', () => {
     await project.store.remove('code', [c.id]);
     const stamps = await localStamps(project.store);
     expect(stamps.get('code')?.has(c.id)).toBe(true);
-    expect(stamps.get('coder')?.get(project.me.id)).toBe(project.me.updated_at_hlc);
+    expect(stamps.get('coder')?.get(project.me.id)).toMatchObject({ updated_at_hlc: project.me.updated_at_hlc });
     const preview = await previewMerge(project, {
       project: { id: project.id, name: 'Copy', description: '', origin: null },
       records: [{ kind: 'coder', record: project.me }, { kind: 'coder', record: { ...project.me, id: 'x', name: '', updated_at_hlc: 'bad' } }] as BundleRecord[],

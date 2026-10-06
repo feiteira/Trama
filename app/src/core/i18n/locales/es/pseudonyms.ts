@@ -108,7 +108,12 @@ export const pseudonyms: Messages['pseudonyms'] = {
       other: 'otro campo',
     },
     logTitle: { one: 'El registro de auditoría guarda {n} entrada con estos nombres', other: 'El registro de auditoría guarda {n} entradas con estos nombres' },
-    logBody: 'El registro de auditoría nunca se edita, así que la seudonimización no lo cambia. Viaja en las copias .trama del proyecto y en su exportación CSV: compártalas solo con quien pueda ver los nombres.',
+    logBody: 'El registro de auditoría nunca se edita, así que esas entradas conservan los nombres dentro de este proyecto y de sus copias de seguridad. Las exportaciones, las copias para un compañero y el CSV del registro de auditoría dejan fuera esos nombres, también después de eliminar la entrada de la clave.',
+  },
+  interrupted: {
+    title: 'La seudonimización se interrumpió',
+    body: { one: 'Se detuvo después de cambiar {n} documento. Los nombres y los demás documentos no se cambiaron. Aplique la clave de nuevo para terminar.', other: 'Se detuvo después de cambiar {n} documentos. Los nombres y los demás documentos no se cambiaron. Aplique la clave de nuevo para terminar.' },
+    again: 'Aplicar de nuevo',
   },
   apply: {
     button: 'Aplicar a los documentos',
@@ -119,7 +124,7 @@ export const pseudonyms: Messages['pseudonyms'] = {
     point1: 'Los originales se sustituyen en los propios documentos, no solo en las exportaciones.',
     point2: 'Los segmentos codificados y los tiempos de las transcripciones siguen al texto cambiado. También se cambian los nombres de documentos, casos, códigos y grupos, los nombres de archivo, las descripciones, los memorandos, los comentarios y las definiciones de códigos.',
     point3: 'Solo se puede deshacer con Deshacer justo después. En cuanto siga trabajando, el cambio es definitivo.',
-    point4: 'No se cambian: el registro de auditoría y los archivos originales (PDF, Word…) de los documentos editados, que se quedan en este proyecto tal como se importaron. Las exportaciones y las copias dejan fuera esos originales; las copias de seguridad los conservan.',
+    point4: 'No se cambian: el registro de auditoría y los archivos originales (PDF, Word…) de los documentos editados, que se quedan en este proyecto tal como se importaron. Las exportaciones y las copias dejan fuera esos originales y los nombres del registro de auditoría; las copias de seguridad los conservan.',
     bodyFields: { one: 'También hará {n} sustitución en nombres, nombres de archivo, memorandos, comentarios y otros campos.', other: 'También hará {n} sustituciones en nombres, nombres de archivo, memorandos, comentarios y otros campos.' },
     doneFields: { one: '{n} más en nombres, memorandos, comentarios y otros campos.', other: '{n} más en nombres, memorandos, comentarios y otros campos.' },
     understand: 'Entiendo que el texto de los documentos va a cambiar',

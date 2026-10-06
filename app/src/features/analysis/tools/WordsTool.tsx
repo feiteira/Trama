@@ -6,6 +6,7 @@ import { STOPWORD_LANGUAGES } from '../../../core/qda/stopwords';
 import type { Span } from '../../../core/qda/util';
 import { codedTexts, compareFrequencies, type TextInput, type WordCount, wordFrequencies } from '../../../core/qda/wordfreq';
 import { useProject } from '../../../shell/AppState';
+import { useRouter } from '../../../shell/router';
 import { Button, IconButton } from '../../../ui/components/Button';
 import { Checkbox, RadioGroup } from '../../../ui/components/Choice';
 import { Notice, Spinner } from '../../../ui/components/Feedback';
@@ -14,9 +15,10 @@ import { useToast } from '../../../ui/components/Toast';
 import { useI18n } from '../../../ui/i18n';
 import { TipRow } from '../charts/ChartTip';
 import { WordCloud } from '../charts/WordCloud';
-import { formatP, formatPercent, formatValue } from '../lib/format';
+import { formatFixed, formatP, formatPercent, formatValue } from '../lib/format';
 import { SERIES } from '../lib/heat';
 import { groupKwic, hitsWithin, countPerDocument } from '../lib/kwic';
+import { compareCorpora, keynessRows } from '../lib/words';
 import { useAnalysisData, useDeferredCompute, useTexts, useTheme } from '../parts/data';
 import { useExporter } from '../parts/exporting';
 import { KwicList } from '../parts/KwicList';
@@ -44,6 +46,7 @@ const DEFAULTS = {
 export function WordsTool() {
   const { t, tp, locale } = useI18n();
   const project = useProject();
+  const { go } = useRouter();
   const toast = useToast();
   const data = useAnalysisData();
   const { documents, groups, lines, codings, segments } = data;
@@ -82,14 +85,13 @@ export function WordsTool() {
 
   const compare = useDeferredCompute(() => {
     if (s.view !== 'compare' || !texts || !s.groupA) return null;
-    const a = documents.filter((d) => d.group_ids.includes(s.groupA));
-    const b = s.groupB && s.groupB !== s.groupA ? documents.filter((d) => d.group_ids.includes(s.groupB)) : documents.filter((d) => !d.group_ids.includes(s.groupA));
+    const { a, b, shared } = compareCorpora(documents, s.groupA, s.groupB);
     const res = compareFrequencies(
       a.map((d) => ({ id: d.id, text: texts.get(d.id) ?? '' })),
       b.map((d) => ({ id: d.id, text: texts.get(d.id) ?? '' })),
       { ...opts, limit: 200, minCount: 3 },
     );
-    return { ...res, docsA: a.length, docsB: b.length };
+    return { ...res, docsA: a.length, docsB: b.length, shared };
   }, [s.view, texts, s.groupA, s.groupB, documents, opts]);
 
   // KWIC for the word clicked: whole word, in the scope's documents (inside the code's segments).
@@ -147,8 +149,7 @@ export function WordsTool() {
       if (!c) return;
       const ga = groups.find((g) => g.id === s.groupA)?.name ?? 'A';
       const gb = s.groupB ? groups.find((g) => g.id === s.groupB)?.name ?? 'B' : t('analysis.words.restOfDocs');
-      const rows = [[t('analysis.words.col.word'), ga, gb, `${ga} /10k`, `${gb} /10k`, 'LL (G²)', 'p', 'log2 ratio', t('analysis.words.col.more')]];
-      for (const r of c.rows) rows.push([r.word, String(r.countA), String(r.countB), r.perTenThousandA.toFixed(2), r.perTenThousandB.toFixed(2), r.logLikelihood.toFixed(2), r.p.toPrecision(3), Number.isFinite(r.logRatio) ? r.logRatio.toFixed(2) : '', r.overused === 'A' ? ga : r.overused === 'B' ? gb : '']);
+      const rows = keynessRows(c.rows, [t('analysis.words.col.word'), ga, gb, `${ga} /10k`, `${gb} /10k`, 'LL (G²)', 'p', 'log2 ratio', t('analysis.words.col.more')], ga, gb);
       void exporter.table(t('analysis.words.compareExportName'), format, rows, t('analysis.words.compare'));
       return;
     }
@@ -196,6 +197,14 @@ export function WordsTool() {
       </PanelSection>
       <PanelSection title={t('analysis.words.counting')}>
         <Select<string> label={t('analysis.words.language')} value={s.language} onChange={(language) => set({ language })} options={langOptions} size="sm" data-testid="words-language" />
+        {s.language === '' && !data.language ? (
+          <p className="an-hint" data-testid="words-language-unset">
+            {t('analysis.words.languageUnset')}{' '}
+            <button type="button" className="an-linkbtn" onClick={() => go({ name: 'settings' })} data-testid="words-set-language">
+              {t('analysis.words.setLanguage')}
+            </button>
+          </p>
+        ) : null}
         <TextField
           label={t('analysis.words.minLength')}
           type="number"
@@ -269,6 +278,22 @@ export function WordsTool() {
       <div className="an__center">
         <Spinner size={20} label={t('analysis.computing')} />
       </div>
+    );
+  } else if (!f.words.length && !documents.length) {
+    body = (
+      <ResultsMessage icon={WholeWord} title={t('analysis.words.noDocs')} testId="words-empty">
+        <p>{t('analysis.words.noDocsBody')}</p>
+        <Button size="sm" variant="secondary" onClick={() => go({ name: 'import' })} data-testid="words-import">
+          {t('analysis.words.importDocs')}
+        </Button>
+      </ResultsMessage>
+    );
+  } else if (!f.words.length && f.totalTokens === 0) {
+    // Nothing to count at all, as opposed to every word being left out by the settings.
+    body = (
+      <ResultsMessage icon={WholeWord} title={t('analysis.words.noText')} testId="words-empty">
+        {s.scope === 'code' ? t('analysis.words.noTextCode') : t('analysis.words.noTextBody')}
+      </ResultsMessage>
     );
   } else if (!f.words.length) {
     body = <ResultsMessage icon={WholeWord} title={t('analysis.words.none')}>{t('analysis.words.noneBody')}</ResultsMessage>;
@@ -394,12 +419,12 @@ function CompareView({
   groups: readonly { id: string; name: string }[];
   groupA: string;
   groupB: string;
-  value: (ReturnType<typeof compareFrequencies> & { docsA: number; docsB: number }) | null | undefined;
+  value: (ReturnType<typeof compareFrequencies> & { docsA: number; docsB: number; shared: number }) | null | undefined;
   busy: boolean;
   theme: 'light' | 'dark';
   onWord: (w: string) => void;
 }) {
-  const { t, locale } = useI18n();
+  const { t, tp, locale } = useI18n();
   if (!groupA) return <ResultsMessage icon={Scale} title={t('analysis.words.comparePick')}>{t('analysis.words.comparePickBody')}</ResultsMessage>;
   if (!value)
     return busy ? (
@@ -455,14 +480,17 @@ function CompareView({
                     <span className="an-div__bar" style={lr >= 0 ? { left: '50%', width: `${w}%`, background: col.a } : { right: '50%', width: `${w}%`, background: col.b }} />
                   </span>
                 </td>
-                <td className="an-num">{r.logLikelihood.toFixed(1)}</td>
+                <td className="an-num">{formatFixed(r.logLikelihood, locale, 1)}</td>
                 <td className="an-num">{formatP(r.p, locale)}</td>
               </tr>
             );
           })}
         </tbody>
       </table>
-      <p className="an-caption">{t('analysis.words.compareCaption', { a: nameA, b: nameB, docsA: value.docsA, docsB: value.docsB })}</p>
+      <p className="an-caption">
+        {t('analysis.words.compareCaption', { a: nameA, b: nameB, docsA: value.docsA, docsB: value.docsB })}
+        {value.shared ? ` ${tp('analysis.words.compareShared', value.shared)}` : ''}
+      </p>
     </div>
   );
 }

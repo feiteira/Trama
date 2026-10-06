@@ -50,7 +50,7 @@ export const cases = {
     openDetails: 'Open details',
     openDetailsOf: 'Open the details of “{name}”',
     noDocuments: 'No documents',
-    noValue: '(none)',
+    choicePlaceholder: 'Choose or type a value',
     addPlaceholder: 'New case…',
     addHint: 'Press Enter to add',
   },

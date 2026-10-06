@@ -5,7 +5,9 @@ import { useI18n } from '../ui/i18n';
 import { declareHelpTopic, routeTopic } from './helpTopic';
 import { useKeyLabel } from './keys';
 import { useRouter } from './router';
+import type { Undoable } from '../services/undo';
 import { useUndo } from './undo';
+import { describeStep } from './undoFeedback';
 import './shell.css';
 
 export interface ScreenHeaderProps {
@@ -59,14 +61,16 @@ export function ScreenHeader({ title, subtitle, actions, leading, undo = true, h
   );
 }
 function UndoRedo() {
-  const { t } = useI18n();
+  const i18n = useI18n();
+  const { t } = i18n;
   const key = useKeyLabel();
   const { state, undo, redo } = useUndo();
+  const what = (s: { label: Undoable['label']; detail: string }) => describeStep(s, i18n) || s.detail;
   return (
     <div className="screen-header__undo" role="group" aria-label={t('app.undo.group')}>
       <IconButton
         icon={Undo2}
-        label={state.undo ? t('app.undo.undoWhat', { what: state.undo.detail }) : t('common.undo')}
+        label={state.undo ? t('app.undo.undoWhat', { what: what(state.undo) }) : t('common.undo')}
         shortcut={key('Z')}
         disabled={!state.canUndo}
         onClick={() => void undo()}
@@ -74,7 +78,7 @@ function UndoRedo() {
       />
       <IconButton
         icon={Redo2}
-        label={state.redo ? t('app.undo.redoWhat', { what: state.redo.detail }) : t('common.redo')}
+        label={state.redo ? t('app.undo.redoWhat', { what: what(state.redo) }) : t('common.redo')}
         shortcut={key('Z', { shift: true })}
         disabled={!state.canRedo}
         onClick={() => void redo()}

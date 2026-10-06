@@ -1,4 +1,5 @@
 // Helpers shared by the REFI-QDA readers and writers.
+import { decodeText, fromWindows1252 } from '../../bytes';
 import { uuid } from '../../ids';
 
 export const PROJECT_NS = 'urn:QDA-XML:project:1.0';
@@ -8,6 +9,43 @@ export const PROJECT_SCHEMA_LOCATION = `${PROJECT_NS} http://schema.qdasoftware.
 export const CODEBOOK_SCHEMA_LOCATION = `${CODEBOOK_NS} http://schema.qdasoftware.org/versions/Codebook/v1.0/Codebook.xsd`;
 
 export class RefiError extends Error {}
+
+/**
+ * Decodes a text or XML file from a REFI-QDA archive, where UTF-8 is mandatory. Exactly one
+ * byte-order mark is removed: it is the file's, not the text's. A further U+FEFF is text the
+ * producer counted (QualCoder writes its own BOM in front of one it kept), so it stays.
+ *
+ * A stray invalid byte becomes U+FFFD, one code point, so the positions after it still match;
+ * decoding the whole file as Windows-1252 instead would turn every accented letter into two or
+ * three characters and shift every coding after it. Only a file that is mostly not UTF-8 is read
+ * as Windows-1252. `damaged` says that either happened.
+ */
+export function decodeRefiText(b: Uint8Array): { text: string; damaged: boolean } {
+  // UTF-16 with its BOM: decodeText drops that BOM and nothing else.
+  if ((b[0] === 0xff && b[1] === 0xfe) || (b[0] === 0xfe && b[1] === 0xff)) return { text: decodeText(b), damaged: false };
+  const body = b[0] === 0xef && b[1] === 0xbb && b[2] === 0xbf ? b.subarray(3) : b;
+  try {
+    return { text: new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(body), damaged: false };
+  } catch {
+    // not valid UTF-8: see below
+  }
+  const lossy = new TextDecoder('utf-8', { ignoreBOM: true }).decode(body);
+  let good = 0;
+  let bad = 0;
+  for (const ch of lossy) {
+    const c = ch.codePointAt(0)!;
+    if (c === 0xfffd) bad++;
+    else if (c > 0x7f) good++;
+  }
+  // A U+FFFD that was in the file (EF BF BD) is a valid character, not a decoding failure.
+  for (let i = 0; i + 2 < body.length; i++) {
+    if (body[i] === 0xef && body[i + 1] === 0xbf && body[i + 2] === 0xbd) {
+      bad--;
+      good++;
+    }
+  }
+  return { text: bad > good ? fromWindows1252(body) : lossy, damaged: true };
+}
 
 const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
@@ -169,18 +207,49 @@ export function toDecimal(n: number): string {
  */
 export const CODE_SECTIONS = { inclusion: 'Inclusion criteria:', exclusion: 'Exclusion criteria:', example: 'Example:' } as const;
 
-/** Splits Trama's labelled sections back out of a code description. */
+const SECTION_KEYS = ['inclusion', 'exclusion', 'example'] as const;
+const LABELS = SECTION_KEYS.map((k) => CODE_SECTIONS[k].replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+/** Where a line holding only a label starts, inside a field's own text. */
+const LABEL_LINE = new RegExp(`^(?=(?:${LABELS})[ \\t]*$)`, 'gm');
+const ESCAPED_LABEL_LINE = new RegExp(`^\u{200b}(?=(?:${LABELS})[ \\t]*$)`, 'gmu');
+/** A section heading as Trama writes it: alone on its line, after a blank line (or first). */
+const HEADING = new RegExp(`(?:^|\\n\\n)(${LABELS})[ \\t]*\\n`, 'g');
+
+/**
+ * A field's text, safe to place in a code's Description next to the labelled sections: a line
+ * of the researcher's own that reads exactly like a label gets a zero-width space in front, so
+ * it can never be taken for a section heading when the file is read back.
+ */
+export function escapeCodeSection(text: string): string {
+  return text.replace(LABEL_LINE, '\u{200b}');
+}
+
+/**
+ * Splits Trama's labelled sections back out of a code description. Only the block Trama writes
+ * at the end counts: headings alone on their line after a blank line, in the order inclusion,
+ * exclusion, example. "Example: …" inside the definition (or a heading out of order, which an
+ * older version could leave unescaped) stays text where it is, so no words are lost.
+ */
 export function splitCodeDescription(text: string): { description: string; inclusion: string; exclusion: string; example: string } {
   const out = { description: text, inclusion: '', exclusion: '', example: '' };
-  const labels = Object.entries(CODE_SECTIONS) as [keyof typeof CODE_SECTIONS, string][];
-  const re = new RegExp(`^(${labels.map(([, l]) => l.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})[ \\t]*\\n?`, 'gm');
-  const hits = [...text.matchAll(re)];
-  if (!hits.length) return out;
-  out.description = text.slice(0, hits[0]!.index).trim();
-  for (const [i, h] of hits.entries()) {
-    const key = labels.find(([, l]) => l === h[1])![0];
-    const end = hits[i + 1]?.index ?? text.length;
-    out[key] = text.slice(h.index! + h[0].length, end).trim();
+  const hits = [...text.matchAll(HEADING)].map((h) => ({
+    key: SECTION_KEYS.find((k) => CODE_SECTIONS[k] === h[1])!,
+    at: h.index!,
+    body: h.index! + h[0].length,
+  }));
+  // From the end: each heading must come before the one after it in the fixed order.
+  let first = hits.length;
+  for (let i = hits.length - 1; i >= 0; i--) {
+    const next = hits[i + 1];
+    if (next && SECTION_KEYS.indexOf(hits[i]!.key) >= SECTION_KEYS.indexOf(next.key)) break;
+    first = i;
   }
+  const unescape = (s: string) => s.replace(ESCAPED_LABEL_LINE, '').trim();
+  if (first === hits.length) {
+    out.description = unescape(text);
+    return out;
+  }
+  out.description = unescape(text.slice(0, hits[first]!.at));
+  for (let i = first; i < hits.length; i++) out[hits[i]!.key] = unescape(text.slice(hits[i]!.body, hits[i + 1]?.at ?? text.length));
   return out;
 }

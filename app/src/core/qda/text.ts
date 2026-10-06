@@ -274,7 +274,8 @@ const LETTER_FOLDS: Record<string, string> = {
   ß: 'ss', ẞ: 'SS', æ: 'ae', Æ: 'AE', œ: 'oe', Œ: 'OE', ø: 'o', Ø: 'O', ł: 'l', Ł: 'L', đ: 'd', Đ: 'D', ı: 'i',
 };
 const MARKS = /\p{M}/gu;
-const APOSTROPHES: Record<number, number> = { 0x2019: 0x27, 0x2018: 0x27, 0x02bc: 0x27, 0x2032: 0x27 };
+// Typographic apostrophes and hyphens match the plain ones (word counts fold them alike).
+const APOSTROPHES: Record<number, number> = { 0x2019: 0x27, 0x2018: 0x27, 0x02bc: 0x27, 0x2032: 0x27, 0x2010: 0x2d, 0x2011: 0x2d };
 
 const foldCaches: Map<number, string>[] = [new Map(), new Map(), new Map(), new Map()];
 

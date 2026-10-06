@@ -74,7 +74,7 @@ export function ExportMenu({ tables, images, disabled, testId = 'analysis-export
     items.push({ id: 'svg', label: t('analysis.export.svg'), icon: FileImage, onSelect: () => images('svg'), testId: `${testId}-svg`, disabled });
     items.push({ id: 'png', label: t('analysis.export.png'), icon: FileImage, onSelect: () => images('png'), testId: `${testId}-png`, disabled });
   }
-  return <MenuButton items={items} label={t('analysis.export.label')} icon={Download} variant="secondary" size="sm" align="end" data-testid={testId} />;
+  return <MenuButton items={items} label={t('analysis.export.label')} icon={Download} variant="secondary" size="sm" align="end" disabled={disabled} data-testid={testId} />;
 }
 
 export interface PickItem {

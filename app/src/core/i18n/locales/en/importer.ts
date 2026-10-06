@@ -272,6 +272,10 @@ export const importer = {
     cuesSkipped: { one: '{n} subtitle without a readable time was skipped.', other: '{n} subtitles without a readable time were skipped.' },
     formulas: { one: '{n} formula had no saved result and was left empty.', other: '{n} formulas had no saved result and were left empty.' },
     raggedRows: { one: '{n} row has more or fewer cells than the header.', other: '{n} rows have more or fewer cells than the header.' },
+    malformedQuotes: {
+      one: 'A quoted cell on line {lines} is never closed properly, so the lines after it may have been merged into one answer. Check the file in a spreadsheet before importing.',
+      other: 'Quoted cells on lines {lines} are never closed properly, so the lines after them may have been merged into one answer. Check the file in a spreadsheet before importing.',
+    },
     other: 'Note from the importer: {code}',
   },
 
@@ -380,6 +384,8 @@ export const importer = {
       syncPoint: { one: '{n} transcript time stamp without a position or time', other: '{n} transcript time stamps without a position or time' },
       richTextOnly: { one: '{n} text was read from a Word file; its coded positions may be off', other: '{n} texts were read from Word files; their coded positions may be off' },
       invalidRecord: { one: '{n} item with invalid data', other: '{n} items with invalid data' },
+      unknownUser: { one: '{n} coder was not in the project’s list of users and is named after their ID: rename them in Trama', other: '{n} coders were not in the project’s list of users and are named after their IDs: rename them in Trama' },
+      badEncoding: { one: '{n} text was not valid UTF-8: check its accented letters and symbols (unreadable ones show as �)', other: '{n} texts were not valid UTF-8: check their accented letters and symbols (unreadable ones show as �)' },
     },
     named: {
       pdfSkipped: 'The PDF “{name}”: neither the file nor its text was included',

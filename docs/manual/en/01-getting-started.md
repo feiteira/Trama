@@ -88,11 +88,11 @@ The navigation on the left leads to every part of a project:
 | **Analysis** | Search, co-occurrence, matrices, word frequencies and charts ([Analysis](07-analysis.md)) |
 | **Agreement** | Coders, teammates’ copies and inter-coder agreement ([Teamwork](08-teamwork-and-agreement.md)) |
 | **Import** | Bringing in documents ([Documents](02-documents.md#import)) |
-| **Export & backup** | Project files, REFI-QDA, reports and automatic backups ([Exchanging projects](09-exchange.md), [Backups](10-privacy-and-security.md#backups)) |
+| **Project** | The project’s details, exports (project files, REFI-QDA, codebook, reports), automatic backups and restoring them ([Exchanging projects](09-exchange.md), [Backups](10-privacy-and-security.md#backups)) |
 | **Pseudonymisation** | Replacing names consistently ([Pseudonymisation](10-privacy-and-security.md#pseudonymisation)) |
 | **Audit trail** | A record of every change ([Audit trail](10-privacy-and-security.md#audit-trail)) |
 
-The **command palette** (`Ctrl+K`) finds any screen, document, project or action by typing part of its name. **Back** (`Alt+←`, or the mouse’s back button) returns to where you were.
+The **command palette** (`Ctrl+K`) finds any screen, document, project or action by typing part of its name. **Back** (`Alt+←`, or the mouse’s back button) returns to where you were — except while a recording is playing, when `Alt+←` and `Alt+→` skip back and forward instead (see [Transcripts and recordings](02-documents.md#transcripts)).
 
 Everything you do is saved as you go. There is no Save button.
 
@@ -131,7 +131,7 @@ Everything in Trama can be done from the keyboard. The ones you will use most:
 | `Ctrl+K` | Open the command palette |
 | `Ctrl+Z` / `Ctrl+Shift+Z` | Undo / redo |
 | `Ctrl+L` | Lock Trama |
-| `Alt+←` | Back |
+| `Alt+←` | Back (while a recording plays: skip back 5 seconds) |
 | `Ctrl+F` | Find in the document you are reading |
 | `1` … `9` | With text selected, apply the code that has that shortcut key |
 | `Enter` | With text selected, find or create a code; on coded text, show its codes |

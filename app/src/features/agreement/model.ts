@@ -109,6 +109,22 @@ export function fmtPercent(p: number | null, bcp47: string, digits = 1): string 
   return numberFormat(bcp47, digits, 'percent').format(p / 100);
 }
 
+/**
+ * A boundary disagreement's overlap, never shown as reaching the threshold it failed: 84.69 %
+ * at an 85 % threshold reads "84.6 %", not "85 %". Truncated, with as few decimals as that takes.
+ */
+export function fmtOverlap(overlap: number, threshold: number, bcp47: string): string {
+  const pct = overlap * 100;
+  const th = threshold * 100;
+  if (!(pct < th) || Math.round(pct) < th) return fmtPercent(pct, bcp47, 0);
+  for (const digits of [1, 2]) {
+    const f = 10 ** digits;
+    const cut = Math.floor(pct * f) / f;
+    if (cut < th) return fmtPercent(cut, bcp47, digits);
+  }
+  return fmtPercent(Math.floor(pct * 1000) / 1000, bcp47, 3);
+}
+
 export function fmtInt(n: number, bcp47: string): string {
   return numberFormat(bcp47, 0).format(n);
 }

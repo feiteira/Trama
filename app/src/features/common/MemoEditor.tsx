@@ -22,6 +22,7 @@ import { useConfirm } from '../../ui/components/Confirm';
 import { Spinner } from '../../ui/components/Feedback';
 import { Popover } from '../../ui/components/Popover';
 import { useToast } from '../../ui/components/Toast';
+import { MemoSaveUndo } from './memoUndo';
 import { applyFormat, type Format, hlcMs, resolveTarget, type TargetInfo } from '../memos/memoModel';
 import './MemoEditor.css';
 
@@ -66,7 +67,10 @@ export function MemoEditor({ memoId, onDeleted, compact = false, autoFocusTitle 
   const { t, tp, date, relative } = useI18n();
   const project = useProject();
   const { go } = useRouter();
-  const { record } = useUndo();
+  const { record, manager } = useUndo();
+  // Text saves go on the undo stack too (memoUndo.ts explains why).
+  const [saveUndo] = useState(() => new MemoSaveUndo(manager));
+  useEffect(() => saveUndo.attach(), [saveUndo]);
   const confirm = useConfirm();
   const toast = useToast();
   const key = useKeyLabel();
@@ -149,7 +153,8 @@ export function MemoEditor({ memoId, onDeleted, compact = false, autoFocusTitle 
       if (before) await before;
       setState('saving');
       try {
-        await updateMemo(project, snapshot.memoId, { title: tidyTitle(snapshot.title), body: snapshot.body });
+        const { undo } = await updateMemo(project, snapshot.memoId, { title: tidyTitle(snapshot.title), body: snapshot.body });
+        saveUndo.saved(snapshot.memoId, undo);
         const cur = draft.current;
         if (cur.memoId === snapshot.memoId && cur.title === snapshot.title && cur.body === snapshot.body) cur.dirty = false;
         if (draft.current.memoId === snapshot.memoId) setState(draft.current.dirty ? 'dirty' : 'saved');
@@ -167,7 +172,7 @@ export function MemoEditor({ memoId, onDeleted, compact = false, autoFocusTitle 
     } finally {
       if (saving.current === run) saving.current = null;
     }
-  }, [project]);
+  }, [project, saveUndo]);
 
   useRegisterSaver(save);
   // Leaving the memo (another one chosen, the drawer closed) saves what was typed.

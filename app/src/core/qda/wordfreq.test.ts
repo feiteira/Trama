@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { coding } from './fixtures';
 import { logLikelihood } from './stats';
 import { STOPWORD_LANGUAGES, stopwordsFor } from './stopwords';
-import { codedTexts, compareFrequencies, wordFrequencies, wordKwic, wordsByCode } from './wordfreq';
+import { codedTexts, compareFrequencies, wordFrequencies, wordHits, wordKwic, wordsByCode } from './wordfreq';
 
 const top = (r: ReturnType<typeof wordFrequencies>) => r.words.map((w) => [w.word, w.count, w.documents]);
 
@@ -150,6 +150,37 @@ describe('wordKwic', () => {
     expect(r.rows.map((x) => x.keyword)).toEqual(['médica', 'MÉDICA']);
     expect(r.total).toBe(2);
     expect(wordKwic(docs, '  ').rows).toEqual([]);
-    expect(wordKwic([{ id: 'x', text: "l'école" }], 'école').rows.map((x) => x.left)).toEqual(["l'"]);
+    expect(wordKwic([{ id: 'x', text: "l'école" }], 'école', { language: 'fr' }).rows.map((x) => x.left)).toEqual(["l'"]);
+  });
+});
+
+describe('transcript markup and KWIC totals', () => {
+  it('leaves speaker labels and bracketed annotations out by default', () => {
+    const t = { id: 'a', text: 'Interviewer: hello there\nAna: hi [laughs] [inaudible]' };
+    const f = wordFrequencies([t], { minLength: 1, useStopwords: false });
+    expect(f.words.map((w) => w.word).sort()).toEqual(['hello', 'hi', 'there']);
+    expect(f.countedTokens).toBe(3);
+    const all = wordFrequencies([t], { minLength: 1, useStopwords: false, includeMarkup: true });
+    expect(all.words.map((w) => w.word).sort()).toEqual(['ana', 'hello', 'hi', 'inaudible', 'interviewer', 'laughs', 'there']);
+    // Portuguese and Spanish transcripts alike; a kind says when a text is a transcript.
+    const pt = wordFrequencies([{ text: 'Entrevistadora: Pode falar-me?\nMarta: Sim [ri-se].', kind: 'transcript' }], { language: 'pt' });
+    expect(pt.words.map((w) => w.word)).not.toContain('entrevistadora');
+    expect(pt.words.map((w) => w.word)).not.toContain('ri-se');
+    expect(pt.words.map((w) => w.word)).not.toContain('marta');
+    // A text that is not a transcript keeps a "Note:" at the start of a paragraph.
+    const note = wordFrequencies([{ text: 'Note: the garden opened.\nThe garden grew.', kind: 'text' }], { minLength: 1, useStopwords: false });
+    expect(note.words.map((w) => w.word)).toContain('note');
+  });
+
+  it('a word\'s KWIC total always equals its count (hyphen compounds, clitics, U+2010, markup)', () => {
+    const docs = [
+      { id: 'a', text: 'Interviewer: Pode falar-me disso?\nMargaret: Disse-me que sim. Twenty-two years [laughs], twenty of them.' },
+      { id: 'b', text: 'Margaret: Our well‐being and well-being. I disse it, falar is fine.', kind: 'transcript' },
+    ];
+    const f = wordFrequencies(docs, { minLength: 1, useStopwords: false });
+    for (const w of f.words) expect(wordHits(docs, w.word).total, w.word).toBe(w.count);
+    expect(wordHits(docs, 'well-being').total).toBe(2);
+    expect(wordHits(docs, 'margaret').total).toBe(0);
+    expect(wordHits(docs, 'falar').total).toBe(1);
   });
 });

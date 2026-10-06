@@ -8,6 +8,7 @@ import { TABLES } from '../../core/store/schema';
 import { createCode } from '../../services/codes';
 import { applyCode, autocode, inVivo, recode, removeCoding, resizeCoding, setComment } from '../../services/codings';
 import { attachMedia, detachMedia, editDocumentText } from '../../services/documents';
+import { DraftClaims, isDirty, startDraft, type EditDraft } from './editDraft';
 import { createMemo, memosFor } from '../../services/memos';
 import { combineUndo, q, ServiceError } from '../../services/undo';
 import { claimAltArrows } from '../../shell/activity.web';
@@ -217,7 +218,7 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ do
     return next;
   }, [text, paras, marksBy, findsBy, styles, dark]);
 
-  const [editing, setEditing] = useState<{ text: string; busy: boolean } | null>(null);
+  const [editing, setEditing] = useState<EditDraft | null>(null);
 
   // ── Layout ──────────────────────────────────────────────────────────────────────────────
   const bodyRef = useRef<HTMLDivElement>(null);
@@ -866,13 +867,13 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ do
   // ── Editing the text ────────────────────────────────────────────────────────────────────
   const saveEdit = useCallback(async () => {
     if (!editing || editing.busy) return;
-    if (editing.text === text) {
+    if (editing.text === editing.base) {
       setEditing(null);
       return;
     }
     setEditing({ ...editing, busy: true });
     try {
-      const r = await editDocumentText(project, docId, editing.text);
+      const r = await editDocumentText(project, editing.docId, editing.text);
       record(r.undo);
       setEditing(null);
       toast.show({
@@ -884,14 +885,50 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ do
       setEditing((cur) => (cur ? { ...cur, busy: false } : cur));
       fail(e);
     }
-  }, [editing, text, project, docId, record, toast, tp, t, undoAction, fail]);
+  }, [editing, project, record, toast, tp, t, undoAction, fail]);
   const editingRef = useRef(editing);
   editingRef.current = editing;
+  const claims = useRef(new DraftClaims());
   // Locking or closing the project keeps an edit in progress rather than dropping it.
   useRegisterSaver(async () => {
-    const e = editingRef.current;
-    if (e && e.text !== textRef.current) await editDocumentText(project, docId, e.text).then((r) => record(r.undo));
+    const d = claims.current.claim(editingRef.current);
+    if (d) await editDocumentText(project, d.docId, d.text).then((r) => record(r.undo));
   });
+  // So does leaving it: opening another document, going to another screen. The researcher
+  // asked to keep nothing less than a save would, so the edit is saved (one undo step) and a
+  // toast says so, rather than thrown away without a word.
+  const keepOnLeave = useRef<() => void>(() => {});
+  keepOnLeave.current = () => {
+    const d = claims.current.claim(editingRef.current);
+    if (!d) return;
+    editDocumentText(project, d.docId, d.text).then(
+      (r) => {
+        record(r.undo);
+        toast.show({
+          message: r.removedCodings ? tp('workbench.edit.keptRemoved', r.removedCodings, { name: d.name }) : t('workbench.edit.kept', { name: d.name }),
+          tone: r.removedCodings ? 'neutral' : 'success',
+          action: undoAction,
+        });
+      },
+      (e: unknown) => fail(e),
+    );
+  };
+  useEffect(() => () => keepOnLeave.current(), [docId]);
+  // Cancel and Esc throw the changes away, so they ask first when there are any.
+  const cancelEdit = useCallback(async () => {
+    const d = editingRef.current;
+    if (!d || d.busy) return;
+    if (isDirty(d)) {
+      const ok = await confirm({
+        title: t('workbench.edit.discardTitle'),
+        body: t('workbench.edit.discardBody'),
+        confirmLabel: t('workbench.edit.discard'),
+        danger: true,
+      });
+      if (!ok || editingRef.current?.docId !== d.docId) return;
+    }
+    setEditing(null);
+  }, [confirm, t]);
 
   // ── Keyboard ────────────────────────────────────────────────────────────────────────────
   const [keysOpen, setKeysOpen] = useState(false);
@@ -1198,7 +1235,7 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ do
   ];
   const moreItems: MenuEntry[] = [
     ...folded,
-    { id: 'edit', label: t('workbench.edit.start'), icon: FilePen, onSelect: () => setEditing({ text, busy: false }), testId: 'menu-edit-text' },
+    { id: 'edit', label: t('workbench.edit.start'), icon: FilePen, onSelect: () => setEditing(startDraft(docId, doc?.name ?? '', text)), testId: 'menu-edit-text' },
     { kind: 'separator' },
     {
       id: 'media',
@@ -1214,7 +1251,7 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ do
 
   const actions = editing ? (
     <>
-      <Button variant="ghost" onClick={() => setEditing(null)} disabled={editing.busy} data-testid="edit-cancel">
+      <Button variant="ghost" onClick={() => void cancelEdit()} disabled={editing.busy} data-testid="edit-cancel">
         {t('common.cancel')}
       </Button>
       <Button variant="primary" onClick={() => void saveEdit()} busy={editing.busy} data-testid="edit-save">
@@ -1279,7 +1316,7 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ do
             codings={codings.length}
             fontSize={fontSize}
             onSave={() => void saveEdit()}
-            onCancel={() => setEditing(null)}
+            onCancel={() => void cancelEdit()}
           />
         ) : (
           <>

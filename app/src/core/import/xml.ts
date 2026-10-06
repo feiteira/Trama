@@ -6,16 +6,37 @@ import { ImportError } from './types';
 // fails with DAMAGED instead of logging to the console.
 
 /** More than this, uncompressed, in one entry is a zip bomb or not something we can hold. */
-const MAX_ENTRY = 512 * 1024 * 1024;
+export const MAX_ENTRY = 512 * 1024 * 1024;
+/** Most all the inflated entries of one file may add up to. */
+export const MAX_TOTAL = 1024 * 1024 * 1024;
+
+// fflate inflates each entry into a buffer of exactly its declared size, so checking declared
+// sizes before inflating refuses a zip bomb before the memory is allocated.
 
 /** Inflates the entries `want` accepts. Throws ImportError DAMAGED for a broken archive. */
 export function readZip(bytes: Uint8Array, want: (name: string) => boolean): Record<string, Uint8Array> {
+  checkZipSizes(bytes, want);
   try {
-    return unzipSync(bytes, {
+    return unzipSync(bytes, { filter: (f) => want(f.name) });
+  } catch (e) {
+    if (e instanceof ImportError) throw e;
+    throw new ImportError('DAMAGED', 'zip', e instanceof Error ? e.message : String(e));
+  }
+}
+
+/**
+ * Throws ImportError TOO_LARGE when the entries `want` accepts would inflate past the limits
+ * (DAMAGED when the archive cannot be listed). Nothing is inflated.
+ */
+export function checkZipSizes(bytes: Uint8Array, want: (name: string) => boolean): void {
+  let total = 0;
+  try {
+    unzipSync(bytes, {
       filter: (f) => {
         if (!want(f.name)) return false;
-        if (f.originalSize > MAX_ENTRY) throw new ImportError('TOO_LARGE', f.name);
-        return true;
+        total += f.originalSize;
+        if (f.originalSize > MAX_ENTRY || total > MAX_TOTAL) throw new ImportError('TOO_LARGE', f.name);
+        return false;
       },
     });
   } catch (e) {

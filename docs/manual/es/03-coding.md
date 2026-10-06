@@ -99,4 +99,4 @@ Hay dos formas de anotar algo sobre un pasaje:
 
 ## Codificar mientras escucha
 
-En las transcripciones con una grabación asociada, el reproductor está sobre el texto. Codifique mientras escucha: `Ctrl+Space` reproduce y pausa sin salir del texto, `Alt+Shift+←` repite los últimos 5 segundos y **Seguir la grabación en el texto** mantiene a la vista el turno que se está oyendo. Consulte [Transcripciones y grabaciones](02-documents.md#transcripts).
+En las transcripciones con una grabación asociada, el reproductor está sobre el texto. Codifique mientras escucha: `Ctrl+Space` reproduce y pausa sin salir del texto, `Alt+←` repite los últimos 5 segundos durante la reproducción (`Alt+Shift+←` en cualquier momento) y **Seguir la grabación en el texto** mantiene a la vista el turno que se está oyendo. Consulte [Transcripciones y grabaciones](02-documents.md#transcripts).

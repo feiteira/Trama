@@ -2,9 +2,11 @@ import React, { useEffect, useState, type ReactNode } from 'react';
 import { ChevronDown, Copy, KeyRound, Lock, ShieldCheck, Trash2 } from 'lucide-react';
 import { UI_LOCALE_META, UI_LOCALES, type UiLocale } from '../../core/i18n/languages';
 import { FLOWS, NO_NETWORK, PRIVACY_HEAD } from '../../core/privacy/flows';
-import { LIMITS } from '../../core/model/types';
+import { LIMITS, SETTING_KEYS } from '../../core/model/types';
+import { STOPWORD_LANGUAGES } from '../../core/qda/stopwords';
 import { AUTO_LOCK_MINUTES, type AutoLockMinutes, type ThemePref } from '../../services/prefs';
-import { useAppState, useLibrary } from '../../shell/AppState';
+import { useAppState, useLibrary, useProject } from '../../shell/AppState';
+import { useLive } from '../../shell/useLive';
 import type { ScreenProps } from '../../shell/router';
 import { ScreenHeader } from '../../shell/ScreenHeader';
 import { useCommands } from '../../shell/useCommands';
@@ -19,12 +21,14 @@ import { useToast } from '../../ui/components/Toast';
 import { BUNDLED } from './licences';
 import { ChangePassphraseDialog, NewRecoveryDialog } from './SecurityDialogs';
 import '../onboarding/onboarding.css';
+import { forgetAllProjectPrefs } from '../common/localPrefs';
 import './settings.css';
 
 /** Trama's own settings on this computer (not the project's). */
 export default function SettingsScreen(_props: ScreenProps<'settings'>) {
   const { t } = useI18n();
   const [dialog, setDialog] = useState<'passphrase' | 'recovery' | null>(null);
+  const inProject = useAppState().phase.name === 'project';
 
   useCommands(
     () => [
@@ -40,6 +44,7 @@ export default function SettingsScreen(_props: ScreenProps<'settings'>) {
       <div className="set" data-testid="screen-settings">
         <div className="set__column">
           <General />
+          {inProject ? <ProjectGroup /> : null}
           <Security onDialog={setDialog} />
           <Privacy />
           <About />
@@ -74,6 +79,39 @@ function Row({ label, hint, children, labelId, danger }: { label: ReactNode; hin
       </div>
       {children ? <div className="set__control">{children}</div> : null}
     </div>
+  );
+}
+
+/** Settings of the open project, saved in it (for everyone working on it). */
+function ProjectGroup() {
+  const { t } = useI18n();
+  const project = useProject();
+  const toast = useToast();
+  const { data } = useLive(async (store) => (await store.get('setting', SETTING_KEYS.textLanguage)) ?? null, [], ['setting']);
+  const stored = data && !data.deleted && typeof data.value === 'string' ? data.value : '';
+  const value = (STOPWORD_LANGUAGES as readonly string[]).includes(stored) ? stored : '';
+  const save = async (lang: string) => {
+    try {
+      if (lang) await project.store.put('setting', { id: SETTING_KEYS.textLanguage, value: lang });
+      else if (data && !data.deleted) await project.store.remove('setting', [SETTING_KEYS.textLanguage]);
+      toast.show({ message: t('settings.materialLanguage.saved'), tone: 'success' });
+    } catch (e) {
+      toast.error(e);
+    }
+  };
+  return (
+    <Group id="project" title={t('settings.sections.project')}>
+      <Row label={t('settings.materialLanguage.label')} hint={t('settings.materialLanguage.hint')} labelId="set-material-language">
+        <Select<string>
+          value={value}
+          onChange={(v) => void save(v)}
+          aria-labelledby="set-material-language"
+          size="sm"
+          options={[{ value: '', label: t('settings.materialLanguage.unset') }, ...STOPWORD_LANGUAGES.map((l) => ({ value: l, label: t(`analysis.words.languages.${l}`) }))]}
+          data-testid="settings-material-language"
+        />
+      </Row>
+    </Group>
   );
 }
 
@@ -173,6 +211,7 @@ function Security({ onDialog }: { onDialog: (d: 'passphrase' | 'recovery') => vo
       // The keys go first, so nothing can write to a project while its files are removed.
       await library.lock();
       await platform.eraseAll();
+      forgetAllProjectPrefs();
       await setPrefs({ lastProjectId: null });
       erased();
     } catch (e) {

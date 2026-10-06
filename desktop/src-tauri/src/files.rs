@@ -86,8 +86,56 @@ pub fn blob_file_for_write(dir: &Path, project: &str, id: &str) -> AppResult<Pat
 /// Distinguishes temporary files of concurrent writes to the same path.
 static TMP_COUNTER: AtomicU64 = AtomicU64::new(0);
 
+/// How old a temporary file of `write_atomic` must be before another write in the same folder
+/// treats it as left over (a crash, a drive unplugged mid-write) and removes it.
+const STALE_TMP: std::time::Duration = std::time::Duration::from_secs(60 * 60);
+
+/// True for a name `write_atomic` gives its temporary files: `.{name}.{pid}-{counter}.tmp`.
+fn is_atomic_tmp(name: &str) -> bool {
+    let Some(rest) = name.strip_prefix('.').and_then(|n| n.strip_suffix(".tmp")) else {
+        return false;
+    };
+    let Some((head, tail)) = rest.rsplit_once('.') else {
+        return false;
+    };
+    let Some((pid, n)) = tail.split_once('-') else {
+        return false;
+    };
+    !head.is_empty()
+        && !pid.is_empty()
+        && !n.is_empty()
+        && pid.bytes().all(|b| b.is_ascii_digit())
+        && n.bytes().all(|b| b.is_ascii_digit())
+}
+
+/// Removes temporary files of earlier `write_atomic` calls in `dir` that are older than
+/// STALE_TMP. Listings skip dot-files, so nothing else would ever find them; each would stay a
+/// full-size hidden copy (of a backup, say) that sync clients keep uploading.
+fn remove_stale_tmps(dir: &Path) {
+    let Ok(entries) = fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        if !is_atomic_tmp(&name.to_string_lossy()) {
+            continue;
+        }
+        let stale = entry
+            .metadata()
+            .ok()
+            .filter(|m| m.is_file())
+            .and_then(|m| m.modified().ok())
+            .and_then(|t| t.elapsed().ok())
+            .is_some_and(|age| age > STALE_TMP);
+        if stale {
+            let _ = fs::remove_file(entry.path());
+        }
+    }
+}
+
 /// Writes through a temporary file and a rename so a crash never leaves half a file. The
 /// temporary name starts with a dot, so listings skip it and it can never be a valid id.
+/// Temporary files an earlier write left behind in the same folder are removed once stale.
 pub fn write_atomic(path: &Path, bytes: &[u8]) -> AppResult<()> {
     let parent = path
         .parent()
@@ -96,6 +144,7 @@ pub fn write_atomic(path: &Path, bytes: &[u8]) -> AppResult<()> {
         .file_name()
         .ok_or_else(|| AppError::Invalid("path has no file name".into()))?;
     fs::create_dir_all(parent)?;
+    remove_stale_tmps(parent);
     let tmp = parent.join(format!(
         ".{}.{}-{}.tmp",
         name.to_string_lossy(),
@@ -339,6 +388,42 @@ mod tests {
         // Non-recursive and capped listings.
         assert_eq!(list(dir.path(), false, 100).unwrap().len(), 2);
         assert_eq!(list(dir.path(), true, 1).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn stale_temporary_files_are_removed_by_the_next_write() {
+        let dir = tempfile::tempdir().unwrap();
+        let old = dir
+            .path()
+            .join(".Trama backup ab12cd 2026-10-05 093015.trama.4242-7.tmp");
+        let fresh = dir
+            .path()
+            .join(".Trama backup ab12cd 2026-10-05 103015.trama.4243-0.tmp");
+        let other = dir.path().join(".hidden.tmp");
+        for p in [&old, &fresh, &other] {
+            fs::write(p, b"x").unwrap();
+        }
+        let two_hours_ago = std::time::SystemTime::now() - std::time::Duration::from_secs(7200);
+        for p in [&old, &other] {
+            fs::File::options()
+                .write(true)
+                .open(p)
+                .unwrap()
+                .set_modified(two_hours_ago)
+                .unwrap();
+        }
+        assert!(is_atomic_tmp(&old.file_name().unwrap().to_string_lossy()));
+        assert!(!is_atomic_tmp(".hidden.tmp"));
+        assert!(!is_atomic_tmp("Trama backup.trama.1-2.tmp"));
+        write_atomic(
+            &dir.path()
+                .join("Trama backup ab12cd 2026-10-06 093015.trama"),
+            b"new",
+        )
+        .unwrap();
+        assert!(!old.exists(), "a stale temporary file is removed");
+        assert!(fresh.exists(), "one that may still be written is kept");
+        assert!(other.exists(), "files of another shape are never touched");
     }
 
     #[test]

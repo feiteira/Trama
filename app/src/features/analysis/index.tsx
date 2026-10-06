@@ -1,4 +1,4 @@
-import React, { Suspense, useCallback, useEffect, useMemo } from 'react';
+import React, { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { BarChart3, Grid3x3, Network, Table2, TextSearch, WholeWord } from 'lucide-react';
 import type { ScreenProps, AnalysisTool } from '../../shell/router';
 import { useRouter } from '../../shell/router';
@@ -6,9 +6,11 @@ import { useProject } from '../../shell/AppState';
 import { ScreenHeader } from '../../shell/ScreenHeader';
 import { useCommands } from '../../shell/useCommands';
 import { Notice, Spinner } from '../../ui/components/Feedback';
+import { Select } from '../../ui/components/Field';
 import { useI18n } from '../../ui/i18n';
 import { readSettings, settingsKey, writeSettings } from './lib/settings';
-import { AnalysisDataProvider, useLoadAnalysisData } from './parts/data';
+import { ALL_CODERS } from './lib/coders';
+import { type AnalysisData, AnalysisDataProvider, useLoadAnalysisData } from './parts/data';
 import { SearchTool } from './tools/SearchTool';
 import { CooccurrenceTool } from './tools/CooccurrenceTool';
 import { MatrixTool } from './tools/MatrixTool';
@@ -26,7 +28,14 @@ export default function AnalysisScreen({ route }: ScreenProps<'analysis'>) {
   const { t } = useI18n();
   const project = useProject();
   const { replace } = useRouter();
-  const { data, error } = useLoadAnalysisData();
+  // Whose codings are counted (lib/coders.ts): remembered per project, '' = the default.
+  const coderKey = settingsKey(project.id, 'coder');
+  const [coderChoice, setCoderChoice] = useState(() => readSettings(coderKey, { coder: '' }).coder);
+  const chooseCoder = (coder: string) => {
+    setCoderChoice(coder);
+    writeSettings(coderKey, { coder });
+  };
+  const { data, error } = useLoadAnalysisData(coderChoice, project.me.id);
   const lastKey = settingsKey(project.id, 'tool');
   const remembered = useMemo(() => readSettings(lastKey, { tool: 'search' as AnalysisTool }, { tool: TOOLS }).tool, [lastKey]);
   const tool: AnalysisTool = route.tool && TOOLS.includes(route.tool) ? route.tool : remembered;
@@ -56,7 +65,11 @@ export default function AnalysisScreen({ route }: ScreenProps<'analysis'>) {
 
   return (
     <div className="an" data-testid="analysis">
-      <ScreenHeader title={t('analysis.title')} subtitle={t(`analysis.toolHints.${tool}`)} />
+      <ScreenHeader
+        title={t('analysis.title')}
+        subtitle={t(`analysis.toolHints.${tool}`)}
+        actions={data && data.coders.length > 1 ? <CoderPicker data={data} onChange={chooseCoder} /> : undefined}
+      />
       <nav className="an-tools" aria-label={t('analysis.tools.label')}>
         <div className="an-tools__list" role="tablist" aria-label={t('analysis.tools.label')} onKeyDown={(e) => onTabKey(e, tool, choose)}>
           {TOOLS.map((id) => {
@@ -83,6 +96,7 @@ export default function AnalysisScreen({ route }: ScreenProps<'analysis'>) {
           })}
         </div>
       </nav>
+      {data ? <CoderNote data={data} /> : null}
       <div className="an__body" role="tabpanel" id="an-panel" aria-labelledby={`an-tab-${tool}`}>
         {error ? (
           <div className="an__center">
@@ -103,6 +117,41 @@ export default function AnalysisScreen({ route }: ScreenProps<'analysis'>) {
         )}
       </div>
     </div>
+  );
+}
+
+function CoderPicker({ data, onChange }: { data: AnalysisData; onChange: (coder: string) => void }) {
+  const { t } = useI18n();
+  const total = data.coders.reduce((n, c) => n + c.count, 0);
+  const options = [
+    ...data.coders.map((c) => ({ value: c.id, label: t('analysis.coders.option', { name: c.name || t('analysis.coders.unnamed'), n: c.count }) })),
+    { value: ALL_CODERS, label: t('analysis.coders.option', { name: t('analysis.coders.all'), n: total }) },
+  ];
+  return (
+    <label className="an-coders">
+      <span className="an-coders__label">{t('analysis.coders.label')}</span>
+      <Select size="sm" value={data.coderScope} onChange={onChange} options={options} data-testid="analysis-coder" />
+    </label>
+  );
+}
+
+/** Says when codings are left out, or when several coders' codings are counted together. */
+function CoderNote({ data }: { data: AnalysisData }) {
+  const { t, tp } = useI18n();
+  if (data.pooled) {
+    return (
+      <p className="an-coders__note" data-testid="analysis-coder-note">
+        {t('analysis.coders.pooled')}
+      </p>
+    );
+  }
+  const total = data.coders.reduce((n, c) => n + c.count, 0);
+  const others = total - data.rawCodings.length;
+  if (others <= 0) return null;
+  return (
+    <p className="an-coders__note" data-testid="analysis-coder-note">
+      {tp('analysis.coders.others', others)}
+    </p>
   );
 }
 

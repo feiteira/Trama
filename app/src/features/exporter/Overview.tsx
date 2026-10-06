@@ -17,6 +17,7 @@ import { useToast } from '../../ui/components/Toast';
 import { backupRunner } from './backupRunner';
 import { useBackupState } from './useBackupState';
 import { attachedBytes, formatBytes } from './report';
+import { forgetProjectPrefs } from '../common/localPrefs';
 
 interface OverviewData {
   summary: ProjectSummary;
@@ -255,6 +256,7 @@ function DangerZone() {
       backupRunner.skip(project);
       await runSavers();
       await library.deleteProject(project.id);
+      forgetProjectPrefs(project.id);
       await closeProject();
       toast.show({ message: t('exporter.danger.deleted', { name }) });
     } catch (e) {

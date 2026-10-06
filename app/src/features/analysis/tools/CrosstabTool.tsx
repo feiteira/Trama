@@ -10,7 +10,7 @@ import { useI18n } from '../../../ui/i18n';
 import { TipRow } from '../charts/ChartTip';
 import { HeatTable, type HeatRow } from '../charts/HeatTable';
 import { visibleLines } from '../lib/codeLines';
-import { type Cell, formatP, formatPercent, formatValue, pathLabel } from '../lib/format';
+import { type Cell, formatFixed, formatP, formatPercent, formatValue, pathLabel } from '../lib/format';
 import { heatScale } from '../lib/heat';
 import { useAnalysisData, useDeferredCompute, useTheme } from '../parts/data';
 import { useExporter } from '../parts/exporting';
@@ -267,7 +267,7 @@ export function CrosstabTool() {
                       if (!tr) return <span className="t-muted">–</span>;
                       const low = tr.lowExpectedShare > 0.2;
                       return (
-                        <span className={tr.p < 0.05 ? 'an-p an-p--strong' : 'an-p'} title={t('analysis.crosstab.testTitle', { chi: tr.chi2.toFixed(2), df: tr.df, v: tr.cramersV.toFixed(2) })}>
+                        <span className={tr.p < 0.05 ? 'an-p an-p--strong' : 'an-p'} title={t('analysis.crosstab.testTitle', { chi: formatFixed(tr.chi2, locale, 2), df: tr.df, v: formatFixed(tr.cramersV, locale, 2) })}>
                           p {formatP(tr.p, locale)}
                           {low ? '*' : ''}
                         </span>

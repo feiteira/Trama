@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { strToU8, unzipSync, zipSync } from 'fflate';
 import { describe, expect, it } from 'vitest';
+import { forgeSize } from '../export/forgeZip.testutil';
 import { type MammothLike, docxToText, loadMammoth } from './docx';
 
 const fixture = (name: string) => new Uint8Array(readFileSync(new URL(`../../../test-fixtures/import/${name}`, import.meta.url)));
@@ -86,5 +87,21 @@ describe('docxToText', () => {
   it('loads mammoth once', async () => {
     expect(await loadMammoth()).toBe(await loadMammoth());
     expect(typeof (await loadMammoth()).convertToHtml).toBe('function');
+  });
+});
+
+describe('zip bombs', () => {
+  it('refuses a Word file whose parts would inflate to gigabytes, before mammoth sees it', async () => {
+    const forged = forgeSize(fixture('empty.docx'), 'word/document.xml', 0xf0000000);
+    let called = false;
+    const fake: MammothLike = {
+      convertToHtml: () => {
+        called = true;
+        return Promise.resolve({ value: '', messages: [] });
+      },
+      images: { imgElement: () => ({}) },
+    };
+    await expect(docxToText(forged, fake)).rejects.toMatchObject({ code: 'TOO_LARGE' });
+    expect(called).toBe(false);
   });
 });

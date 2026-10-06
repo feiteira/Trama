@@ -148,6 +148,14 @@ export const workbench: Messages['workbench'] = {
       one: 'Texto guardado. {n} codificação ficou sem texto e foi removida.',
       other: 'Texto guardado. {n} codificações ficaram sem texto e foram removidas.',
     },
+    kept: 'As suas alterações a «{name}» foram guardadas.',
+    keptRemoved: {
+      one: 'As suas alterações a «{name}» foram guardadas. {n} codificação ficou sem texto e foi removida.',
+      other: 'As suas alterações a «{name}» foram guardadas. {n} codificações ficaram sem texto e foram removidas.',
+    },
+    discardTitle: 'Descartar as alterações ao texto?',
+    discardBody: 'As alterações que fez desde que começou a editar serão perdidas.',
+    discard: 'Descartar alterações',
   },
   media: {
     loading: 'A desencriptar a gravação…',

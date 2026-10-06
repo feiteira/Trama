@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { Settings } from 'luxon';
-import { LOG_ACTIONS } from '../../core/model/types';
+import { LOG_ACTIONS, type LogAction } from '../../core/model/types';
 import { log } from '../../core/i18n/locales/en/log';
 import { lookup } from '../../core/i18n/translate';
 import {
-  actionsOf, afterBound, beforeBound, buildSentence, groupByDay, groupOf, matchesText, onOrAfter, parseSummary, sentenceText, splitTemplate, TEMPLATES, templateKey,
+  actionsOf, type DetailWords, afterBound, beforeBound, buildSentence, groupByDay, groupOf, matchesText, onOrAfter, parseSummary, sentenceText, splitTemplate, TEMPLATES, templateKey,
 } from './sentence';
 
 const en = { log };
@@ -136,5 +136,38 @@ describe('quotes', () => {
     const s = buildSentence({ action: 'code.edit', summary: '"Trust": "x" ∅' }, 'nenhum', q);
     expect(s.detail).toContain('«');
     expect(sentenceText('Editou o código {a}', buildSentence({ action: 'code.edit', summary: '"Confiança"' }, 'nenhum', q), String, q)).toBe('Editou o código «Confiança»');
+  });
+});
+
+describe('details in the reader’s language', () => {
+  const words: DetailWords = {
+    field: (id) => ({ codable: 'Categoria', color: 'Cor' })[id] ?? null,
+    attrType: (id) => ({ choice: 'Escolha', number: 'Número', text: 'Texto' })[id] ?? null,
+    phrase: (id) => `<${id}>`,
+    count: (id, n) => `${n} <${id}>`,
+  };
+  const detail = (action: LogAction, summary: string) => buildSentence({ action, summary }, '∅', ['«', '»'], words).detail;
+
+  it('translates code fields, attribute types, exports and imports', () => {
+    expect(detail('code.edit', '"Pertença": codable')).toBe('Categoria');
+    expect(detail('code.edit', '"Pertença": codable, color')).toBe('Categoria, Cor');
+    expect(detail('attribute.edit', '+ "Gender": choice')).toBe('Escolha');
+    expect(detail('attribute.edit', '"Age": text → number')).toBe('Texto → Número');
+    expect(detail('export', '.qdpx (MAXQDA line endings)')).toBe('.qdpx (<crlf>)');
+    expect(detail('export', '.trama (password) + pseudonyms')).toBe('.trama (<password>) + <pseudonyms>');
+    expect(detail('export', 'segments ×12 → Trust.docx')).toBe('12 <segments> → Trust.docx');
+    expect(detail('export', 'memos ×3 → Memos.md')).toBe('3 <memos> → Memos.md');
+    expect(detail('export', 'codebook .qdc')).toBe('<codebook> .qdc');
+    expect(detail('export', 'project report .docx')).toBe('<report> .docx');
+    expect(detail('export', 'agreement .xlsx (Ana / Rui)')).toBe('<agreement> .xlsx (Ana / Rui)');
+    expect(detail('export', 'analysis: Matrix.csv')).toBe('<analysis>: Matrix.csv');
+    expect(detail('export', '"key.csv" (pseudonyms)')).toBe('(<pseudonyms>)');
+    expect(detail('project.import', 'Trama 0.1.0: 71 records, 2 left out')).toBe('Trama 0.1.0: 71 <records>, 2 <leftOut>');
+  });
+
+  it('keeps what it does not know as it is', () => {
+    expect(detail('code.edit', '"Trust": 3')).toBe('3');
+    expect(detail('code.edit', '"Trust": codable, weird')).toBe('codable, weird');
+    expect(buildSentence({ action: 'code.edit', summary: '"Pertença": codable' }).detail).toBe('codable');
   });
 });

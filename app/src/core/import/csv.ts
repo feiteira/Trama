@@ -1,4 +1,4 @@
-import Papa from 'papaparse';
+import Papa, { type ParseError } from 'papaparse';
 import { canonicalize } from './text';
 import { type ImportedTable, WARNING, warning } from './types';
 
@@ -93,5 +93,23 @@ export function parseCsv(text: string, name: string, opts: CsvOptions = {}): Imp
   }
   delimiter ??= detectDelimiter(body);
   const parsed = Papa.parse<string[]>(body, { delimiter, skipEmptyLines: 'greedy' });
-  return rowsToTable(name, parsed.data);
+  const table = rowsToTable(name, parsed.data);
+  // An unbalanced quote swallows the following lines into one cell: the next respondents vanish
+  // and their answers are attributed to someone else, invisibly once imported. Say where.
+  const lines = quoteErrorLines(body, parsed.errors, sep ? 2 : 1);
+  if (lines.length) table.warnings = [warning(WARNING.malformedQuotes, lines.join(',')), ...(table.warnings ?? [])];
+  return table;
+}
+
+/** File line numbers (from 1) where Papa found a broken quoted field. */
+function quoteErrorLines(body: string, errors: ParseError[], firstLine: number): number[] {
+  const at = errors.flatMap((e) => (e.type === 'Quotes' && typeof e.index === 'number' ? [e.index] : [])).sort((a, b) => a - b);
+  const lines: number[] = [];
+  let line = firstLine;
+  let pos = 0;
+  for (const index of at) {
+    for (; pos < index && pos < body.length; pos++) if (body.charCodeAt(pos) === 10) line++;
+    if (lines[lines.length - 1] !== line) lines.push(line);
+  }
+  return lines;
 }

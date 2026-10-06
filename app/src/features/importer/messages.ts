@@ -91,6 +91,10 @@ export function warningMessage(w: string, bcp47: string): Msg {
       return { plural: 'importer.warnings.formulas', n: count(arg) };
     case WARNING.raggedRows:
       return { plural: 'importer.warnings.raggedRows', n: count(arg) };
+    case WARNING.malformedQuotes: {
+      const lines = (arg ?? '').split(',').filter(Boolean).length;
+      return { plural: 'importer.warnings.malformedQuotes', n: lines, vars: { lines: pageList(arg, bcp47) } };
+    }
     default:
       return { key: 'importer.warnings.other', vars: { code: w } };
   }
@@ -99,5 +103,5 @@ export function warningMessage(w: string, bcp47: string): Msg {
 /** Warnings worth stopping at (the document will be empty or wrong without a look). */
 export function isSerious(w: string): boolean {
   const { code } = parseWarning(w);
-  return code === WARNING.pdfNoText || code === WARNING.pdfImagePages || code === WARNING.legacyEncoding || code === WARNING.rtfCodePage;
+  return code === WARNING.pdfNoText || code === WARNING.pdfImagePages || code === WARNING.legacyEncoding || code === WARNING.rtfCodePage || code === WARNING.malformedQuotes;
 }

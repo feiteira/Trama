@@ -233,3 +233,43 @@ describe('surveyToDocuments', () => {
     expect(r.questionSpans[0]![0]!.question).toBe('Q'.repeat(300));
   });
 });
+
+describe('large or malformed tables stay fast and say what went wrong', () => {
+  const sheetWith = (sheetData: string) => {
+    const files = unzipSync(bytes('survey.xlsx'));
+    files['xl/worksheets/sheet1.xml'] = strToU8(
+      `<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>${sheetData}</sheetData></worksheet>`,
+    );
+    return zipSync(files);
+  };
+  const inline = (ref: string, v: string) => `<c r="${ref}" t="inlineStr"><is><t>${v}</t></is></c>`;
+
+  it('ignores empty formatted rows down to the last row of the sheet', () => {
+    const header = Array.from({ length: 200 }, (_, i) => inline(`${columnLetter(i)}1`, `Q${i + 1}`)).join('');
+    const xlsx = sheetWith(`<row r="1">${header}</row><row r="2">${inline('A2', 'R1')}</row><row r="1048576" s="1" customFormat="1"/>`);
+    const t0 = Date.now();
+    const r = readXlsx(xlsx, 'x');
+    expect(Date.now() - t0).toBeLessThan(1000);
+    expect(r.table.headers).toHaveLength(200);
+    expect(r.table.rows).toEqual([['R1', ...Array<string>(199).fill('')]]);
+  });
+
+  it('leaves out columns no row uses, so a stray value in XFD does not make 16 384 columns', () => {
+    const rows = Array.from({ length: 2000 }, (_, i) => `<row r="${i + 2}">${inline(`A${i + 2}`, `R${i}`)}${inline(`B${i + 2}`, 'x')}</row>`).join('');
+    const r = readXlsx(sheetWith(`<row r="1">${inline('A1', 'ID')}${inline('B1', 'Resposta')}${inline('XFD1', 'stray')}</row>${rows}`), 'x');
+    expect(r.table.headers).toEqual(['ID', 'Resposta', 'stray']);
+    expect(r.table.rows).toHaveLength(2000);
+    expect(r.table.rows[0]).toEqual(['R0', 'x', '']);
+  });
+
+  it('warns about an unbalanced quote that swallowed the next respondents', () => {
+    const lines = ['id,idade,resposta'];
+    for (let i = 1; i <= 1000; i++) lines.push(i === 2 ? `R2,30,"Gosto muito, mas` : `R${i},${20 + (i % 50)},"Resposta número ${i}, com vírgula"`);
+    const t = parseCsv(lines.join('\n') + '\n', 's');
+    expect(t.warnings).toContain('table.malformedQuotes:3');
+    expect(parseCsv('id,r\nR1,"abc\nR2,x\n', 's').warnings).toContain('table.malformedQuotes:2');
+    // with a "sep=" line the line numbers still match the file
+    expect(parseCsv('sep=,\nid,r\nR1,"ab"c\nR2,x\n', 's').warnings).toContain('table.malformedQuotes:3');
+    expect(parseCsv('id,r\nR1,"ok"\n', 's').warnings).toEqual([]);
+  });
+});

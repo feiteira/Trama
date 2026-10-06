@@ -50,7 +50,9 @@ export class ImportSession {
   readonly undos: Undoable[] = [];
   private cases: Map<string, string> | null = null;
   private groups: Map<string, string> | null = null;
+  /** Code ids by parent and name (see codeNamed). */
   private codes = new Map<string, string>();
+  private codebookRead = false;
   /** Names and positions of new documents, read once for the whole batch. */
   private slots: DocumentSlots | null = null;
 
@@ -115,30 +117,33 @@ export class ImportSession {
   async codeUnder(category: string, name: string): Promise<string> {
     const catName = clip(category, LIMITS.codeNameMax);
     const codeName = clip(name, LIMITS.codeNameMax);
-    const catKey = `\u0000${nameKey(catName)}`;
-    let catId = this.codes.get(catKey);
-    const all = await this.ctx.store.list('code');
-    if (!catId) {
-      catId = all.find((c) => c.parent_id === null && nameKey(c.name) === nameKey(catName))?.id;
-      if (!catId) {
-        const r = await createCode(this.ctx, { name: catName, codable: false });
-        this.undos.push(r.undo);
-        catId = r.code.id;
+    const catId = await this.codeNamed(null, catName, () => createCode(this.ctx, { name: catName, codable: false }));
+    return this.codeNamed(catId, codeName, () => createCode(this.ctx, { name: codeName, parent_id: catId }));
+  }
+
+  /**
+   * The code called `name` under `parentId`, made by `create` when there is none. The codebook
+   * is read once per session, not once per call: a survey asks for a code per answer, and
+   * thousands of full codebook reads made large imports take minutes.
+   */
+  private async codeNamed(parentId: string | null, name: string, create: () => Promise<{ code: { id: string }; undo: Undoable }>): Promise<string> {
+    const key = `${parentId ?? ''}\u0000${nameKey(name)}`;
+    const known = this.codes.get(key);
+    if (known) return known;
+    if (!this.codebookRead) {
+      for (const c of await this.ctx.store.list('code')) {
+        const k = `${c.parent_id ?? ''}\u0000${nameKey(c.name)}`;
+        // The first of two codes with the same name, as before.
+        if (!this.codes.has(k)) this.codes.set(k, c.id);
       }
-      this.codes.set(catKey, catId);
+      this.codebookRead = true;
+      const found = this.codes.get(key);
+      if (found) return found;
     }
-    const key = `${catId}\u0000${nameKey(codeName)}`;
-    let id = this.codes.get(key);
-    if (!id) {
-      id = all.find((c) => c.parent_id === catId && nameKey(c.name) === nameKey(codeName))?.id;
-      if (!id) {
-        const r = await createCode(this.ctx, { name: codeName, parent_id: catId });
-        this.undos.push(r.undo);
-        id = r.code.id;
-      }
-      this.codes.set(key, id);
-    }
-    return id;
+    const r = await create();
+    this.undos.push(r.undo);
+    this.codes.set(key, r.code.id);
+    return r.code.id;
   }
 
   /**

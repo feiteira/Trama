@@ -16,7 +16,7 @@ A `.trama` file is either a plain ZIP archive or that ZIP inside an encrypted co
 | `readable/codebook.md` | The codebook as Markdown: the code hierarchy as headings, each code's definition, when to use it, when not to, and an example. |
 | `readable/memos/<title>.md` | Each live memo. |
 
-Everything under `readable/` is a convenience for people without Trama. Trama never reads it back; only `data/` and `blobs/` count. File names under `readable/` are made safe for every system (characters such as `/ \ : * ? " < > |` become `_`, names are cut at 80 characters, duplicates get ` (2)`, ` (3)`…).
+Everything under `readable/` is a convenience for people without Trama. Trama never reads it back; only `data/` and `blobs/` count. File names under `readable/` are made safe for every system (characters such as `/ \ : * ? " < > |` become `_`, names are cut at 80 characters (never inside a character: an emoji is kept whole or left out), duplicates get ` (2)`, ` (3)`…).
 
 ### manifest.json
 
@@ -42,7 +42,8 @@ Everything under `readable/` is a convenience for people without Trama. Trama ne
 Readers must:
 
 - refuse a file whose `format` is not `trama-project`, or whose `version` is greater than they understand;
-- verify every checksum in `files`, and refuse a file in which an entry other than `manifest.json` is not listed in `files`;
+- verify every checksum in `files` for the entries they read (`data/`, `blobs/`), and refuse a file in which such an entry, or any entry other than `manifest.json` and those under `readable/`, is not listed in `files`. Entries under `readable/` are never read, so a damaged or missing readable copy does not make the file unreadable;
+- check the uncompressed sizes the archive declares before inflating anything, and refuse an archive that would expand far beyond its own size (Trama: at most 2 GiB per blob, 512 MiB per other entry, and in all the larger of 1 GiB and 32 times the archive's size);
 - refuse entry names that are absolute, contain `\`, a drive letter, or a `.`, `..` or empty path segment.
 
 ### Records

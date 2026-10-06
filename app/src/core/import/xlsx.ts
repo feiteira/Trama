@@ -1,5 +1,5 @@
 import type { Element } from '@xmldom/xmldom';
-import { rowsToTable } from './csv';
+import { columnLetter, rowsToTable } from './csv';
 import { ImportError, type ImportedTable, WARNING, warning } from './types';
 import { childElements, descendants, firstChild, parseXml, readZip, textContent, zipText } from './xml';
 
@@ -232,14 +232,17 @@ export function readXlsx(bytes: Uint8Array, name: string, opts: XlsxOptions = {}
   if (sheetXml === null) throw new ImportError('DAMAGED', 'xlsx', `${sheet.path} missing`);
   const ws = parseXml(sheetXml, 'xlsx').documentElement!;
   const data = kid(ws, 'sheetData');
-  const grid: string[][] = [];
+  // Only cells with a value are kept, sparsely: a sheet saved with whole-column formatting has
+  // empty <row> elements down to row 1 048 576, and a stray value in column XFD would make every
+  // row 16 384 cells wide. Padding those out cost gigabytes for a one-row table.
+  const grid = new Map<number, Map<number, string>>();
+  const usedCols = new Set<number>();
   let noValue = 0;
   let r = -1;
   for (const row of data ? kids(data, 'row') : []) {
     const rAttr = row.getAttribute('r');
     r = rAttr ? Number(rAttr) - 1 : r + 1;
     if (!Number.isInteger(r) || r < 0 || r > 2_000_000) continue;
-    const cells: string[] = (grid[r] ??= []);
     let c = -1;
     for (const cell of kids(row, 'c')) {
       const ref = cell.getAttribute('r') ?? '';
@@ -268,20 +271,27 @@ export function readXlsx(bytes: Uint8Array, name: string, opts: XlsxOptions = {}
       }
       if (!v && !kid(cell, 'is') && kid(cell, 'f')) noValue++;
       if (value) {
-        while (cells.length < c) cells.push('');
-        cells[c] = value;
+        let cells = grid.get(r);
+        if (!cells) grid.set(r, (cells = new Map()));
+        cells.set(c, value);
+        usedCols.add(c);
       }
     }
   }
-  // Sparse rows (row 4 after row 2) leave holes; short rows are padded so that a row ending in
-  // empty cells is not reported as ragged.
-  const width = grid.reduce((w, row) => Math.max(w, row?.length ?? 0), 0);
-  const rows: string[][] = [];
-  for (let k = 0; k < grid.length; k++) {
-    const row = grid[k] ?? [];
-    while (row.length < width) row.push('');
-    rows.push(row);
-  }
+  // Columns no row uses at all are left out (they hold no data), the rest keep their order. Every
+  // row gets the same width, so a row ending in empty cells is not reported as ragged.
+  const cols = [...usedCols].sort((a, b) => a - b);
+  const rows: string[][] = [...grid.keys()]
+    .sort((a, b) => a - b)
+    .map((k) => {
+      const cells = grid.get(k)!;
+      return cols.map((col) => cells.get(col) ?? '');
+    });
+  // A column with data but no header is named by its letter in the sheet, not by its new position.
+  const header = rows.find((row) => row.some((v) => v.trim()));
+  if (header) cols.forEach((col, k) => {
+    if (!header[k]?.trim()) header[k] = columnLetter(col);
+  });
   const table = rowsToTable(name, rows);
   if (noValue) table.warnings = [...(table.warnings ?? []), warning(WARNING.formulasWithoutValue, noValue)];
   // Columns before the first used one (A empty, data from B) are not data.

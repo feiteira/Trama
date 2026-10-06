@@ -148,6 +148,14 @@ export const workbench: Messages['workbench'] = {
       one: 'Texto guardado. {n} codificación se quedó sin texto y se ha quitado.',
       other: 'Texto guardado. {n} codificaciones se quedaron sin texto y se han quitado.',
     },
+    kept: 'Se han guardado sus cambios en «{name}».',
+    keptRemoved: {
+      one: 'Se han guardado sus cambios en «{name}». {n} codificación se quedó sin texto y se ha quitado.',
+      other: 'Se han guardado sus cambios en «{name}». {n} codificaciones se quedaron sin texto y se han quitado.',
+    },
+    discardTitle: '¿Descartar los cambios en el texto?',
+    discardBody: 'Se perderán los cambios que ha hecho desde que empezó a editar.',
+    discard: 'Descartar cambios',
   },
   media: {
     loading: 'Descifrando la grabación…',

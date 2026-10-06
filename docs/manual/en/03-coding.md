@@ -99,4 +99,4 @@ Two ways to note something about a passage:
 
 ## Coding while listening
 
-For transcripts with an attached recording, the player sits above the text. Code as you listen: `Ctrl+Space` plays and pauses without leaving the text, `Alt+Shift+←` replays the last 5 seconds, and **Follow the recording** keeps the turn being spoken in view. See [Transcripts and recordings](02-documents.md#transcripts).
+For transcripts with an attached recording, the player sits above the text. Code as you listen: `Ctrl+Space` plays and pauses without leaving the text, `Alt+←` replays the last 5 seconds while it plays (`Alt+Shift+←` at any time), and **Follow the recording** keeps the turn being spoken in view. See [Transcripts and recordings](02-documents.md#transcripts).

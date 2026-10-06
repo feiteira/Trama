@@ -42,7 +42,8 @@ Trama recognises transcripts and keeps **one speaker turn per paragraph**, writt
 
 **Recordings.** A transcript can carry its audio or video. In the document’s header, choose **Attach a recording…** and pick the file; it is encrypted and stored in the project. A player appears above the text:
 
-- `Ctrl+Space` plays or pauses; `Alt+Shift+←` and `Alt+Shift+→` jump back or forward 5 seconds.
+- `Ctrl+Space` plays or pauses.
+- `Alt+←` and `Alt+→` jump back or forward 5 seconds while the recording plays (or the player has the focus); at other times `Alt+←` is **Back**. `Alt+Shift+←` and `Alt+Shift+→` jump at any time, even when paused.
 - `Alt+Enter` plays from the paragraph where the cursor is.
 - **Follow the recording** highlights the turn being spoken as it plays.
 - Removing a recording erases the file from the project; the transcript and its time stamps stay.

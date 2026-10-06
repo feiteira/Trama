@@ -1,3 +1,4 @@
+import { useRef } from 'react';
 import type React from 'react';
 
 // Focus helpers for dialogs, menus and popovers (browser only).
@@ -38,6 +39,30 @@ export function trapTab(e: KeyboardEvent | React.KeyboardEvent, root: HTMLElemen
     e.preventDefault();
     first.focus();
   }
+}
+
+/**
+ * Follows a dialog's or popover's `open` flag and keeps what had the focus as it opened.
+ * `update` runs during render: by the time an effect runs, React has already focused any
+ * `autoFocus` field inside, so reading the focus there returns the dialog's own field, which is
+ * gone when it closes — and the focus then falls to the page.
+ */
+export class OpenerTracker<T> {
+  private wasOpen = false;
+  opener: T | null = null;
+
+  update(open: boolean, focused: () => T | null): void {
+    if (open && !this.wasOpen) this.opener = focused();
+    this.wasOpen = open;
+  }
+}
+
+/** The element that had the focus when `open` last turned true (see OpenerTracker). */
+export function useOpener(open: boolean): OpenerTracker<Element> {
+  const tracker = useRef<OpenerTracker<Element> | null>(null);
+  tracker.current ??= new OpenerTracker<Element>();
+  tracker.current.update(open, () => (typeof document === 'undefined' ? null : document.activeElement));
+  return tracker.current;
 }
 
 /**

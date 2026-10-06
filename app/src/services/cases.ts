@@ -431,7 +431,7 @@ export async function importAttributeTable(
   rows: string[][],
   opts: { header: boolean; nameColumn: number; createMissing: boolean },
 ): Promise<AttributeImport> {
-  const width = Math.max(0, ...rows.map((r) => r.length));
+  const width = rows.reduce((w, r) => Math.max(w, r.length), 0);
   if (opts.nameColumn < 0 || opts.nameColumn >= Math.max(width, 1)) throw new ServiceError('invalid_argument', 'no such name column');
   const head = opts.header ? rows[0] ?? [] : Array.from({ length: width }, (_, i) => `#${i + 1}`);
   const body = (opts.header ? rows.slice(1) : rows).filter((r) => r.some((cell) => (cell ?? '').trim()));

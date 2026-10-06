@@ -29,11 +29,11 @@ Trama works out how each program counted text positions (programs differ in how 
 
 ## Taking a project to another program
 
-In **Export & backup**, choose **REFI-QDA project** and save the `.qdpx` file. Then import it in the other program. Options:
+Open **Project**, go to the **Export** tab, choose **REFI-QDA project** and save the `.qdpx` file. Then import it in the other program.
 
-- **MAXQDA compatibility** — writes the text files the way MAXQDA expects, so its codings do not shift. Turn it on when the file is going to MAXQDA.
-- **Memos** and **recordings** can be left out to make the file smaller.
-- **Original PDFs of edited documents** are left out by default (see below); you can include them.
+- **MAXQDA line endings** is the one option: it writes the text files with Windows line endings, so coded segments land in the right place in MAXQDA. Turn it on when the file is going to MAXQDA, and leave it off for other programs.
+- Memos and recordings are always included.
+- Original PDFs whose text you have edited are always written as text (see [What does not carry over](#lost)).
 
 The `.qdpx` file is **not encrypted** and never contains the pseudonymisation key, deleted items or the audit trail.
 
@@ -72,7 +72,7 @@ The `.qdpx` file is **not encrypted** and never contains the pseudonymisation ke
 - **Choice** attributes as choices: they become text, because REFI-QDA has no list of allowed values;
 - colours of cases, groups, memos and documents, code shortcut keys, and the document kinds *survey* and *note* (they become ordinary text documents);
 - the audit trail, deleted items and the pseudonymisation key;
-- the original PDF of a document whose text you have edited — for instance, pseudonymised. The original would still show what was removed, so the document is written as text unless you explicitly include the originals.
+- the original PDF of a document whose text you have edited — for instance, pseudonymised. The original would still show what was removed, so the document is always written as text.
 
 The full mapping, for the technically curious, is in `docs/spec/refi-qda.md` in Trama’s source code.
 
@@ -82,7 +82,7 @@ The full mapping, for the technically curious, is in `docs/spec/refi-qda.md` in 
 
 A `.trama` file holds one whole project, losslessly: documents and their original files and recordings, the codebook, coded segments, memos, cases and attributes, document groups and the audit trail. Trama uses it for:
 
-- **Export & backup → Trama project file** — to keep a copy, to archive a finished study, or to move to another computer;
+- **Project → Export → Trama project file** — to keep a copy, to archive a finished study, or to move to another computer;
 - **copies for teammates** ([Teamwork](08-teamwork-and-agreement.md#copies));
 - **automatic backups**, which are always encrypted ([Backups](10-privacy-and-security.md#backups)).
 

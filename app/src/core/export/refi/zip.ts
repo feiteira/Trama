@@ -1,6 +1,14 @@
 // Reading the ZIP container of a .qdpx: listing, safe paths, case-insensitive lookup.
 import { unzipSync } from 'fflate';
+import { LIMITS } from '../../model/types';
 import { RefiError } from './common';
+
+/** Most project.qde may hold uncompressed: an XML string much larger than this cannot be parsed. */
+export const MAX_QDE_BYTES = 256 * 1024 * 1024;
+/** Uncompressed bytes any archive may expand to, whatever its size. */
+const MIN_BUDGET = 1024 * 1024 * 1024;
+/** Beyond that floor, how much larger than the file its contents may be (media barely compress). */
+const MAX_RATIO = 32;
 
 /** Whether a ZIP entry name could escape the folder it is extracted to (zip-slip). */
 export function isUnsafeEntry(name: string): boolean {
@@ -14,6 +22,10 @@ export class ZipIndex {
   readonly names: string[] = [];
   /** Entries refused because their name was unsafe. */
   readonly refused: string[] = [];
+  /** Declared uncompressed size of each entry (stored name). */
+  private readonly sizes = new Map<string, number>();
+  /** Bytes inflated so far, against the archive's budget. */
+  private inflated = 0;
 
   constructor(private readonly zip: Uint8Array) {
     try {
@@ -24,6 +36,7 @@ export class ZipIndex {
             this.refused.push(f.name);
             return false;
           }
+          this.sizes.set(f.name, f.originalSize);
           const key = normPath(f.name).toLowerCase();
           if (!this.byLower.has(key)) {
             this.byLower.set(key, f.name);
@@ -42,11 +55,28 @@ export class ZipIndex {
     return this.byLower.get(normPath(path).toLowerCase()) ?? null;
   }
 
-  /** Reads the given entries (stored names). Only these are inflated. */
-  read(names: Iterable<string>): Map<string, Uint8Array> {
+  /**
+   * Reads the given entries (stored names). Only these are inflated. fflate inflates an entry
+   * into a buffer of exactly its declared size, so checking declared sizes first refuses a zip
+   * bomb before gigabytes are allocated.
+   */
+  read(names: Iterable<string>, maxEntry: number = LIMITS.mediaMaxBytes): Map<string, Uint8Array> {
     const want = new Set(names);
     if (!want.size) return new Map();
-    const files = unzipSync(this.zip, { filter: (f) => want.has(f.name) });
+    let total = this.inflated;
+    const budget = Math.max(MIN_BUDGET, this.zip.length * MAX_RATIO);
+    for (const name of want) {
+      const size = this.sizes.get(name) ?? 0;
+      total += size;
+      if (size > maxEntry || total > budget) throw new RefiError(`This file is too large to open: ${name} would take ${Math.ceil(size / 1048576)} MB.`);
+    }
+    this.inflated = total;
+    let files: Record<string, Uint8Array>;
+    try {
+      files = unzipSync(this.zip, { filter: (f) => want.has(f.name) });
+    } catch (e) {
+      throw new RefiError(`This archive is damaged (${e instanceof Error ? e.message : String(e)}).`);
+    }
     return new Map(Object.entries(files));
   }
 }

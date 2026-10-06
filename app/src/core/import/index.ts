@@ -86,7 +86,9 @@ interface Parsed {
 
 // Older Teams exports in Word, and subtitles pasted into documents: "0:0:0.0 --> 0:0:3.410"
 // lines followed by the speaker and the words. Read them as subtitles.
-const CUE_TIMING = /^\s*\d{1,3}:\d{1,2}:\d{1,2}(?:[.,]\d{1,3})?\s*-+>\s*\d{1,3}:\d{1,2}:\d{1,2}/gm;
+// [^\S\n], not \s: a leading \s* would run across blank lines from every line start, quadratic
+// in a long run of empty lines.
+const CUE_TIMING = /^[^\S\n]*\d{1,3}:\d{1,2}:\d{1,2}(?:[.,]\d{1,3})?[^\S\n]*-+>[^\S\n]*\d{1,3}:\d{1,2}:\d{1,2}/gm;
 
 function textTranscript(text: string, opts: ImportOptions, force: boolean) {
   const timings = text.match(CUE_TIMING)?.length ?? 0;

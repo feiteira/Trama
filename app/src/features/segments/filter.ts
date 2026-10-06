@@ -90,7 +90,8 @@ export function parseFilter(raw: string | null): FilterState {
           key: typeof c.key === 'string' && c.key ? c.key : `c${i}`,
           attributeId: typeof c.attributeId === 'string' ? c.attributeId : '',
           op: oneOf(c.op, CONDITION_OPS, 'eq'),
-          value: typeof c.value === 'string' ? c.value : '',
+          // Older versions stored typed values: never bring them back (see serializeFilter).
+          value: '',
         }))
     : [];
   return {
@@ -102,7 +103,7 @@ export function parseFilter(raw: string | null): FilterState {
     conditions,
     attributeMatch: o.attributeMatch === 'any' ? 'any' : 'all',
     coderIds: strings(o.coderIds),
-    text: typeof o.text === 'string' ? o.text : '',
+    text: '',
     overlap: {
       on: ov.on === true,
       codeIds: strings(ov.codeIds),
@@ -114,7 +115,14 @@ export function parseFilter(raw: string | null): FilterState {
   };
 }
 
-export const serializeFilter = (f: FilterState): string => JSON.stringify(f);
+/**
+ * The filter as remembered in browser storage, which is not encrypted: only choices and opaque
+ * record ids, never typed text. The search text and the values typed into attribute conditions
+ * are left out (a search often names a participant); a condition keeps its attribute and
+ * operator, so the row comes back for its value to be typed again.
+ */
+export const serializeFilter = (f: FilterState): string =>
+  JSON.stringify({ ...f, text: '', conditions: f.conditions.map((c) => ({ ...c, value: '' })) });
 
 /** localStorage key of a project's last filter. */
 export const filterStorageKey = (projectId: string): string => `trama.segments.filter.${projectId}`;

@@ -12,7 +12,7 @@ export interface KeyCombo {
 export type ShortcutLabel =
   | 'palette' | 'lock' | 'undo' | 'redo' | 'back' | 'escape' | 'tab'
   | 'move' | 'select' | 'find' | 'openHere' | 'favourite' | 'searchCode' | 'inVivo' | 'clear' | 'remove' | 'workbenchKeys'
-  | 'playPause' | 'skip' | 'playHere'
+  | 'playPause' | 'skip' | 'skipAlways' | 'playHere'
   | 'listMove' | 'listOpen' | 'listSelect' | 'menu' | 'rename' | 'delete'
   | 'helpSearch' | 'helpBack';
 
@@ -61,7 +61,10 @@ export const SHORTCUTS: readonly { group: ShortcutGroup; items: readonly Shortcu
     group: 'recording',
     items: [
       { keys: [{ mod: true, key: 'Space' }], label: 'playPause' },
-      { keys: [{ alt: true, shift: true, key: '←' }, { alt: true, shift: true, key: '→' }], label: 'skip' },
+      // Alt+←/→ alone skip only while the recording plays (Back gives way to them then, see
+      // Viewer.tsx); with Shift they skip at any time.
+      { keys: [{ alt: true, key: '←' }, { alt: true, key: '→' }], label: 'skip' },
+      { keys: [{ alt: true, shift: true, key: '←' }, { alt: true, shift: true, key: '→' }], label: 'skipAlways' },
       { keys: [{ alt: true, key: 'Enter' }], label: 'playHere' },
     ],
   },

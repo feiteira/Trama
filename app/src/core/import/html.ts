@@ -73,7 +73,7 @@ export function htmlToParagraphs(html: string, opts: HtmlOptions = {}): string[]
   let row: string[] | null = null;
   let cell: string | null = null;
 
-  const clean = (p: string) => (pre ? p.replace(/^\n+|\s+$/g, '') : opts.literal ? p.trim() : p.replace(/ {2,}/g, ' ').trim());
+  const clean = (p: string) => (pre ? p.replace(/^\n+/, '').trimEnd() : opts.literal ? p.trim() : p.replace(/ {2,}/g, ' ').trim());
   const flush = () => {
     if (cell !== null) {
       cell += ' ';

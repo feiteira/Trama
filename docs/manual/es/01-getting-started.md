@@ -88,11 +88,11 @@ La navegación de la izquierda lleva a todas las partes de un proyecto:
 | **Análisis** | Búsqueda, coocurrencia, matrices, frecuencia de palabras y gráficos ([Análisis](07-analysis.md)) |
 | **Acuerdo** | Codificadores, copias de los compañeros y acuerdo entre codificadores ([Trabajo en equipo](08-teamwork-and-agreement.md)) |
 | **Importar** | Traer documentos al proyecto ([Documentos](02-documents.md#import)) |
-| **Exportar y copias** | Archivos de proyecto, REFI-QDA, informes y copias de seguridad automáticas ([Intercambiar proyectos](09-exchange.md), [Copias de seguridad](10-privacy-and-security.md#backups)) |
+| **Proyecto** | Los datos del proyecto, las exportaciones (archivos de proyecto, REFI-QDA, libro de códigos, informes), las copias de seguridad automáticas y su restauración ([Intercambiar proyectos](09-exchange.md), [Copias de seguridad](10-privacy-and-security.md#backups)) |
 | **Seudonimización** | Sustituir nombres de forma coherente ([Seudonimización](10-privacy-and-security.md#pseudonymisation)) |
 | **Registro de auditoría** | Un registro de todos los cambios ([Registro de auditoría](10-privacy-and-security.md#audit-trail)) |
 
-La **paleta de comandos** (`Ctrl+K`) encuentra cualquier pantalla, documento, proyecto o acción al escribir parte de su nombre. **Volver** (`Alt+←`, o el botón de retroceso del ratón) le lleva adonde estaba.
+La **paleta de comandos** (`Ctrl+K`) encuentra cualquier pantalla, documento, proyecto o acción al escribir parte de su nombre. **Volver** (`Alt+←`, o el botón de retroceso del ratón) le lleva adonde estaba, salvo mientras se reproduce una grabación: entonces `Alt+←` y `Alt+→` retroceden y avanzan en la grabación (consulte [Transcripciones y grabaciones](02-documents.md#transcripts)).
 
 Todo lo que hace se guarda sobre la marcha. No hay botón Guardar.
 
@@ -131,7 +131,7 @@ Todo en Trama se puede hacer con el teclado. Los que más usará:
 | `Ctrl+K` | Abrir la paleta de comandos |
 | `Ctrl+Z` / `Ctrl+Shift+Z` | Deshacer / rehacer |
 | `Ctrl+L` | Bloquear Trama |
-| `Alt+←` | Volver |
+| `Alt+←` | Volver (mientras se reproduce una grabación: retroceder 5 segundos) |
 | `Ctrl+F` | Buscar en el documento que está leyendo |
 | `1` … `9` | Con texto seleccionado, aplicar el código que tiene esa tecla de atajo |
 | `Enter` | Con texto seleccionado, buscar o crear un código; sobre texto codificado, ver sus códigos |

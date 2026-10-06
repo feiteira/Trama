@@ -323,13 +323,142 @@ function compileTerms(q: SearchQuery): Compiled {
   };
 }
 
+// Characters a class's extra members must escape, and a code point's length in code units.
+const escapeInClass = (s: string) => s.replace(/[\\\]\[^-]/g, '\\$&');
+const cpCount = (s: string) => [...s].length;
+// Ranges larger than this are left as written (folding every member would be slow).
+const MAX_FOLDED_RANGE = 5000;
+
+interface PatternAtom {
+  /** The source as written. */
+  raw: string;
+  /** The character it stands for, when it is one literal character (escapes resolved). */
+  literal?: string;
+}
+
+/** Reads one escape sequence at `j` (a backslash), resolving \xHH, \uHHHH (and pairs) and \u{…}. */
+function readEscape(p: string, j: number): PatternAtom & { end: number } {
+  const c = p[j + 1];
+  if (c === undefined) return { raw: '\\', end: j + 1 };
+  const hex = (from: number, n: number) => (new RegExp(`^[0-9a-fA-F]{${n}}$`).test(p.slice(from, from + n)) ? parseInt(p.slice(from, from + n), 16) : -1);
+  if (c === 'u' && p[j + 2] === '{') {
+    const close = p.indexOf('}', j + 3);
+    const h = close > 0 ? p.slice(j + 3, close) : '';
+    if (/^[0-9a-fA-F]{1,6}$/.test(h) && parseInt(h, 16) <= 0x10ffff) return { raw: p.slice(j, close + 1), literal: String.fromCodePoint(parseInt(h, 16)), end: close + 1 };
+  }
+  if (c === 'u') {
+    const hi = hex(j + 2, 4);
+    if (hi >= 0) {
+      if (hi >= 0xd800 && hi <= 0xdbff && p[j + 6] === '\\' && p[j + 7] === 'u') {
+        const lo = hex(j + 8, 4);
+        if (lo >= 0xdc00 && lo <= 0xdfff) return { raw: p.slice(j, j + 12), literal: String.fromCharCode(hi, lo), end: j + 12 };
+      }
+      return { raw: p.slice(j, j + 6), literal: String.fromCharCode(hi), end: j + 6 };
+    }
+  }
+  if (c === 'x') {
+    const h = hex(j + 2, 2);
+    if (h >= 0) return { raw: p.slice(j, j + 4), literal: String.fromCharCode(h), end: j + 4 };
+  }
+  if ((c === 'p' || c === 'P') && p[j + 2] === '{') {
+    const close = p.indexOf('}', j + 3);
+    if (close > 0) return { raw: p.slice(j, close + 1), end: close + 1 };
+  }
+  if (c === 'k' && p[j + 2] === '<') {
+    const close = p.indexOf('>', j + 3);
+    if (close > 0) return { raw: p.slice(j, close + 1), end: close + 1 };
+  }
+  const cp = p.codePointAt(j + 1)!;
+  const len = cp > 0xffff ? 2 : 1;
+  // An escaped non-ASCII character is that character.
+  return { raw: p.slice(j, j + 1 + len), ...(cp >= 128 ? { literal: String.fromCodePoint(cp) } : {}), end: j + 1 + len };
+}
+
+/**
+ * The pattern for accent-folded text: literal characters (also written as escapes) become what
+ * they fold into, and so do the members of character classes, without touching regex syntax.
+ * In a class, a range's members are folded one by one ("[à-ú]" also takes a, c, e, i, n, o, u,
+ * never every letter from a to u), and a character folding into several ("ß" → "ss") becomes an
+ * alternative to the class.
+ */
 function foldRegexPattern(pattern: string, opts: FoldOptions): string {
-  // Fold only literal non-ASCII characters (escapes and syntax are ASCII), escaping whatever
-  // they fold into so "…" → "\.\.\." stays literal.
+  // Plain ASCII without escapes for other characters folds to itself.
+  if (!/[^\x00-\x7f]|\\[ux]/.test(pattern)) return pattern;
+  const foldCh = (ch: string) => foldWithMap(ch, opts).folded;
+  const literalOut = (a: PatternAtom): string => {
+    if (a.literal === undefined || a.literal.charCodeAt(0) < 128) return a.raw;
+    const f = foldCh(a.literal);
+    if (f === a.literal) return a.raw;
+    const e = escapeRe(f);
+    return cpCount(f) === 1 ? e : `(?:${e})`;
+  };
   let out = '';
-  for (const ch of pattern) {
-    if (ch.charCodeAt(0) < 128) out += ch;
-    else out += escapeRe(foldWithMap(ch, opts).folded);
+  let i = 0;
+  while (i < pattern.length) {
+    const ch = pattern[i]!;
+    if (ch === '\\') {
+      const a = readEscape(pattern, i);
+      out += literalOut(a);
+      i = a.end;
+      continue;
+    }
+    if (ch === '[') {
+      // A character class: read its members up to the closing bracket.
+      let j = i + 1;
+      const negated = pattern[j] === '^';
+      if (negated) j++;
+      const atoms: PatternAtom[] = [];
+      while (j < pattern.length && pattern[j] !== ']') {
+        if (pattern[j] === '\\') {
+          const a = readEscape(pattern, j);
+          atoms.push(a);
+          j = a.end;
+        } else {
+          const cp = pattern.codePointAt(j)!;
+          const c = String.fromCodePoint(cp);
+          atoms.push({ raw: c, literal: c });
+          j += c.length;
+        }
+      }
+      if (j >= pattern.length) {
+        // Unclosed: leave the rest as written, the engine reports it.
+        out += pattern.slice(i);
+        break;
+      }
+      const extras = new Set<string>();
+      const multis = new Set<string>();
+      const add = (c: string) => {
+        if (c.charCodeAt(0) < 128) return;
+        const f = foldCh(c);
+        if (f === c) return;
+        if (cpCount(f) === 1) extras.add(f);
+        else if (f) multis.add(f);
+      };
+      for (let k = 0; k < atoms.length; k++) {
+        const a = atoms[k]!;
+        const dash = atoms[k + 1];
+        const b = atoms[k + 2];
+        if (dash && dash.raw === '-' && b && a.literal !== undefined && b.literal !== undefined && a.raw !== '-' ) {
+          const from = a.literal.codePointAt(0)!;
+          const to = b.literal.codePointAt(0)!;
+          if (to >= from && to - from <= MAX_FOLDED_RANGE && (from >= 128 || to >= 128)) {
+            for (let cp = Math.max(from, 128); cp <= to; cp++) add(String.fromCodePoint(cp));
+          }
+          k += 2;
+          continue;
+        }
+        if (a.literal !== undefined) add(a.literal);
+      }
+      const body = atoms.map((a) => a.raw).join('') + [...extras].map(escapeInClass).join('');
+      const cls = `[${negated ? '^' : ''}${body}]`;
+      out += multis.size && !negated ? `(?:${cls}|${[...multis].map(escapeRe).join('|')})` : cls;
+      i = j + 1;
+      continue;
+    }
+    const cp = pattern.codePointAt(i)!;
+    const c = String.fromCodePoint(cp);
+    out += literalOut({ raw: c, literal: c });
+    i += c.length;
   }
   return out;
 }
@@ -340,7 +469,9 @@ function compileRegex(q: SearchQuery): Compiled {
   // classes such as [A-Z] keep their meaning.
   const fo: FoldOptions | null = q.accentSensitive ? null : { caseSensitive: true, accentSensitive: false };
   const pattern = fo ? foldRegexPattern(q.query, fo) : q.query;
-  const flags = q.caseSensitive ? 'g' : 'gi';
+  // `m`: ^ and $ anchor at every paragraph (line), Trama's unit for search, not only at the
+  // start and end of a whole document.
+  const flags = q.caseSensitive ? 'gm' : 'gim';
   let re: RegExp;
   let post = false;
   try {

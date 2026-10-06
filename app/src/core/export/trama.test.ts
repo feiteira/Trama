@@ -8,6 +8,7 @@ import { createKeyring, newLibraryKey, newRecoveryPhrase, WrongSecretError } fro
 import { formatHlc } from '../hlc';
 import type { Entity, Kind } from '../model/types';
 import type { BundleRecord, ProjectBundle } from './bundle';
+import { forgeSize } from './forgeZip.testutil';
 import {
   buildTramaZip, decryptTrama, encryptWithLibraryKey, encryptWithPassword, isSafePath, keyringOf, NotTramaFileError,
   protectionOf, readTramaZip, safeName, UnlockRequiredError,
@@ -164,7 +165,7 @@ describe('reading refuses damaged or forged files', () => {
   };
 
   it('detects tampering with any listed file', () => {
-    for (const path of ['data/code.jsonl', 'blobs/blob-1', 'readable/codebook.md']) {
+    for (const path of ['data/code.jsonl', 'blobs/blob-1']) {
       const zip = rezip(good(), (f) => {
         const b = f[path]!.slice();
         b[0] = b[0]! ^ 1;
@@ -173,6 +174,38 @@ describe('reading refuses damaged or forged files', () => {
       expect(reason(() => readTramaZip(zip))).toBe('checksum');
     }
     expect(reason(() => readTramaZip(rezip(good(), (f) => delete f['data/coder.jsonl'])))).toBe('checksum');
+  });
+
+  it('refuses a zip bomb from the declared sizes, before inflating anything', () => {
+    const t0 = Date.now();
+    // One blob claiming 3.75 GiB (over the 2 GiB a file may have), a record file claiming
+    // 600 MiB, and blobs adding up to more than the archive could hold for its size.
+    expect(reason(() => readTramaZip(forgeSize(good(), 'blobs/blob-1', 0xf0000000)))).toBe('too-large');
+    expect(reason(() => readTramaZip(forgeSize(good(), 'data/code.jsonl', 600 * 1024 * 1024)))).toBe('too-large');
+    const many = rezip(good(), (f) => {
+      for (let i = 0; i < 8; i++) f[`blobs/b${i}`] = new Uint8Array(16);
+    });
+    expect(reason(() => readTramaZip(forgeSize(many, /^blobs\/b\d$/, 512 * 1024 * 1024)))).toBe('too-large');
+    // A large readable copy costs nothing: it is never inflated.
+    expect(reason(() => readTramaZip(forgeSize(good(), 'readable/codebook.md', 0xf0000000)))).toBe('accepted');
+    expect(Date.now() - t0).toBeLessThan(2000);
+  });
+
+  it('checks the manifest before inflating the files it lists', () => {
+    // A forged manifest is refused without inflating the (huge) blobs next to it.
+    const zip = zipSync({ 'manifest.json': utf8('{}'), 'blobs/b1': new Uint8Array(16) });
+    expect(reason(() => readTramaZip(forgeSize(zip, 'blobs/b1', 400 * 1024 * 1024)))).toBe('format');
+  });
+
+  it('ignores the readable copies, which Trama never reads: a damaged one cannot lock the project away', () => {
+    const changed = rezip(good(), (f) => {
+      const b = f['readable/codebook.md']!.slice();
+      b[0] = b[0]! ^ 1;
+      f['readable/codebook.md'] = b;
+      f['readable/notes.txt'] = utf8('added by hand');
+      delete f['readable/README.txt'];
+    });
+    expect(reason(() => readTramaZip(changed))).toBe('accepted');
   });
 
   it('refuses files slipped in without a checksum', () => {
@@ -213,6 +246,38 @@ describe('reading refuses damaged or forged files', () => {
     expect(reason(() => readTramaZip(withLine('not json')))).toBe('bad-record');
     expect(reason(() => readTramaZip(withLine(JSON.stringify({ ...base('x'), updated_at_hlc: 'yesterday' }))))).toBe('bad-record');
     expect(reason(() => readTramaZip(withLine('[]')))).toBe('bad-record');
+  });
+});
+
+/** No unpaired surrogate (String#isWellFormed is ES2024, past this project's lib). */
+const wellFormed = (s: string) => !/[\u{d800}-\u{dfff}]/u.test(s);
+
+describe('names with emoji in the readable copies', () => {
+  // A memo title whose emoji starts at UTF-16 index 79: cutting at 80 units left half of it.
+  const title = 'Ideias sobre a relação entre as hortas comunitárias e o sentimento de pertença 🌱 no bairro';
+
+  it('never cuts a character in half', () => {
+    expect(title.indexOf('🌱')).toBe(79);
+    const name = safeName(title);
+    expect(wellFormed(name)).toBe(true);
+    expect(name.endsWith('pertença 🌱')).toBe(true);
+    expect([...name].length).toBeLessThanOrEqual(80);
+    // A lone surrogate in a name (from anywhere) cannot reach a UTF-8 entry name either.
+    expect(wellFormed(safeName('a\ud83c b'))).toBe(true);
+  });
+
+  it('round-trips a project whose memo title and document name hold an astral character at the cut', () => {
+    const bundle = sample();
+    const at80 = 'x'.repeat(79) + '😀 resto';
+    bundle.records.push(
+      rec('memo', { title, body: 'b', target: { kind: 'project', id: null }, coder_id: 'coder-1', color: null }, 'memo-2'),
+      rec('document', { kind: 'text', group_ids: [], case_id: null, source: null, media: null, chars: 1, color: null, name: at80, original: null, order: 4 }, 'doc-4'),
+      rec('doctext', { text: 'x', sync: [] }, 'doc-4'),
+    );
+    const back = readTramaZip(buildTramaZip(bundle, opts));
+    expect(back.records.some((r) => r.kind === 'memo' && r.record.id === 'memo-2')).toBe(true);
+    const names = Object.keys(unzipSync(buildTramaZip(bundle, opts)));
+    expect(names.every((n) => !n.includes('\ufffd'))).toBe(true);
   });
 });
 

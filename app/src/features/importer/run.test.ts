@@ -130,6 +130,29 @@ describe('ImportSession', () => {
     ]);
   });
 
+  it('reads the codebook once per session, not once per answer (large surveys)', async () => {
+    const ctx = await makeTestProject();
+    const questions = ['Why did you join?', 'What do you grow?', 'What would you change?'];
+    const table: ImportedTable = {
+      name: 'Big survey',
+      headers: ['ID', ...questions],
+      rows: Array.from({ length: 1000 }, (_, i) => [`R${i + 1}`, `Answer ${i} about joining the garden.`, `Beans and tomatoes, ${i}.`, `More water taps, ${i}.`]),
+      source: { filename: 'big.csv', format: 'csv' },
+    };
+    const row = withTable(newRow('b', 'file', 'big.csv'), { table, format: 'csv', sheets: [], sheet: 0 }, defaultMapping(table));
+    let codeReads = 0;
+    const list = ctx.store.list.bind(ctx.store);
+    ctx.store.list = ((kind: Parameters<typeof list>[0], ...rest: unknown[]) => {
+      if (kind === 'code') codeReads++;
+      return (list as (...a: unknown[]) => unknown)(kind, ...rest);
+    }) as typeof ctx.store.list;
+    const made = await new ImportSession(ctx, labels).import(row);
+    expect(made).toHaveLength(1000);
+    expect((await ctx.store.list('coding')).length).toBe(3000);
+    // One read for the session, plus what creating the four codes needs.
+    expect(codeReads).toBeLessThanOrEqual(10);
+  }, 60_000);
+
   it('stops before the next step when asked', async () => {
     const ctx = await makeTestProject();
     const s = new ImportSession(ctx, labels, () => true);

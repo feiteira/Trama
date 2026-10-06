@@ -69,6 +69,11 @@ export const WARNING = {
   formulasWithoutValue: 'xlsx.formulasWithoutValue',
   /** Rows with more or fewer cells than the header row (argument: how many). */
   raggedRows: 'table.raggedRows',
+  /**
+   * A quoted CSV field never closes properly (argument: the file's line numbers, comma-separated):
+   * the lines after it may have been merged into one cell.
+   */
+  malformedQuotes: 'table.malformedQuotes',
 } as const;
 export type WarningCode = (typeof WARNING)[keyof typeof WARNING];
 

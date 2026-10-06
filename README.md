@@ -4,11 +4,16 @@
 
 [English](#english) · [Português](#português) · [Español](#español)
 
+| Light theme | Dark theme |
+|---|---|
+| ![Reading and coding an interview transcript](docs/manual/img/en/workbench.png) | ![Reading and coding an interview transcript, in the dark theme](docs/manual/img/en/workbench-dark.png) |
+| ![Code co-occurrence](docs/manual/img/en/analysis-cooccurrence.png) | ![Code co-occurrence, in the dark theme](docs/manual/img/en/analysis-dark.png) |
+
 | | |
 |---|---|
 | ![Coding an interview](docs/manual/img/en/coding.png) | ![The codebook](docs/manual/img/en/codebook.png) |
-| ![Coded segments](docs/manual/img/en/segments.png) | ![Code co-occurrence](docs/manual/img/en/analysis-cooccurrence.png) |
-| ![Inter-coder agreement](docs/manual/img/en/agreement.png) | ![Cases and attributes](docs/manual/img/en/cases.png) |
+| ![Coded segments](docs/manual/img/en/segments.png) | ![Inter-coder agreement](docs/manual/img/en/agreement.png) |
+| ![Cases and attributes](docs/manual/img/en/cases.png) | ![Word frequencies](docs/manual/img/en/analysis-words.png) |
 
 > Trama is at an early stage (version 0.1). Test builds for Linux and Windows come first; macOS follows from the same code.
 

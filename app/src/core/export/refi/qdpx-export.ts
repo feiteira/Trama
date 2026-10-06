@@ -21,6 +21,7 @@ import { HEX_COLOR } from '../../model/types';
 import type { ProjectBundle } from '../bundle';
 import {
   CODE_SECTIONS,
+  escapeCodeSection,
   excerpt,
   extFor,
   formatDateTime,
@@ -50,15 +51,45 @@ export interface QdpxExportOptions {
   now?: () => Date;
 }
 
+/** What an export could not carry over, by stable code (the screens word it in the reader's language). */
+const EXPORT_ISSUES = {
+  noText: (n: number) => `${n} document(s) without text were left out.`,
+  missingOriginal: (n: number) => `${n} original file(s) were missing and were left out.`,
+  editedPdf: (n: number) => `${n} original PDF(s) were left out because their text was edited after import (for example pseudonymised); the edited text was exported.`,
+  editedDocx: (n: number) => `${n} original Word file(s) were left out because their text was edited after import (for example pseudonymised); the edited text was exported.`,
+  otherOriginal: (n: number) => `${n} original file(s) in a format REFI-QDA cannot hold were left out; their text was exported.`,
+  missingMedia: (n: number) => `${n} audio/video file(s) were missing and were left out.`,
+  transcriptNoMedia: (n: number) => `${n} transcript(s) without their recording were exported without time stamps.`,
+  orphanMemo: (n: number) => `${n} memo(s) whose item was deleted were attached to the project.`,
+  choiceAsText: (n: number) => `${n} choice attribute(s) were exported as text: REFI-QDA has no list of allowed values.`,
+  badValue: (n: number) => `${n} attribute value(s) did not fit their type and were left out.`,
+  orphanCoding: (n: number) => `${n} coding(s) of deleted codes or documents were left out.`,
+  outsideText: (n: number) => `${n} coding(s) outside their document text were left out.`,
+  tooLarge: (n: number) => `${n} file(s) were larger than the 2 GB REFI-QDA allows for one file and were left out.`,
+} as const;
+
+export type QdpxExportIssueCode = keyof typeof EXPORT_ISSUES;
+export const QDPX_EXPORT_ISSUE_CODES = Object.keys(EXPORT_ISSUES) as QdpxExportIssueCode[];
+
+export interface QdpxExportIssue {
+  code: QdpxExportIssueCode;
+  count: number;
+  /** The same in plain English (logs, tests). */
+  message: string;
+}
+
 export interface QdpxExport {
   bytes: Uint8Array;
-  /** What could not be carried over, in plain language. */
+  /** What could not be carried over, in plain English (the messages of `issues`). */
   warnings: string[];
+  /** The same as data, for the export screen to word in the reader's language. */
+  issues: QdpxExportIssue[];
 }
 
 /** REFI-QDA limit for one internal file. */
 const MAX_INTERNAL_FILE = 2_147_483_647;
 const SELECTION_NAME_CHARS = 100;
+const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 const ALREADY_COMPRESSED = /^(audio|video|image)\/|^application\/(pdf|zip|vnd\.openxmlformats)/;
 
 interface Live {
@@ -108,6 +139,8 @@ interface DocOut {
   guid: string;
   txtFile: string;
   pdf: { guid: string; file: string; repGuid: string; repFile: string } | null;
+  /** The original Word file, written as the TextSource's richTextPath. */
+  docx: string | null;
   media: { guid: string; file: string; video: boolean; transcriptGuid: string } | null;
 }
 
@@ -118,8 +151,7 @@ export function exportQdpx(bundle: ProjectBundle, opts: QdpxExportOptions): Qdpx
 class ProjectWriter {
   private readonly live: Live;
   private readonly guids = new GuidMap();
-  private readonly warnings: string[] = [];
-  private readonly counts = new Map<string, number>();
+  private readonly counts = new Map<QdpxExportIssueCode, number>();
   private readonly files: Zippable = {};
   private readonly includeMemos: boolean;
   private readonly now: Date;
@@ -142,8 +174,8 @@ class ProjectWriter {
     this.codeIds = new Set(this.live.codes.map((c) => c.id));
   }
 
-  private count(message: string, n = 1): void {
-    this.counts.set(message, (this.counts.get(message) ?? 0) + n);
+  private count(code: QdpxExportIssueCode, n = 1): void {
+    this.counts.set(code, (this.counts.get(code) ?? 0) + n);
   }
 
   write(): QdpxExport {
@@ -176,13 +208,13 @@ class ProjectWriter {
 
     const mtime = this.now;
     const bytes = zipSync(this.files, { level: 6, mtime });
-    const warnings = [...this.warnings, ...[...this.counts].map(([m, n]) => m.replace('{n}', String(n)))];
-    return { bytes, warnings };
+    const issues = [...this.counts].map(([code, count]) => ({ code, count, message: EXPORT_ISSUES[code](count) }));
+    return { bytes, warnings: issues.map((i) => i.message), issues };
   }
 
   private addFile(name: string, data: Uint8Array, mime: string): boolean {
     if (data.length > MAX_INTERNAL_FILE) {
-      this.warnings.push(`${name} is larger than the 2 GB REFI-QDA allows for one file and was left out.`);
+      this.count('tooLarge');
       return false;
     }
     this.files[name] = ALREADY_COMPRESSED.test(mime) ? [data, { level: 0 }] : data;
@@ -200,20 +232,29 @@ class ProjectWriter {
     for (const doc of this.live.documents) {
       const dt = this.live.texts.get(doc.id);
       if (!dt) {
-        this.count('{n} document(s) without text were left out.');
+        this.count('noText');
         continue;
       }
       const guid = this.guids.get(doc.id);
       const txtFile = `${guid}.txt`;
-      const o: DocOut = { doc, text: dt.text, cp: codePointMap(dt.text), guid, txtFile, pdf: null, media: null };
+      const o: DocOut = { doc, text: dt.text, cp: codePointMap(dt.text), guid, txtFile, pdf: null, docx: null, media: null };
       if (!this.addFile(`sources/${txtFile}`, this.textFile(dt.text), 'text/plain')) continue;
 
+      // An edit can be pseudonymisation: the original would still show what was removed.
+      const unchanged = doc.source !== null && doc.source.text_sha256 === toHex(sha256(utf8(dt.text)));
+      const isDocx = !!doc.original && (doc.original.mime === DOCX_MIME || /\.docx$/i.test(doc.original.filename));
+      if (doc.original && doc.kind !== 'pdf') {
+        const bytes = this.bundle.blobs.get(doc.original.blob_id);
+        if (!isDocx) this.count('otherOriginal');
+        else if (!bytes) this.count('missingOriginal');
+        else if (!unchanged && !this.opts.includeEditedOriginals) this.count('editedDocx');
+        else if (this.addFile(`sources/${guid}.docx`, bytes, DOCX_MIME)) o.docx = `${guid}.docx`;
+      }
       if (doc.kind === 'pdf' && doc.original) {
         const bytes = this.bundle.blobs.get(doc.original.blob_id);
-        const unchanged = doc.source !== null && doc.source.text_sha256 === toHex(sha256(utf8(dt.text)));
-        if (!bytes) this.count('{n} original file(s) were missing and were left out.');
+        if (!bytes) this.count('missingOriginal');
         else if (!unchanged && !this.opts.includeEditedOriginals) {
-          this.count('{n} original PDF(s) were left out because their text was edited after import (for example pseudonymised); the edited text was exported.');
+          this.count('editedPdf');
         } else {
           const file = `${guid}.pdf`;
           const repGuid = this.guids.fresh();
@@ -228,7 +269,7 @@ class ProjectWriter {
       }
       if (doc.kind === 'transcript' && doc.media && this.opts.includeMedia !== false) {
         const bytes = this.bundle.blobs.get(doc.media.blob_id);
-        if (!bytes) this.count('{n} audio/video file(s) were missing and were left out.');
+        if (!bytes) this.count('missingMedia');
         else {
           const mediaGuid = this.guids.fresh();
           const file = `${mediaGuid}.${extFor(doc.media.filename, doc.media.mime)}`;
@@ -237,7 +278,7 @@ class ProjectWriter {
           }
         }
       } else if (doc.kind === 'transcript' && dt.sync.length && !doc.media) {
-        this.count('{n} transcript(s) without their recording were exported without time stamps.');
+        this.count('transcriptNoMedia');
       }
       out.push(o);
     }
@@ -262,7 +303,7 @@ class ProjectWriter {
         this.writtenMemos.push(m);
         continue;
       } else {
-        this.count('{n} memo(s) whose item was deleted were attached to the project.');
+        this.count('orphanMemo');
         key = 'project';
       }
       const list = this.noteRefs.get(key);
@@ -328,7 +369,7 @@ class ProjectWriter {
         type = ints ? 'Integer' : 'Float';
         numberTypes.set(a.id, type as 'Integer' | 'Float');
       } else type = a.type === 'boolean' ? 'Boolean' : a.type === 'date' ? 'Date' : 'Text';
-      if (a.type === 'choice') this.count('{n} choice attribute(s) were exported as text: REFI-QDA has no list of allowed values.');
+      if (a.type === 'choice') this.count('choiceAsText');
       x.open('Variable', { guid: this.guids.get(a.id), name: a.name, typeOfVariable: type });
       if (a.description.trim()) x.leaf('Description', {}, a.description);
       x.close();
@@ -349,7 +390,7 @@ class ProjectWriter {
         if (v === null || v === undefined || v === '') continue;
         const el = valueElement(attrs.get(a.id)!, v, numberTypes.get(a.id) ?? 'Float');
         if (!el) {
-          this.count('{n} attribute value(s) did not fit their type and were left out.');
+          this.count('badValue');
           continue;
         }
         x.open('VariableValue').leaf('VariableRef', { targetGUID: this.guids.get(a.id) }).leaf(el[0], {}, el[1]).close();
@@ -373,7 +414,7 @@ class ProjectWriter {
     const docIds = new Set(docs.map((d) => d.doc.id));
     const codings = this.exportableCodings(docIds);
     const skipped = this.live.codings.length - codings.length;
-    if (skipped) this.count('{n} coding(s) of deleted codes or documents were left out.', skipped);
+    if (skipped) this.count('orphanCoding', skipped);
     const byDoc = new Map<string, Coding[]>();
     for (const c of codings) {
       const list = byDoc.get(c.document_id);
@@ -391,7 +432,13 @@ class ProjectWriter {
         this.refs(x, d.doc.id);
         x.close();
       } else {
-        x.open('TextSource', { guid: d.guid, name: d.doc.name, plainTextPath: `internal://${d.txtFile}`, creationDateTime: formatDateTime(d.doc.created_at) });
+        x.open('TextSource', {
+          guid: d.guid,
+          name: d.doc.name,
+          ...(d.docx ? { richTextPath: `internal://${d.docx}` } : {}),
+          plainTextPath: `internal://${d.txtFile}`,
+          creationDateTime: formatDateTime(d.doc.created_at),
+        });
         this.writeSelections(x, d, docCodings);
         this.refs(x, d.doc.id);
         x.close();
@@ -406,7 +453,7 @@ class ProjectWriter {
     const groups = new Map<string, Coding[]>();
     for (const c of codings) {
       if (c.start < 0 || c.end > d.text.length || c.end <= c.start) {
-        this.count('{n} coding(s) outside their document text were left out.');
+        this.count('outsideText');
         continue;
       }
       const key = `${c.start}\u0000${c.end}\u0000${c.coder_id}\u0000${c.comment}`;
@@ -496,10 +543,10 @@ class ProjectWriter {
 
 /** The code's Description: its definition, then labelled inclusion/exclusion/example sections. */
 export function codeDescription(c: Pick<Code, 'description' | 'inclusion' | 'exclusion' | 'example'>): string {
-  const parts = [c.description.trim()];
+  const parts = [escapeCodeSection(c.description.trim())];
   for (const key of ['inclusion', 'exclusion', 'example'] as const) {
     const v = c[key].trim();
-    if (v) parts.push(`${CODE_SECTIONS[key]}\n${v}`);
+    if (v) parts.push(`${CODE_SECTIONS[key]}\n${escapeCodeSection(v)}`);
   }
   return parts.filter(Boolean).join('\n\n');
 }

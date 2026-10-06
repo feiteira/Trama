@@ -4,7 +4,7 @@ import { sha256 } from '@noble/hashes/sha2.js';
 import { generateMnemonic, validateMnemonic } from '@scure/bip39';
 import { wordlist } from '@scure/bip39/wordlists/english.js';
 import { fromBase64, randomBytes, toBase64, utf8, wipe } from '../bytes';
-import { ARGON2_PARAMS, type Kdf, type KdfParams, normalizePassphrase } from './kdf';
+import { ARGON2_PARAMS, checkKdfParams, type Kdf, type KdfParams, normalizePassphrase } from './kdf';
 
 // The keyring protects the library key (the random key the local database and attachments
 // are encrypted with). It holds that key wrapped twice: once under the passphrase and once
@@ -90,6 +90,8 @@ export async function unlockKeyring(keyring: Keyring, kind: SlotKind, secret: st
   const slot = keyring.slots.find((s) => s.kind === kind);
   if (!slot) throw new WrongSecretError();
   const { salt, ...params } = slot.kdf;
+  // A keyring can come from a file (a backup's header): never run crafted, ruinous parameters.
+  checkKdfParams(params);
   const kek = await kdf(secretBytes(kind, secret), fromBase64(salt), params);
   try {
     return gcm(kek, fromBase64(slot.nonce), AAD).decrypt(fromBase64(slot.ct));

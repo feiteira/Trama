@@ -6,6 +6,12 @@ export function formatValue(v: number | null | undefined, locale: string, digits
   return new Intl.NumberFormat(locale, { maximumFractionDigits: Number.isInteger(v) ? 0 : digits }).format(v);
 }
 
+/** A number with exactly `digits` decimals, in the reader's locale ("0.50" / "0,50"). */
+export function formatFixed(v: number | null | undefined, locale: string, digits = 2): string {
+  if (v === null || v === undefined || !Number.isFinite(v)) return '–';
+  return new Intl.NumberFormat(locale, { minimumFractionDigits: digits, maximumFractionDigits: digits }).format(v);
+}
+
 /** A percentage with one decimal ("12.5 %" / "12,5 %" by locale). */
 export function formatPercent(v: number | null | undefined, locale: string, digits = 1): string {
   if (v === null || v === undefined || !Number.isFinite(v)) return '–';

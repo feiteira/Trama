@@ -118,6 +118,11 @@ export interface CodeActions {
   /** Creates a code (under `parentId`, or at the top level) and returns it. */
   create: (parentId: string | null, name?: string, opts?: { beforeId?: string | null }) => Promise<Code | null>;
   rename: (id: string, name: string) => Promise<void>;
+  /**
+   * Takes back a code just made by `create` (Escape on its first name), as Undo would: only
+   * while its creation is still the newest entry on the undo stack. Resolves whether it did.
+   */
+  discardNew: (id: string) => Promise<boolean>;
   setColor: (id: string, color: string) => Promise<void>;
   setCodable: (id: string, codable: boolean) => Promise<void>;
   setShortcut: (id: string, n: number | null) => Promise<void>;
@@ -135,8 +140,17 @@ export interface CodeActions {
 export function useCodeActions(data: CodeData | undefined, opts: { onDeleted?: (ids: Set<string>) => void } = {}): CodeActions {
   const project = useProject();
   const { t, tp } = useI18n();
-  const { record } = useUndo();
+  const { record, manager } = useUndo();
   const undoToast = useUndoToast();
+  // The code `create` just made, while its creation is the newest entry on the undo stack.
+  const fresh = useRef<{ id: string; recording: boolean } | null>(null);
+  useEffect(
+    () =>
+      manager.subscribe(() => {
+        if (fresh.current && !fresh.current.recording) fresh.current = null;
+      }),
+    [manager],
+  );
   const fail = useFail();
   const [deleting, setDeleting] = useState<string | null>(null);
   const [merging, setMerging] = useState<string | null>(null);
@@ -154,7 +168,9 @@ export function useCodeActions(data: CodeData | undefined, opts: { onDeleted?: (
         const taken = dataRef.current?.items.map((i) => i.name) ?? [];
         const finalName = name?.trim() ? name.trim() : uniqueName(t('codes.newCodeName'), taken);
         const { code, undo } = await codesService.createCode(project, { name: finalName, parent_id: parentId, beforeId: o.beforeId ?? null });
+        fresh.current = { id: code.id, recording: true };
         record(undo);
+        fresh.current = { id: code.id, recording: false };
         return code;
       } catch (e) {
         fail(e);
@@ -162,6 +178,20 @@ export function useCodeActions(data: CodeData | undefined, opts: { onDeleted?: (
       }
     },
     [project, record, fail, t],
+  );
+
+  const discardNew = useCallback(
+    async (id: string) => {
+      if (fresh.current?.id !== id) return false;
+      fresh.current = null;
+      try {
+        return (await manager.undo()) !== null;
+      } catch (e) {
+        fail(e);
+        return false;
+      }
+    },
+    [manager, fail],
   );
 
   const rename = useCallback(
@@ -298,6 +328,7 @@ export function useCodeActions(data: CodeData | undefined, opts: { onDeleted?: (
   return {
     create,
     rename,
+    discardNew,
     setColor,
     setCodable,
     setShortcut,

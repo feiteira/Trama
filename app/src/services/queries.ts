@@ -16,9 +16,15 @@ export interface DocumentRow {
   groupNames: string[];
 }
 
+/**
+ * SQL condition: a coding whose document and code are live. Others (possible after merging a
+ * teammate's copy into an older project) are counted nowhere, as retrieval leaves them out.
+ */
+export const LIVE_CODING = `deleted = 0 AND document_id IN (SELECT id FROM ${TABLES.document.table} WHERE deleted = 0) AND code_id IN (SELECT id FROM ${TABLES.code.table} WHERE deleted = 0)`;
+
 async function countBy(ctx: ProjectContext, column: string): Promise<Map<string, number>> {
   const rows = await ctx.store.db.query<{ k: string; n: number }>(
-    `SELECT ${column} AS k, count(*) AS n FROM ${TABLES.coding.table} WHERE deleted = 0 GROUP BY ${column}`,
+    `SELECT ${column} AS k, count(*) AS n FROM ${TABLES.coding.table} WHERE ${LIVE_CODING} GROUP BY ${column}`,
   );
   return new Map(rows.map((r) => [r.k, Number(r.n)]));
 }
@@ -61,7 +67,7 @@ export async function listCodesWithCounts(ctx: ProjectContext): Promise<CodeRow[
     ctx.store.list('code'),
     codeUsage(ctx),
     ctx.store.db.query<{ c: string; d: string }>(
-      `SELECT DISTINCT code_id AS c, document_id AS d FROM ${TABLES.coding.table} WHERE deleted = 0`,
+      `SELECT DISTINCT code_id AS c, document_id AS d FROM ${TABLES.coding.table} WHERE ${LIVE_CODING}`,
     ),
   ]);
   const tree = buildTree(codes);
@@ -156,7 +162,7 @@ export async function projectSummary(ctx: ProjectContext): Promise<ProjectSummar
   const [documents, codes, codings, memos, cases, attributes, groups, coders, pseudonyms, docs, coded, last] = await Promise.all([
     s.count('document'),
     s.count('code'),
-    s.count('coding'),
+    s.db.query<{ n: number }>(`SELECT count(*) AS n FROM ${TABLES.coding.table} WHERE ${LIVE_CODING}`).then((r) => Number(r[0]?.n ?? 0)),
     s.count('memo'),
     s.count('case'),
     s.count('attribute'),
@@ -164,7 +170,7 @@ export async function projectSummary(ctx: ProjectContext): Promise<ProjectSummar
     s.count('coder'),
     s.count('pseudonym'),
     s.list('document'),
-    s.db.query<{ n: number }>(`SELECT count(DISTINCT document_id) AS n FROM ${TABLES.coding.table} WHERE deleted = 0`),
+    s.db.query<{ n: number }>(`SELECT count(DISTINCT document_id) AS n FROM ${TABLES.coding.table} WHERE ${LIVE_CODING}`),
     listLog(ctx, { limit: 1 }),
   ]);
   return {

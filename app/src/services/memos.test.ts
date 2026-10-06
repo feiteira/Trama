@@ -43,9 +43,8 @@ describe('memos', () => {
     expect(await ctx.store.count('memo')).toBe(0);
     expect(await restoreMemos(ctx, r.batch)).toBe(1);
     expect(await ctx.store.count('memo')).toBe(1);
-    await r.undo.redo();
-    expect(await ctx.store.count('memo')).toBe(0);
-    await r.undo.undo();
+    // Restored off the undo stack: the delete's undo/redo must not write over that.
+    await expect(r.undo.redo()).rejects.toMatchObject({ code: 'changed_since' });
     expect(await ctx.store.count('memo')).toBe(1);
     const all = await listLog(ctx);
     expect(all.some((l) => l.summary.includes('Ana Lima'))).toBe(false);

@@ -9,7 +9,8 @@ import { TipRow } from '../charts/ChartTip';
 import { Heatmap } from '../charts/Heatmap';
 import { Network } from '../charts/Network';
 import { defaultCodeSelection, inCodebookOrder } from '../lib/codeLines';
-import { formatValue, matrixRows, pathLabel } from '../lib/format';
+import { pooledCooccurrence } from '../lib/coders';
+import { formatFixed, formatValue, matrixRows, pathLabel } from '../lib/format';
 import { heatScale } from '../lib/heat';
 import { edgesOf } from '../lib/network';
 import { useAnalysisData, useDeferredCompute, useTexts, useTheme } from '../parts/data';
@@ -35,7 +36,7 @@ const DEFAULTS = {
 export function CooccurrenceTool() {
   const { t, tp, locale } = useI18n();
   const data = useAnalysisData();
-  const { lines, codings, segments, codeById } = data;
+  const { lines, codings, rawCodings, pooled, segments, codeById } = data;
   const theme = useTheme();
   const [s, set] = useToolSettings('cooccurrence', DEFAULTS, { mode: MODES, measure: ['count', 'jaccard'], view: ['matrix', 'network'] });
   const [distanceText, setDistanceText] = useState(String(s.distance));
@@ -50,15 +51,17 @@ export function CooccurrenceTool() {
   const waitingTexts = s.mode === 'paragraph' && !texts;
   const result = useDeferredCompute(() => {
     if (codeIds.length < 2 || waitingTexts) return null;
-    return cooccurrence(codings, codeIds, {
+    const opts = {
       mode: s.mode,
       distance: s.distance,
       texts: s.mode === 'paragraph' ? texts ?? undefined : undefined,
       includeChildren: s.subcodes,
       descendants: data.descendants,
       details: true,
-    });
-  }, [codings, codeIds, s.mode, s.distance, s.subcodes, texts, waitingTexts]);
+    };
+    // Several coders: codes co-occur only within one coder's coding (lib/coders.ts).
+    return pooled ? pooledCooccurrence(rawCodings, codeIds, opts) : cooccurrence(codings, codeIds, { ...opts, sameCoder: true });
+  }, [codings, rawCodings, pooled, codeIds, s.mode, s.distance, s.subcodes, texts, waitingTexts]);
   const r = result.value;
 
   const values = useMemo(() => (r ? (s.measure === 'jaccard' ? r.jaccard : r.matrix) : []), [r, s.measure]);
@@ -67,7 +70,7 @@ export function CooccurrenceTool() {
   const pathOf = (id: string) => pathLabel(lines.find((l) => l.id === id)?.path ?? [codeById.get(id)?.name ?? id]);
   const fmt = (v: number, i: number, j: number) => {
     if (i === j) return formatValue(r?.segmentCounts[i] ?? 0, locale);
-    if (s.measure === 'jaccard') return v === 0 ? '' : v.toFixed(2).replace(/^0/, '');
+    if (s.measure === 'jaccard') return v === 0 ? '' : formatFixed(v, locale, 2);
     return formatValue(v, locale);
   };
   const totalPairs = useMemo(() => {
@@ -94,7 +97,7 @@ export function CooccurrenceTool() {
           {a.label} × {b.label}
         </div>
         <TipRow value={formatValue(r.matrix[i]![j]!, locale)} label={t('analysis.cooc.pairs')} />
-        <TipRow value={r.jaccard[i]![j]!.toFixed(2)} label={t('analysis.cooc.jaccard')} />
+        <TipRow value={formatFixed(r.jaccard[i]![j]!, locale, 2)} label={t('analysis.cooc.jaccard')} />
         <TipRow value={t('analysis.cooc.nOfM', { n: r.segmentsWith[i]![j]!, m: r.segmentCounts[i] ?? 0 })} label={t('analysis.cooc.segmentsOfWith', { a: a.label })} />
         {r.matrix[i]![j]! > 0 ? <div className="an-tip__hint">{t('analysis.clickForPassages')}</div> : null}
       </>
@@ -245,7 +248,7 @@ export function CooccurrenceTool() {
           theme={theme}
           testId="cooc-heatmap"
         />
-        <HeatLegend theme={theme} max={scale.max} low={s.measure === 'jaccard' ? 0 : undefined} format={(v) => (s.measure === 'jaccard' ? v.toFixed(2) : formatValue(v, locale))} diagonal={t('analysis.cooc.diagonal')} />
+        <HeatLegend theme={theme} max={scale.max} low={s.measure === 'jaccard' ? 0 : undefined} format={(v) => (s.measure === 'jaccard' ? formatFixed(v, locale, 2) : formatValue(v, locale))} diagonal={t('analysis.cooc.diagonal')} />
       </div>
     );
   }

@@ -25,6 +25,15 @@ describe('csv', () => {
     expect(csvField('a = b')).toBe('a = b');
   });
 
+  it('writes the comma as decimal mark with the semicolon delimiter of Portuguese and Spanish spreadsheets', () => {
+    expect(toCsv([['Código', 'Kappa', '%'], ['Pertença', 0.857, 85.71], ['n', 12, -0.5]], { delimiter: ';' })).toBe('Código;Kappa;%\r\nPertença;0,857;85,71\r\nn;12;-0,5\r\n');
+    expect(toCsv([[0.857]], { delimiter: ',' })).toBe('0.857\r\n');
+    expect(toCsv([[0.857]], { delimiter: ';', decimal: '.' })).toBe('0.857\r\n');
+    expect(toCsv([[0.5, 'a.b']], { delimiter: '\t', decimal: ',' })).toBe('0,5\ta.b\r\n');
+    // text that looks like a number is left as it is
+    expect(toCsv([['1.5']], { delimiter: ';' })).toBe('1.5\r\n');
+  });
+
   it('supports semicolon and tab delimiters', () => {
     expect(toCsv([['a;b', 'c,d']], { delimiter: ';' })).toBe('"a;b";c,d\r\n');
     expect(toCsv([['a\tb', 'c']], { delimiter: '\t' })).toBe('"a\tb"\tc\r\n');

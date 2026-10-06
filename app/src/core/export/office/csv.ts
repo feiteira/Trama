@@ -13,6 +13,12 @@ export interface CsvOptions {
    * participants' words, and "=HYPERLINK(…)" in a quote must stay text.
    */
   guardFormulas?: boolean;
+  /**
+   * Decimal mark of numbers. By default ',' when the delimiter is ';' — the spreadsheets that
+   * expect ';' (Portugal, Spain) do so because the comma is their decimal mark, and would open
+   * 0.857 as text, or as 857 where '.' groups thousands — and '.' otherwise.
+   */
+  decimal?: '.' | ',';
 }
 
 const FORMULA_START = /^[=+\-@\t\r]/;
@@ -21,7 +27,11 @@ export function csvField(cell: CsvCell, opts: CsvOptions = {}): string {
   const delimiter = opts.delimiter ?? ',';
   let s: string;
   if (cell === null || cell === undefined) return '';
-  if (typeof cell === 'number') s = Number.isFinite(cell) ? String(cell) : '';
+  if (typeof cell === 'number') {
+    const decimal = opts.decimal ?? (delimiter === ';' ? ',' : '.');
+    s = Number.isFinite(cell) ? String(cell) : '';
+    if (decimal === ',') s = s.replace('.', ',');
+  }
   else if (typeof cell === 'boolean') s = cell ? 'true' : 'false';
   else {
     s = cell;

@@ -225,3 +225,81 @@ describe('preview and apply', () => {
     expect((await ctx.store.get('pseudonym', absent.id))!.applied_count).toBe(0);
   });
 });
+
+describe('erased key entries stay erased', () => {
+  it('Undo/Redo never brings an erased original back (P1: create, edit, erase, undo, undo)', async () => {
+    const { UndoManager } = await import('./undo');
+    const ctx = await makeTestProject();
+    const m = new UndoManager();
+    const { pseudonym } = await createPseudonym(ctx, { original: 'Maria Silva', replacement: 'P1' });
+    m.record((await updatePseudonym(ctx, pseudonym.id, { replacement: '[Participant 1]' })).undo);
+    m.record(await deletePseudonym(ctx, pseudonym.id, { erase: true }));
+    expect(m.canUndo).toBe(false);
+    expect(await m.undo()).toBeNull();
+    const stored = await ctx.store.get('pseudonym', pseudonym.id);
+    expect(stored).toMatchObject({ original: '∅', deleted: true });
+    expect(await listPseudonyms(ctx)).toEqual([]);
+  });
+
+  it('P2: create recorded, erase, undo, undo, redo — still erased', async () => {
+    const { UndoManager } = await import('./undo');
+    const ctx = await makeTestProject();
+    const m = new UndoManager();
+    const r = await createPseudonym(ctx, { original: 'Maria Silva', replacement: 'P1' });
+    m.record(r.undo);
+    m.record(await deletePseudonym(ctx, r.pseudonym.id, { erase: true }));
+    await m.undo();
+    await m.undo();
+    await m.redo();
+    expect(await listPseudonyms(ctx)).toEqual([]);
+    // Even an Undoable kept elsewhere cannot write over the erased record.
+    await expect(r.undo.redo()).rejects.toThrow();
+    await expect(r.undo.undo()).rejects.toThrow();
+    expect((await ctx.store.get('pseudonym', r.pseudonym.id))!.original).toBe('∅');
+  });
+});
+
+describe('pseudonymisation covers names, comments, memos and definitions', () => {
+  it('P3: replaces the original everywhere but the audit trail, which the preview reports', async () => {
+    const { inVivo, setComment } = await import('./codings');
+    const { createMemo } = await import('./memos');
+    const { createCase } = await import('./cases');
+    const { UndoManager } = await import('./undo');
+    const ctx = await makeTestProject();
+    const text = 'Interviewer: Hello.\nMaria Silva: I trust my neighbours.';
+    const { case: cs } = await createCase(ctx, { name: 'Maria Silva', description: 'Maria Silva, 64, gardener' });
+    const { document: doc } = await createDocument(ctx, { name: 'Interview — Maria Silva', kind: 'transcript', text, case_id: cs.id });
+    const s = text.indexOf('Maria Silva: I trust');
+    const v = await inVivo(ctx, { documentId: doc.id, start: s, end: text.length });
+    await setComment(ctx, v.coding.id, 'Maria Silva hesitates here');
+    await createMemo(ctx, { title: 'About Maria Silva', body: 'Maria Silva is the gardener.', target: { kind: 'project', id: null } });
+    await createPseudonym(ctx, { original: 'Maria Silva', replacement: '[P1]' });
+
+    const p = await preview(ctx);
+    expect(p.textTotal).toBe(1);
+    expect(new Set(p.fields.map((f) => `${f.kind}.${f.field}`))).toEqual(
+      new Set(['document.name', 'case.name', 'case.description', 'code.name', 'coding.comment', 'memo.title', 'memo.body']),
+    );
+    expect(p.total).toBe(p.textTotal + p.fields.reduce((n, f) => n + f.count, 0));
+    expect(p.logEntries).toBeGreaterThan(0);
+
+    const m = new UndoManager();
+    const r = await apply(ctx);
+    m.record(r.undo);
+    expect(r.fieldReplacements).toBe(7);
+    const live = async () => {
+      const found: string[] = [];
+      for (const kind of ['document', 'doctext', 'case', 'code', 'coding', 'memo'] as const) {
+        for (const rec of await ctx.store.list(kind)) if (JSON.stringify(rec).includes('Maria Silva')) found.push(kind);
+      }
+      return found;
+    };
+    expect(await live()).toEqual([]);
+    expect((await ctx.store.get('document', doc.id))!.name).toBe('Interview — [P1]');
+    // The apply log entry itself names no original.
+    expect((await listLog(ctx, { action: 'pseudonym.apply' }))[0]!.summary).not.toContain('Maria');
+    await m.undo();
+    expect((await ctx.store.get('memo', (await ctx.store.list('memo'))[0]!.id))!.body).toBe('Maria Silva is the gardener.');
+    expect((await ctx.store.get('document', doc.id))!.name).toBe('Interview — Maria Silva');
+  });
+});

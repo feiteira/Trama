@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import vectors from '../../../../test-vectors/argon2id.json';
 import { fromHex, fromUtf8, randomBytes, toHex, utf8 } from '../bytes';
 import { DecryptError, isSealed, open, seal } from './frames';
@@ -85,5 +85,31 @@ describe('frames', () => {
     expect(() => open(key, tampered, 'attachment')).toThrow(DecryptError);
     const frame = 24 + 100 + 16;
     expect(() => open(key, sealed.subarray(0, 10 + frame * 2), 'attachment')).toThrow(DecryptError);
+  });
+});
+
+describe('Argon2id parameters from files are bounded', () => {
+  it('refuses crafted parameters before running them, in the JS KDF and when unlocking a keyring', async () => {
+    const { checkKdfParams, ARGON2_PARAMS, KdfParamsError } = await import('./kdf');
+    expect(() => checkKdfParams(ARGON2_PARAMS)).not.toThrow();
+    expect(() => checkKdfParams({ algo: 'argon2id', m: 64, t: 1, p: 1, key_len: 32 })).not.toThrow();
+    for (const bad of [
+      { m: 4_194_304, t: 1000, p: 255 },
+      { m: 262_145, t: 3, p: 4 },
+      { m: 65536, t: 11, p: 4 },
+      { m: 65536, t: 3, p: 9 },
+      { m: 16, t: 3, p: 4 },
+      { m: 65536, t: 3, p: 4, key_len: 64 },
+    ]) {
+      const params = { algo: 'argon2id' as const, key_len: 32, ...bad };
+      expect(() => checkKdfParams(params)).toThrow(KdfParamsError);
+      await expect(jsKdf(new Uint8Array(4), new Uint8Array(16), params)).rejects.toBeInstanceOf(KdfParamsError);
+    }
+    const fast = { algo: 'argon2id' as const, m: 64, t: 1, p: 1, key_len: 32 };
+    const spy = vi.fn(jsKdf);
+    const keyring = await createKeyring(newLibraryKey(), { passphrase: 'pass word', recoveryPhrase: newRecoveryPhrase() }, jsKdf, { params: fast });
+    const crafted = { ...keyring, slots: keyring.slots.map((s) => ({ ...s, kdf: { ...s.kdf, m: 2_097_152, t: 10, p: 16 } })) };
+    await expect(unlockKeyring(crafted, 'passphrase', 'pass word', spy)).rejects.toBeInstanceOf(KdfParamsError);
+    expect(spy).not.toHaveBeenCalled();
   });
 });

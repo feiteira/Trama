@@ -5,9 +5,15 @@
 // "é" and "e" are different words), with curly apostrophes made straight. An elided article
 // that is a stop word of the language is dropped ("l'école" → "école", "dell'anno" → "anno"),
 // and in English a possessive 's is ("children's" → "children").
+//
+// Transcript markup is not what anyone said, so by default it is not counted: the speaker label
+// that starts each turn of a transcript ("Interviewer: …") and transcribers' annotations in
+// square brackets ("[laughs]", "[ri-se]", "[ríe]", "[inaudible]", "[00:12:03]"). A text counts as
+// a transcript when its kind says so, or, without a kind, when most of its paragraphs start with
+// a speaker label. `includeMarkup` counts them anyway.
 
 import type { Coding } from '../model/types';
-import { type KwicRow, type SearchOptions, kwic, searchTexts } from './search';
+import { contextAround, DEFAULT_SEARCH_LIMIT, type KwicRow, kwic, type SearchHit, type SearchOptions, type SearchResult } from './search';
 import { logLikelihood, logRatio, chiSquarePValue } from './stats';
 import { stopwordsFor } from './stopwords';
 import { wordRegex } from './text';
@@ -26,6 +32,8 @@ export interface WordFrequencyOptions {
   includeNumbers?: boolean;
   /** Most frequent words returned (default: all). */
   limit?: number;
+  /** Count transcript speaker labels and [bracketed annotations] too (default false). */
+  includeMarkup?: boolean;
 }
 
 export interface WordCount {
@@ -48,7 +56,53 @@ export interface WordFrequencies {
   distinctWords: number;
 }
 
-export type TextInput = string | { id?: string; text: string };
+export type TextInput = string | { id?: string; text: string; /** The document kind ('transcript', 'text'…), when known. */ kind?: string };
+
+// A speaker label at the start of a paragraph: a short name (up to 4 words, 40 characters)
+// followed by a colon and a space, optionally after a [timestamp].
+const SPEAKER = /^[ \t]*(?:\[[^\]\n]{0,40}\][ \t]*)?([\p{L}\p{M}][\p{L}\p{M}\p{N}.'’_-]*(?: [\p{L}\p{M}\p{N}.'’_-]+){0,3})[ \t]*:(?=[ \t]|$)/u;
+const BRACKETED = /\[[^\]\n]{0,120}\]/g;
+
+/**
+ * Spans of transcript markup in a text: speaker labels starting paragraphs (only in a
+ * transcript, see the top of this file) and bracketed annotations anywhere. In text order.
+ */
+export function markupSpans(text: string, kind?: string): { start: number; end: number }[] {
+  const out: { start: number; end: number }[] = [];
+  const labels: { start: number; end: number }[] = [];
+  let paragraphs = 0;
+  for (let at = 0; at <= text.length; ) {
+    let nl = text.indexOf('\n', at);
+    if (nl < 0) nl = text.length;
+    const line = text.slice(at, nl);
+    if (line.trim()) {
+      paragraphs++;
+      const m = SPEAKER.exec(line);
+      if (m && m[1]!.length <= 40) labels.push({ start: at, end: at + m[0].length });
+    }
+    at = nl + 1;
+  }
+  const transcript = kind !== undefined ? kind === 'transcript' : labels.length >= 2 && labels.length * 2 >= paragraphs;
+  if (transcript) out.push(...labels);
+  BRACKETED.lastIndex = 0;
+  for (let m = BRACKETED.exec(text); m; m = BRACKETED.exec(text)) out.push({ start: m.index, end: m.index + m[0].length });
+  return out.sort((a, b) => a.start - b.start || a.end - b.end);
+}
+
+/** The text with its markup (markupSpans) blanked out by spaces: offsets stay as they were. */
+export function maskMarkup(text: string, kind?: string): string {
+  const spans = markupSpans(text, kind);
+  if (!spans.length) return text;
+  let out = '';
+  let at = 0;
+  for (const s of spans) {
+    if (s.end <= at) continue;
+    const from = Math.max(at, s.start);
+    out += text.slice(at, from) + ' '.repeat(s.end - from);
+    at = s.end;
+  }
+  return out + text.slice(at);
+}
 
 const HAS_LETTER = /\p{L}/u;
 const HYPHENS = /[‐‑]/g;
@@ -105,8 +159,9 @@ function tally(texts: readonly TextInput[], opts: WordFrequencyOptions): Tally {
   let totalTokens = 0;
   let countedTokens = 0;
   texts.forEach((t, doc) => {
-    const raw = typeof t === 'string' ? t : t.text;
+    let raw = typeof t === 'string' ? t : t.text;
     if (!raw) return;
+    if (!opts.includeMarkup) raw = maskMarkup(raw, typeof t === 'string' ? undefined : t.kind);
     // Lower-casing the whole text first is much faster than per token; offsets are not needed.
     const text = raw.toLowerCase().replace(APOS, "'").replace(HYPHENS, '-');
     const re = wordRegex();
@@ -263,15 +318,58 @@ export function compareFrequencies(a: readonly TextInput[], b: readonly TextInpu
 }
 
 /**
- * Keyword-in-context rows for one word as counted above: whole word, any case, accents as
- * written. Limit and context width as in searchTexts.
+ * Where one word occurs as counted above (same tokens, same normalisation, markup left out
+ * unless `includeMarkup`), as search hits: the word list's KWIC total then always equals the
+ * word's count. "falar" is not found inside "falar-me" (one word), "well-being" is found as
+ * "well‐being". Limit and context as in searchTexts.
  */
-export function wordKwic(docs: readonly { id: string; text: string }[], word: string, opts: SearchOptions & { width?: number } = {}): {
+export function wordHits(
+  docs: readonly { id: string; text: string; kind?: string }[],
+  word: string,
+  opts: WordFrequencyOptions & SearchOptions = {},
+): SearchResult {
+  const limit = Math.max(0, opts.limit ?? DEFAULT_SEARCH_LIMIT);
+  const width = opts.context ?? 60;
+  const target = word.normalize('NFC').toLowerCase().replace(APOS, "'").replace(HYPHENS, '-').trim();
+  const normalise = makeNormaliser(opts.language, stopwordsFor(opts.language));
+  const hits: SearchHit[] = [];
+  const perDocument = new Map<string, number>();
+  let total = 0;
+  if (!target) return { hits, total, truncated: false, perDocument };
+  for (const doc of docs) {
+    if (!doc.text) continue;
+    const masked = opts.includeMarkup ? doc.text : maskMarkup(doc.text, doc.kind);
+    // Lower-casing keeps UTF-16 offsets for the letters words are made of.
+    const lower = masked.toLowerCase();
+    const text = lower.length === doc.text.length ? lower.replace(APOS, "'").replace(HYPHENS, '-') : null;
+    const re = wordRegex();
+    const src = text ?? masked;
+    for (let m = re.exec(src); m; m = re.exec(src)) {
+      const tok = text ? m[0] : m[0].toLowerCase().replace(APOS, "'").replace(HYPHENS, '-');
+      const norm = normalise(tok);
+      if (norm !== target) continue;
+      total++;
+      perDocument.set(doc.id, (perDocument.get(doc.id) ?? 0) + 1);
+      if (hits.length >= limit) continue;
+      // The word itself: without an elided article ("l'école") or a possessive ("children's").
+      let start = m.index;
+      let end = start + m[0].length;
+      if (norm.length < tok.length && tok.endsWith(norm)) start = end - norm.length;
+      else if (norm.length < tok.length && tok.startsWith(norm)) end = start + norm.length;
+      const ctx = contextAround(doc.text, start, end, width);
+      hits.push({ documentId: doc.id, start, end, before: ctx.before, match: doc.text.slice(start, end), after: ctx.after });
+    }
+  }
+  return { hits, total, truncated: total > hits.length, perDocument };
+}
+
+/** Keyword-in-context rows for one word as counted above (see `wordHits`). */
+export function wordKwic(docs: readonly { id: string; text: string; kind?: string }[], word: string, opts: WordFrequencyOptions & SearchOptions & { width?: number } = {}): {
   rows: KwicRow[];
   total: number;
   truncated: boolean;
 } {
   if (!word.trim()) return { rows: [], total: 0, truncated: false };
-  const r = searchTexts(docs, { query: word, mode: 'phrase', wholeWord: true, caseSensitive: false, accentSensitive: true }, opts);
+  const r = wordHits(docs, word, opts);
   return { rows: kwic(r.hits, opts.width), total: r.total, truncated: r.truncated };
 }

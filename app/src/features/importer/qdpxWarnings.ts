@@ -57,6 +57,8 @@ const GROUP: Record<QdpxWarningCode, WarningGroup> = {
   syncPoint: 'sources',
   richTextOnly: 'sources',
   invalidRecord: 'other',
+  unknownUser: 'coding',
+  badEncoding: 'sources',
 };
 
 const keyOf = (code: QdpxWarningCode): string => (NAMED[code] ? `importer.qdpx.named.${code}` : `importer.qdpx.counted.${code}`);

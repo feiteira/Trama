@@ -14,7 +14,9 @@ pub fn argon2id(
     p: u32,
     len: usize,
 ) -> AppResult<Zeroizing<Vec<u8>>> {
-    if !(8 * p..=1 << 21).contains(&m_kib) || !(1..=10).contains(&t) || !(1..=16).contains(&p) {
+    // The same bounds as the TypeScript core (KDF_LIMITS): parameters can come from a file, and
+    // larger ones would cost gigabytes and minutes on every unlock attempt.
+    if !(1..=8).contains(&p) || !(8 * p..=1 << 18).contains(&m_kib) || !(1..=10).contains(&t) {
         return Err(AppError::Invalid("argon2 parameters out of range".into()));
     }
     if !(16..=64).contains(&len) || salt.len() < 16 {
@@ -65,5 +67,9 @@ mod tests {
         assert!(argon2id(b"x", &[0u8; 16], 8, 1, 1, 32).is_ok());
         assert!(argon2id(b"x", &[0u8; 8], 65536, 3, 4, 32).is_err());
         assert!(argon2id(b"x", &[0u8; 16], 65536, 0, 4, 32).is_err());
+        // Crafted, ruinous parameters from a file header are refused.
+        assert!(argon2id(b"x", &[0u8; 16], 1 << 21, 10, 16, 32).is_err());
+        assert!(argon2id(b"x", &[0u8; 16], (1 << 18) + 1, 3, 4, 32).is_err());
+        assert!(argon2id(b"x", &[0u8; 16], 65536, 3, 9, 32).is_err());
     }
 }

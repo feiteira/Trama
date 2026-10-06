@@ -1,6 +1,7 @@
 import { htmlToParagraphs } from './html';
 import { canonicalize, tidy } from './text';
 import { ImportError, WARNING, warning } from './types';
+import { checkZipSizes } from './xml';
 
 // Word (.docx) → text through mammoth's HTML (headings, paragraphs, lists, tables, footnotes),
 // then our HTML reader. mammoth reads { buffer } in Node and { arrayBuffer } in the browser
@@ -32,6 +33,14 @@ export interface DocxResult {
 }
 
 export async function docxToText(bytes: Uint8Array, mammoth?: MammothLike): Promise<DocxResult> {
+  // mammoth (JSZip) inflates the parts it reads with no limit: refuse a zip bomb first. Images
+  // are never read (they are only counted), so only the XML parts count.
+  try {
+    checkZipSizes(bytes, (name) => /\.(xml|rels)$/i.test(name));
+  } catch (e) {
+    // A damaged archive is mammoth's to report, as a damaged Word file.
+    if (!(e instanceof ImportError) || e.code !== 'DAMAGED') throw e;
+  }
   const m = mammoth ?? (await loadMammoth());
   let images = 0;
   const ab = bytes.slice().buffer as ArrayBuffer;

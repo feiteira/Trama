@@ -1,7 +1,9 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { type Undoable, UndoManager, type UndoState } from '../services/undo';
 import { isTextEntry, modalOpen } from '../ui/focus';
 import { useToast } from '../ui/components/Toast';
+import { useI18n } from '../ui/i18n';
+import { stepDoneMessage } from './undoFeedback';
 
 // The open project's undo/redo stack (services/undo.ts), shared by every screen. Screens
 // record what a domain operation returns:
@@ -30,6 +32,7 @@ export function useUndo(): UndoValue {
 export function UndoProvider({ children }: { children: ReactNode }) {
   const [manager] = useState(() => new UndoManager());
   const toast = useToast();
+  const i18n = useI18n();
   useEffect(() => () => manager.clear(), [manager]);
   const state = useSyncExternalStore(
     useCallback((fn: () => void) => manager.subscribe(fn), [manager]),
@@ -45,20 +48,33 @@ export function UndoProvider({ children }: { children: ReactNode }) {
     }, [manager]),
   );
 
-  const undo = useCallback(async () => {
-    try {
-      await manager.undo();
-    } catch (e) {
-      toast.error(e);
-    }
-  }, [manager, toast]);
-  const redo = useCallback(async () => {
-    try {
-      await manager.redo();
-    } catch (e) {
-      toast.error(e);
-    }
-  }, [manager, toast]);
+  // Every undo and redo says what it did, on a toast (a polite live region) that offers the way
+  // back: Ctrl+Z works from any screen, and a step reverted out of sight must not pass unnoticed.
+  const step = useCallback(
+    async (kind: 'undo' | 'redo') => {
+      let entry: Undoable | null;
+      try {
+        entry = await (kind === 'undo' ? manager.undo() : manager.redo());
+      } catch (e) {
+        toast.error(e);
+        return;
+      }
+      if (!entry) {
+        toast.show({ message: i18n.t(kind === 'undo' ? 'app.undo.nothingToUndo' : 'app.undo.nothingToRedo'), durationMs: 3_000 });
+        return;
+      }
+      const back = kind === 'undo' ? 'redo' : 'undo';
+      toast.show({
+        message: stepDoneMessage(kind, entry, i18n),
+        action: { label: i18n.t(back === 'undo' ? 'common.undo' : 'common.redo'), run: () => stepRef.current(back), testId: `toast-${back}` },
+      });
+    },
+    [manager, toast, i18n],
+  );
+  const stepRef = useRef(step);
+  stepRef.current = step;
+  const undo = useCallback(() => step('undo'), [step]);
+  const redo = useCallback(() => step('redo'), [step]);
   const record = useCallback((entry: Undoable) => manager.record(entry), [manager]);
 
   useEffect(() => {

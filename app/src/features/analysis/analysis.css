@@ -87,6 +87,34 @@
   outline-offset: -2px;
 }
 
+/* Whose codings are counted (header), and what that means (under the tabs). */
+.an-coders {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-width: 0;
+}
+
+.an-coders__label {
+  color: var(--ink-3);
+  font-size: var(--fs-sm);
+  white-space: nowrap;
+}
+
+.an-coders .field {
+  min-width: 0;
+}
+
+.an-coders__note {
+  flex: none;
+  margin: 0;
+  padding: 6px var(--s-4);
+  border-bottom: 1px solid var(--rule);
+  background: var(--paper-sunk);
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
 /* ── Tool layout ────────────────────────────────────────────────────────────────────── */
 
 .an-tool {
@@ -162,6 +190,25 @@
   font-size: var(--fs-sm);
   color: var(--ink-3);
   line-height: 1.4;
+}
+
+.an-hint {
+  margin: 0;
+}
+
+.an-linkbtn {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent-text);
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.an-msg__body > p {
+  margin: 0 0 var(--s-3);
 }
 
 .an-inline-actions {

@@ -147,6 +147,14 @@ export const workbench = {
       one: 'Text saved. {n} coding lost all its text and was removed.',
       other: 'Text saved. {n} codings lost all their text and were removed.',
     },
+    kept: 'Your edits to “{name}” were saved.',
+    keptRemoved: {
+      one: 'Your edits to “{name}” were saved. {n} coding lost all its text and was removed.',
+      other: 'Your edits to “{name}” were saved. {n} codings lost all their text and were removed.',
+    },
+    discardTitle: 'Discard your changes to the text?',
+    discardBody: 'The changes you made since you started editing will be lost.',
+    discard: 'Discard changes',
   },
   media: {
     loading: 'Decrypting the recording…',

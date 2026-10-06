@@ -20,6 +20,7 @@ import { PALETTE } from '../../core/model/types';
 import { Brand, LanguagePicker } from '../onboarding/Frame';
 import { ProjectDialog, type ProjectDraft } from './ProjectDialog';
 import { filterProjects, type ProjectSort, sortProjects } from './projectList';
+import { forgetProjectPrefs } from '../common/localPrefs';
 import './projects.css';
 
 const SORT_KEY = 'trama.projects.sort';
@@ -116,6 +117,7 @@ export function ProjectsScreen() {
     if (!ok) return;
     try {
       await library.deleteProject(p.id);
+      forgetProjectPrefs(p.id);
       if (prefs.lastProjectId === p.id) await setPrefs({ lastProjectId: null }).catch(() => undefined);
       toast.show({ message: t('projects.deleted', { name: p.name }) });
     } catch (e) {

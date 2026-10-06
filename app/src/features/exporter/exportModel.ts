@@ -5,10 +5,11 @@ import { safeName } from '../../core/export/trama';
 // extension and type it gets, and when its options are complete. Pure, so it is tested.
 
 export type ExportKind = 'trama' | 'qdpx' | 'codebook' | 'report';
-export type CodebookFormat = 'qdc' | 'docx' | 'csv';
+// The same five formats as the Codebook screen's Export menu (codes/useCodebookFiles.tsx).
+export type CodebookFormat = 'qdc' | 'docx' | 'csv' | 'xlsx' | 'md';
 export type ReportFormat = 'docx' | 'html';
 
-export const CODEBOOK_FORMATS: readonly CodebookFormat[] = ['qdc', 'docx', 'csv'];
+export const CODEBOOK_FORMATS: readonly CodebookFormat[] = ['qdc', 'docx', 'csv', 'xlsx', 'md'];
 export const REPORT_FORMATS: readonly ReportFormat[] = ['docx', 'html'];
 
 export interface TramaOptions {

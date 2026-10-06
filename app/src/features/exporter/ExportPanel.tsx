@@ -18,7 +18,9 @@ import {
   type CodebookFormat, CODEBOOK_FORMATS, DEFAULT_TRAMA, exportFileName, type ReportFormat, REPORT_FORMATS, tramaExportOptions, type TramaOptions,
   tramaProblem,
 } from './exportModel';
-import { codebookReport, codebookRows, loadReportData, projectReport } from './report';
+import { useCodeData } from '../common/CodeTreeActions';
+import { useCodebookFiles } from '../codes/useCodebookFiles';
+import { loadReportData, projectReport } from './report';
 
 type Busy = 'trama' | 'qdpx' | 'codebook' | 'report' | null;
 
@@ -43,7 +45,7 @@ function useVersion(): string {
 
 export function ExportPanel() {
   const i18n = useI18n();
-  const { t, locale } = i18n;
+  const { t, tp, locale } = i18n;
   const project = useProject();
   const platform = usePlatform();
   const toast = useToast();
@@ -60,6 +62,8 @@ export function ExportPanel() {
   const [qdpxWarnings, setQdpxWarnings] = useState<string[] | null>(null);
   const [codebookFormat, setCodebookFormat] = useState<CodebookFormat>('qdc');
   const [reportFormat, setReportFormat] = useState<ReportFormat>('docx');
+  const { data: codeData } = useCodeData();
+  const codebookFiles = useCodebookFiles(codeData);
 
   useEffect(() => {
     void project.store
@@ -119,7 +123,11 @@ export function ExportPanel() {
       build: async () => {
         const bundle = await projectToBundle(project, { includeDeleted: false, includePseudonyms: false });
         const out = exportQdpx(bundle, { origin, crlfForMaxqda: crlf });
-        warnings = [...bundle.warnings, ...out.warnings];
+        // Worded here, in the reader's language: the exporter reports coded issues.
+        warnings = [
+          ...bundle.warnings.map((item) => t('exporter.export.qdpx.issues.unreadable', { item })),
+          ...out.issues.map((i) => tp(`exporter.export.qdpx.issues.${i.code}`, i.count)),
+        ];
         await project.log('export', `.qdpx${crlf ? ' (MAXQDA line endings)' : ''}`);
         return out.bytes;
       },
@@ -127,29 +135,20 @@ export function ExportPanel() {
     setQdpxWarnings(ok && warnings.length ? warnings : null);
   }
 
+  // The Codebook screen's own export, so both places offer the same formats and write the
+  // same files.
   async function exportCodebook() {
-    const f = codebookFormat;
-    const fileType = { qdc: t('exporter.export.codebook.fileTypeQdc'), docx: t('exporter.export.codebook.fileTypeDocx'), csv: t('exporter.export.codebook.fileTypeCsv') }[f];
-    if ((await project.store.count('code')) === 0) {
+    if (!codeData) return;
+    if (!codeData.items.length) {
       toast.show(t('exporter.export.codebook.empty'));
       return;
     }
-    await save('codebook', {
-      title: t('exporter.export.codebook.dialogTitle'),
-      what: t('exporter.export.codebook.fileName'),
-      ext: f,
-      filter: { name: fileType, extensions: [f] },
-      build: async () => {
-        let bytes: Uint8Array;
-        if (f === 'qdc') bytes = utf8(exportQdc(await project.store.list('code'), { origin }));
-        else {
-          const data = await loadReportData(project, project.info);
-          bytes = f === 'docx' ? buildDocx(codebookReport(data, i18n, { generator: origin, now: new Date() })) : csvBytes(codebookRows(data.codes, i18n), { delimiter: locale === 'en' ? ',' : ';' });
-        }
-        await project.log('export', `codebook .${f}`);
-        return bytes;
-      },
-    });
+    setBusy('codebook');
+    try {
+      await codebookFiles.exportAs(codebookFormat);
+    } finally {
+      setBusy(null);
+    }
   }
 
   async function exportReport() {

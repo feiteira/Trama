@@ -111,3 +111,27 @@ describe('names', () => {
     expect(canonicalize(emoji)).toBe(emoji); // no broken surrogate at the cut
   });
 });
+
+describe('long runs of whitespace', () => {
+  // End-anchored patterns used to rescan a run from every position inside it: minutes for a
+  // file with a long run of spaces in the middle of a line.
+  const fast = (f: () => unknown) => {
+    const t0 = Date.now();
+    f();
+    return Date.now() - t0;
+  };
+  const run = ' '.repeat(100_000);
+
+  it('tidies a 100 000-space run in the middle of a line quickly', () => {
+    expect(fast(() => expect(tidyPlain(`a${run}b`)).toBe(`a${run}b`))).toBeLessThan(100);
+    expect(fast(() => expect(tidy(`a${run}b`)).toBe(`a${run}b`))).toBeLessThan(100);
+    expect(fast(() => tidy(`a${'\u{a0}'.repeat(100_000)}b`))).toBeLessThan(100);
+    expect(fast(() => expect(tidyPlain(`a${'\n'.repeat(100_000)}b`)).toBe(`a${'\n'.repeat(100_000)}b`))).toBeLessThan(100);
+    expect(fast(() => tidyPlain(`a${'\t'.repeat(100_000)}b`))).toBeLessThan(100);
+  });
+
+  it('still removes trailing spaces and blank lines at both ends', () => {
+    expect(tidyPlain('\n\n a  \t\nb \n\n')).toBe(' a\nb');
+    expect(tidy('\n\nx \u{a0}\n\n\n\ny\t\n\n')).toBe('x\n\ny');
+  });
+});

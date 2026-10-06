@@ -13,7 +13,7 @@ import {
 import type { BundleRecord } from '../core/export/bundle';
 import { Library } from './library';
 import type { Project } from './project';
-import { FAST_KDF } from './testing';
+import { FAST_KDF, sha256hex } from './testing';
 
 /** A clock the test moves by hand, shared by a library and its projects. */
 function clock(start = '2026-10-05T12:00:00Z') {
@@ -35,7 +35,9 @@ async function seeded(project: Project) {
   const s = project.store;
   const original = await project.addBlob(utf8('%PDF-1.7 interview'), 'entrevista.pdf', 'application/pdf');
   const doc = await s.put('document', {
-    name: 'Entrevista Inês', kind: 'text', group_ids: [], case_id: null, source: null, original, media: null, chars: 24, order: 1, color: null,
+    name: 'Entrevista Inês', kind: 'text', group_ids: [], case_id: null,
+    source: { filename: 'entrevista.pdf', format: 'pdf', imported_at: '2026-10-05T12:00:00.000Z', text_sha256: sha256hex('A Maria Silva disse olá.') },
+    original, media: null, chars: 24, order: 1, color: null,
   });
   await s.put('doctext', { id: doc.id, text: 'A Maria Silva disse olá.', sync: [] });
   const trust = await s.put('code', code('Confiança'));
@@ -266,5 +268,46 @@ describe('merge preview', () => {
       warnings: [],
     });
     expect(preview).toMatchObject({ added: 0, updated: 0, unchanged: 1, rejected: 1, newCoders: [] });
+  });
+});
+
+describe('exports leave out the original files of edited documents', () => {
+  it('a pseudonymised PDF\'s original (and a file name holding the name) stays out of .trama files; a merge back keeps them here', async () => {
+    const { createDocument } = await import('./documents');
+    const { apply, createPseudonym } = await import('./pseudonyms');
+    const c = clock();
+    const a = await newLibrary(c);
+    const p = await a.library.createProject({ name: 'Estudo', coderName: 'Ana' });
+    const { document: doc } = await createDocument(p, {
+      name: 'Interview 1', kind: 'pdf', text: 'Maria Silva said she was afraid.',
+      source: { filename: 'Maria_Silva_interview.pdf', format: 'pdf' },
+      original: { bytes: utf8('%PDF-1.7 ... Maria Silva said she was afraid ...'), filename: 'Maria_Silva_interview.pdf', mime: 'application/pdf' },
+    });
+    await createPseudonym(p, { original: 'Maria Silva', replacement: 'P1' });
+    expect((await apply(p)).replacements).toBeGreaterThanOrEqual(1);
+    const bytes = await exportProjectFile(p, { includePseudonyms: false });
+    const files = unzipSync(bytes);
+    for (const [name, content] of Object.entries(files)) {
+      expect(strFromU8(content).includes('Maria Silva'), name).toBe(false);
+      expect(strFromU8(content).includes('Maria_Silva'), name).toBe(false);
+    }
+    expect(Object.keys(files).some((n) => n.startsWith('blobs/'))).toBe(false);
+    // Asked for explicitly, the original travels.
+    const withOriginals = unzipSync(await exportProjectFile(p, { includePseudonyms: false, includeEditedOriginals: true }));
+    expect(Object.keys(withOriginals).some((n) => n.startsWith('blobs/'))).toBe(true);
+
+    // A teammate's newer version of the document merged back keeps the original and file name here.
+    c.advance(1000);
+    const rui = await newLibrary(c);
+    const pr = await importProjectFile(rui.library, bytes, { kind: 'none' }, { asCopyOfSameProject: true });
+    await pr.setMe((await pr.addCoder('Rui')).id);
+    c.advance(1000);
+    const { renameDocument } = await import('./documents');
+    await renameDocument(pr, doc.id, 'Interview one');
+    await mergeTeammateCopy(p, readTramaZip(await exportProjectFile(pr, { includePseudonyms: false })));
+    const back = (await p.store.get('document', doc.id))!;
+    expect(back.name).toBe('Interview one');
+    expect(back.original?.blob_id).toBe(doc.original!.blob_id);
+    expect(back.source?.filename).toBe('Maria_Silva_interview.pdf');
   });
 });

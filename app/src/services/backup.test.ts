@@ -192,26 +192,15 @@ describe('running backups', () => {
     await expect(runBackup(project)).rejects.toMatchObject({ code: 'DISK_FULL' });
   });
 
-  it('removes half-written files older than an hour, and never touches other projects\' backups', async () => {
+  it('never touches other projects\' backups or other files (stale temporary files are the shell\'s to remove)', async () => {
     const { platform, project } = await withFolder();
     const theirs = [1, 2, 3, 4].map((d) => `Trama backup ffffff 2020-01-0${d} 080000.trama`);
     for (const n of theirs) await platform.files.write(`/usb/${n}`, utf8('x'));
     await platform.files.write('/usb/notes.txt', utf8('mine'));
-    await platform.files.write('/usb/Trama backup abc 2026.trama.tmp', utf8('half'));
-    await platform.files.write('/usb/Trama backup def 2026.trama.tmp', utf8('being written'));
-    // The memory platform stamps files with the real clock: run the backup two hours "later",
-    // after making one temporary file look fresh again.
-    const later = Date.now() + 2 * 3600_000;
-    const realNow = Date.now;
-    Date.now = () => later;
-    await platform.files.write('/usb/Trama backup def 2026.trama.tmp', utf8('being written'));
-    Date.now = realNow;
-    await runBackup(project, { now: new Date(later) });
+    await runBackup(project, { now: new Date(Date.now() + 2 * 3600_000) });
     const left = await names(platform);
     for (const n of theirs) expect(left).toContain(n);
     expect(left).toContain('notes.txt');
-    expect(left).not.toContain('Trama backup abc 2026.trama.tmp');
-    expect(left).toContain('Trama backup def 2026.trama.tmp');
   });
 
   it('lists backups newest first, by tag', async () => {

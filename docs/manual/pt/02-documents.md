@@ -42,7 +42,8 @@ O Trama reconhece transcrições e mantém **uma intervenção por parágrafo**,
 
 **Gravações.** Uma transcrição pode ter o respetivo áudio ou vídeo. No cabeçalho do documento, escolha **Associar uma gravação…** e escolha o ficheiro; fica cifrado e guardado no projeto. Aparece um leitor por cima do texto:
 
-- `Ctrl+Space` reproduz ou pausa; `Alt+Shift+←` e `Alt+Shift+→` recuam ou avançam 5 segundos.
+- `Ctrl+Space` reproduz ou pausa.
+- `Alt+←` e `Alt+→` recuam ou avançam 5 segundos durante a reprodução (ou quando o leitor tem o foco); no resto do tempo, `Alt+←` é **Voltar**. `Alt+Shift+←` e `Alt+Shift+→` recuam ou avançam a qualquer momento, mesmo em pausa.
 - `Alt+Enter` reproduz a partir do parágrafo onde está o cursor.
 - **Acompanhar a gravação no texto** realça a intervenção que está a ser ouvida.
 - Remover uma gravação apaga o ficheiro do projeto; a transcrição e as marcas de tempo ficam.

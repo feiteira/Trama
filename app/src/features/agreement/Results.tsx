@@ -162,7 +162,7 @@ export function SummaryCards({
           mainSub={t('agreement.cards.segmentsSub', { agree: fmtInt(s.agree, meta.bcp47), total: fmtInt(s.agree + s.disagree, meta.bcp47), threshold: th })}
           testId="agreement-card-percent"
         />
-        <KappaCard label={t('agreement.cards.kappaBP')} sub={t('agreement.cards.kappaBPSub', { k: s.categories })} k={s.kappa} testId="agreement-card-kappa" />
+        <KappaCard label={t('agreement.cards.kappaBP')} sub={s.codes.length === 1 ? t('agreement.cards.kappaBPSubOne') : t('agreement.cards.kappaBPSub', { k: s.categories })} k={s.kappa} testId="agreement-card-kappa" />
         <PercentCard
           label={t('agreement.cards.byCoder')}
           main={aTotal ? (aOk / aTotal) * 100 : null}

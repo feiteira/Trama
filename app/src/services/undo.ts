@@ -15,6 +15,10 @@
 // - Undo writes the "before" records back (records the operation created become tombstones);
 //   redo writes the "after" records. Both are logged, prefixed ↶ / ↷, so the audit trail shows
 //   them. The stack assumes it is used in order (undo the newest first), like any editor.
+// - Before writing, undo and redo check that every record they would write back is still as
+//   the operation (or the previous undo/redo) left it. A record changed since — a recording
+//   attached, a teammate's copy merged, an erased key entry — makes the step refuse
+//   (ServiceError 'changed_since') instead of silently overwriting the newer change.
 
 import { uuid } from '../core/ids';
 import type { Base, Draft, Entity, Kind, LogAction } from '../core/model/types';
@@ -33,7 +37,9 @@ export type ServiceErrorCode =
   | 'invalid_value'
   | 'invalid_argument'
   | 'too_large'
-  | 'duplicate';
+  | 'duplicate'
+  /** Undo/redo refused: a record it would write back was changed since the operation. */
+  | 'changed_since';
 
 /** A refused domain operation. `code` is stable, for the UI to explain in the reader's language. */
 export class ServiceError extends Error {
@@ -59,7 +65,18 @@ export interface Undoable {
   weight: number;
   undo(): Promise<void>;
   redo(): Promise<void>;
+  /** The records (`kind:id`) this step writes back, so the stack can forget steps about them. */
+  touches?: readonly string[];
+  /**
+   * Records (`kind:id`) whose content was erased for good: recording this entry drops every
+   * step of the stack that touches them (they hold the erased content in memory), and the entry
+   * itself is not kept.
+   */
+  forget?: readonly string[];
 }
+
+/** The key the undo stack uses for a record. */
+export const undoKey = (kind: Kind, id: string): string => `${kind}:${id}`;
 
 /** One Undoable made of several, undone newest first. */
 export function combineUndo(label: UndoLabel, detail: string, parts: Undoable[]): Undoable {
@@ -67,6 +84,7 @@ export function combineUndo(label: UndoLabel, detail: string, parts: Undoable[])
     label,
     detail,
     weight: parts.reduce((n, p) => n + p.weight, 0),
+    touches: parts.flatMap((p) => p.touches ?? []),
     async undo() {
       for (let i = parts.length - 1; i >= 0; i--) await parts[i]!.undo();
     },
@@ -99,6 +117,10 @@ export class UndoManager {
   }
 
   record(entry: Undoable): void {
+    if (entry.forget?.length) {
+      this.forget(entry.forget);
+      return;
+    }
     this.done.push(entry);
     this.undone = [];
     this.trim();
@@ -138,6 +160,15 @@ export class UndoManager {
   clear(): void {
     this.done = [];
     this.undone = [];
+    this.emit();
+  }
+
+  /** Drops every step (undo and redo) that touches one of the records (`kind:id`). */
+  forget(keys: readonly string[]): void {
+    const doomed = new Set(keys);
+    const keep = (e: Undoable) => !(e.touches ?? []).some((k) => doomed.has(k));
+    this.done = this.done.filter(keep);
+    this.undone = this.undone.filter(keep);
     this.emit();
   }
 
@@ -194,7 +225,7 @@ interface PutItem {
   before: AnyEntity | null;
 }
 
-const keyOf = (kind: Kind, id: string) => `${kind}:${id}`;
+const keyOf = undoKey;
 
 export class Plan {
   private puts = new Map<string, PutItem>();
@@ -333,6 +364,7 @@ export async function commit(
     ...puts.map((p) => ({ kind: p.kind, id: p.draft.id!, record: saved.find(p.kind, p.draft.id!) ?? null })),
     ...dels.map((d) => ({ kind: d.kind, id: d.record.id, record: { ...d.record, deleted: true, deleted_batch: batch } as unknown as AnyEntity })),
   ];
+  await noteWrites(ctx.store, after);
   for (const l of meta.logs) await ctx.log(l.action, l.summary, l.target);
 
   const weight = [...before, ...after].reduce((n, s) => n + weigh(s), 0);
@@ -343,12 +375,17 @@ export async function commit(
       label: meta.label,
       detail: meta.detail,
       weight,
+      touches: before.map((s) => keyOf(s.kind, s.id)),
       async undo() {
+        await expectUnchanged(ctx.store, after);
         await applySnaps(ctx.store, before, batch);
+        await noteWrites(ctx.store, before);
         for (const l of meta.logs) await ctx.log(INVERSE[l.action] ?? l.action, `↶ ${l.summary}`, l.target);
       },
       async redo() {
+        await expectUnchanged(ctx.store, before);
         await applySnaps(ctx.store, after, batch);
+        await noteWrites(ctx.store, after);
         for (const l of meta.logs) await ctx.log(l.action, `↷ ${l.summary}`, l.target);
       },
     },
@@ -376,6 +413,48 @@ function groupIds(items: { kind: Kind; record: { id: string } }[]): Map<Kind, st
     out.set(i.kind, list);
   }
   return out;
+}
+
+// The stamp of the last write each record got through the stack's own writes (commit, undo,
+// redo), per store. A record whose stored stamp differs was written since by something else: a
+// write off the stack (attaching a recording), a merged copy, an erase.
+const lastWrites = new WeakMap<Store, Map<string, string>>();
+
+/** Reads the stored stamps of the snapshots' records and remembers them as the stack's writes. */
+async function noteWrites(store: Store, snaps: readonly Snap[]): Promise<void> {
+  const reg = lastWrites.get(store) ?? lastWrites.set(store, new Map()).get(store)!;
+  for (const [kind, list] of byKindOf(snaps)) {
+    const stamps = await store.stamps(kind, list.map((s) => s.id));
+    for (const s of list) {
+      const h = stamps.get(s.id)?.hlc;
+      if (h) reg.set(keyOf(kind, s.id), h);
+      else reg.delete(keyOf(kind, s.id));
+    }
+  }
+}
+
+function byKindOf(snaps: readonly Snap[]): Map<Kind, Snap[]> {
+  const out = new Map<Kind, Snap[]>();
+  for (const s of snaps) (out.get(s.kind) ?? out.set(s.kind, []).get(s.kind)!).push(s);
+  return out;
+}
+
+/**
+ * Refuses (ServiceError 'changed_since') unless every record the step would write back still
+ * carries the stamp of the stack's last write to it: the step must not write over a change made
+ * since by anything else (a write off the stack, a merge, an erase).
+ */
+async function expectUnchanged(store: Store, snaps: readonly Snap[]): Promise<void> {
+  const reg = lastWrites.get(store);
+  for (const [kind, list] of byKindOf(snaps)) {
+    const stamps = await store.stamps(kind, list.map((s) => s.id));
+    for (const s of list) {
+      const now = stamps.get(s.id);
+      if (now?.scrubbed || now?.hlc !== reg?.get(keyOf(kind, s.id))) {
+        throw new ServiceError('changed_since', `${kind} ${s.id} was changed since; this step can no longer be undone or redone`);
+      }
+    }
+  }
 }
 
 async function applySnaps(store: Store, snaps: Snap[], batch: string): Promise<void> {

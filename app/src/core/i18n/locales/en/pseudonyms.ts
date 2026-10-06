@@ -22,7 +22,7 @@ export const pseudonyms = {
     replacement: 'Replacement',
     wholeWord: 'Whole word',
     wholeWordShort: 'Whole word',
-    caseSensitive: 'Case sensitive',
+    caseSensitive: 'Match case',
     caseShort: 'Match case',
     note: 'Note',
     lastApplied: 'Last applied',

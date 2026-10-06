@@ -4,9 +4,10 @@
 import { sha256 } from '@noble/hashes/sha2.js';
 import { toHex } from '../core/bytes';
 import type { Coding, DocKind, DocSource, DocText, Document, MediaRef, SyncPoint } from '../core/model/types';
-import { DOC_KINDS, LIMITS } from '../core/model/types';
+import { DOC_KINDS, LIMITS, REVS_MAX } from '../core/model/types';
 import { applyEdits, computeEdits, mapOffset, mapRange, normalizeEdits, splitsPair, type Assoc, type TextEdit } from '../core/qda/ranges';
 import { orderAfterLast, placeBefore } from '../core/qda/tree';
+import { reanchorRestored } from './anchor';
 import type { ProjectContext } from './context';
 import { stopper } from './jobs';
 import {
@@ -95,7 +96,18 @@ export function canonicalText(raw: string): string {
   return canonicalise(raw).text;
 }
 
-const textSha256 = (text: string) => toHex(sha256(new TextEncoder().encode(text)));
+export const textSha256 = (text: string) => toHex(sha256(new TextEncoder().encode(text)));
+
+/** A short revision id of a text (the start of its SHA-256), for `DocText.revs`. */
+export const textRev = (text: string): string => textSha256(text).slice(0, 16);
+
+/** The revision history of a text after it changed to `text`. */
+export function nextRevs(current: Pick<DocText, 'text' | 'revs'>, text: string): string[] {
+  const revs = current.revs?.length ? [...current.revs] : [textRev(current.text)];
+  const rev = textRev(text);
+  if (revs[revs.length - 1] !== rev) revs.push(rev);
+  return revs.slice(-REVS_MAX);
+}
 
 // ---------------------------------------------------------------------------------------------
 // Names
@@ -270,7 +282,7 @@ export async function createDocuments(
         order: slot.order,
         color: input.color ?? null,
       });
-      plan.create('doctext', { id, text, sync });
+      plan.create('doctext', { id, text, sync, revs: [textRev(text)] });
       created.push({ id, name: slot.name });
       await opts.onProgress?.(i + 1, prepared.length);
     }
@@ -435,12 +447,13 @@ export async function deleteDocuments(ctx: ProjectContext, ids: string[]): Promi
 /** Brings back what one `deleteDocuments` removed (from "recently deleted"). */
 export async function restoreDocuments(ctx: ProjectContext, batch: string): Promise<{ documents: number; codings: number; memos: number }> {
   const restored = await restoreBatch(ctx, batch, ['document', 'doctext', 'coding', 'memo']);
+  const fixed = await reanchorRestored(ctx, restored.get('coding') ?? [], batch);
   const docIds = restored.get('document') ?? [];
   for (const id of docIds) {
     const d = await ctx.store.get('document', id);
     if (d) await ctx.log('document.restore', q(d.name), { kind: 'document', id });
   }
-  return { documents: docIds.length, codings: restored.get('coding')?.length ?? 0, memos: restored.get('memo')?.length ?? 0 };
+  return { documents: docIds.length, codings: (restored.get('coding')?.length ?? 0) - fixed.removed, memos: restored.get('memo')?.length ?? 0 };
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -488,7 +501,7 @@ export async function applyTextEdits(
   if (text.length > LIMITS.textMax) throw new ServiceError('too_large', 'the text is too long');
   const plan = new Plan();
   const sync = dt.sync.map((s) => ({ pos: Math.min(text.length, mapOffset(s.pos, edits, 'before')), ms: s.ms }));
-  plan.change('doctext', dt, { text, sync });
+  plan.change('doctext', dt, { text, sync, revs: nextRevs(dt, text) });
   plan.change('document', doc, { chars: text.length });
 
   const codings = await ctx.store.list('coding', { where: 'document_id = ?', params: [id] });
@@ -535,7 +548,9 @@ export async function attachMedia(ctx: ProjectContext, id: string, file: FileInp
   if (file.bytes.length > LIMITS.mediaMaxBytes) throw new ServiceError('too_large', 'the file is too large');
   const ref = await ctx.addBlob(file.bytes, file.filename, file.mime);
   try {
-    await ctx.store.update('document', id, { [slot]: ref } as Partial<Document>);
+    // A file attached here is this project's own: no longer one an export left out.
+    const clear = slot === 'original' ? { original_omitted: undefined } : {};
+    await ctx.store.update('document', id, { [slot]: ref, ...clear } as Partial<Document>);
   } catch (e) {
     await ctx.removeBlob(ref).catch(() => undefined);
     throw e;

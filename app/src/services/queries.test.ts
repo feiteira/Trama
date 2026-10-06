@@ -101,3 +101,22 @@ describe('queries', () => {
     expect((await projectSummary(ctx)).lastActivity).toBeNull();
   });
 });
+
+describe('counts agree with retrieval when codings outlive their document or code', () => {
+  it('leaves orphaned codings (as a merge into an older project can leave them) out of every count', async () => {
+    const { ctx, d1, d2, fear, joy } = await setup();
+    // Orphans written directly, as an older merge left them: the parents deleted, the codings live.
+    const orphanInDoc = (await ctx.store.list('coding', { where: 'document_id = ?', params: [d2.id] }))[0]!;
+    await ctx.store.remove('document', [d2.id]);
+    await ctx.store.remove('code', [fear.id]);
+    expect(orphanInDoc.deleted).toBe(false);
+    const live = await allCodings(ctx);
+    const summary = await projectSummary(ctx);
+    expect(summary.codings).toBe(live.length);
+    expect(summary.codedDocuments).toBe(new Set(live.map((c) => c.document_id)).size);
+    const docs = await listDocuments(ctx);
+    expect(docs.find((r) => r.document.id === d1.id)!.codings).toBe(live.filter((c) => c.document_id === d1.id).length);
+    const joyRow = (await listCodesWithCounts(ctx)).find((r) => r.code.id === joy.id)!;
+    expect(joyRow).toMatchObject({ own: 0, documents: 0 });
+  });
+});

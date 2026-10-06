@@ -75,7 +75,22 @@ describe('parseFilter', () => {
       sort: 'newest',
       context: 'sentence',
     };
-    expect(parseFilter(serializeFilter(f))).toEqual(f);
+    expect(parseFilter(serializeFilter(f))).toEqual({ ...f, text: '', conditions: [{ key: 'k', attributeId: 'age', op: 'lt', value: '' }] });
+  });
+
+  it('never stores typed text: the search and condition values stay out of browser storage', () => {
+    const f: FilterState = {
+      ...DEFAULT_FILTER,
+      text: 'Maria Silva',
+      conditions: [{ key: 'k', attributeId: 'name', op: 'contains', value: 'Silva' }],
+    };
+    const raw = serializeFilter(f);
+    expect(raw).not.toContain('Maria');
+    expect(raw).not.toContain('Silva');
+    // A value stored by an older version is not read back either.
+    const old = parseFilter(JSON.stringify({ ...f }));
+    expect(old.text).toBe('');
+    expect(old.conditions[0]?.value).toBe('');
   });
 
   it('falls back field by field on bad input', () => {

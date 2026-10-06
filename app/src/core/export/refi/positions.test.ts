@@ -134,11 +134,14 @@ describe('toNfc', () => {
 });
 
 describe('canonicalize', () => {
-  it('strips a BOM without counting it, normalises line ends and NFC', () => {
+  it('drops a U+FEFF left in the text but keeps counting it, normalises line ends and NFC', () => {
+    // The file's own BOM comes off once, when the file is decoded (decodeRefiText). A U+FEFF
+    // still in the text is one the producer counted (QualCoder), so positions include it.
     const c = canonicalize('﻿Café\r\nfim', { unit: 'codepoint', crlf: 2 });
     expect(c.text).toBe('Café\nfim');
-    expect(c.maxPosition).toBe(10);
-    expect(c.text.slice(c.toCanonical(7, 'start'), c.toCanonical(10, 'end'))).toBe('fim');
+    expect(c.maxPosition).toBe(11);
+    expect(c.text.slice(c.toCanonical(8, 'start'), c.toCanonical(11, 'end'))).toBe('fim');
+    expect(c.text.slice(c.toCanonical(1, 'start'), c.toCanonical(6, 'end'))).toBe('Café');
   });
 
   it('stripBom only removes a leading BOM', () => {

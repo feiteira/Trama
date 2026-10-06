@@ -2,11 +2,11 @@
 import type { Code, Draft } from '../../model/types';
 import type { QdpxWarning } from './qdpx-import';
 import { HEX_COLOR, LIMITS, PALETTE } from '../../model/types';
-import { decodeText } from '../../bytes';
 import { uuid } from '../../ids';
 import {
   cleanName,
   CODEBOOK_NS,
+  decodeRefiText,
   CODEBOOK_SCHEMA_LOCATION,
   GuidMap,
   normColor,
@@ -71,7 +71,7 @@ export interface QdcImport {
 
 /** Reads a .qdc (text or bytes). Throws RefiError when it is not a REFI-QDA codebook. */
 export function importQdc(input: string | Uint8Array): QdcImport {
-  const xml = typeof input === 'string' ? input : decodeText(input);
+  const xml = typeof input === 'string' ? input : decodeRefiText(input).text;
   let root;
   try {
     root = parseXml(xml);

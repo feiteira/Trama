@@ -46,7 +46,8 @@ export interface CodeTreeHandle {
   /** Starts renaming a code in place (once it is on screen). */
   rename: (id: string) => void;
   /** Creates a code under `parentId` (null: top level) and starts renaming it. */
-  createAndRename: (parentId: string | null) => Promise<void>;
+  /** Creates a code and starts naming it; resolves its id (null when it failed). */
+  createAndRename: (parentId: string | null) => Promise<string | null>;
 }
 
 export interface CodeTreeProps {
@@ -173,17 +174,21 @@ export const CodeTree = forwardRef<CodeTreeHandle, CodeTreeProps>(function CodeT
       createAndRename: async (parentId) => {
         if (parentId) setExpanded(parentId, true);
         const code = await actionsRef.current.create(parentId);
-        if (code) {
-          setFocusedId(code.id);
-          setRenamingId(code.id);
-        }
+        if (!code) return null;
+        setFocusedId(code.id);
+        setRenamingId(code.id);
+        creatingId.current = code.id;
+        return code.id;
       },
     }),
     [tabId, focusRow, startRename, setExpanded],
   );
 
+  // A code just created and being named for the first time: Escape takes it back.
+  const creatingId = useRef<string | null>(null);
   const commitRename = useCallback(
     (id: string, name: string) => {
+      if (creatingId.current === id) creatingId.current = null;
       setRenamingId(null);
       void actionsRef.current.rename(id, name);
       focusRow(id);
@@ -193,6 +198,13 @@ export const CodeTree = forwardRef<CodeTreeHandle, CodeTreeProps>(function CodeT
   const cancelRename = useCallback(
     (id: string) => {
       setRenamingId(null);
+      if (creatingId.current === id) {
+        creatingId.current = null;
+        void actionsRef.current.discardNew(id).then((gone) => {
+          if (!gone) focusRow(id);
+        });
+        return;
+      }
       focusRow(id);
     },
     [focusRow],

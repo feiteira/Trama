@@ -291,3 +291,69 @@ describe('splitCode and codeUsage', () => {
     await expect(splitCode(ctx, code.id, { newName: 'X', codingIds: [b.coding.id] })).rejects.toMatchObject({ code: 'invalid_argument' });
   });
 });
+
+describe('mergeCodes keeps the coding-merge rule and refuses categories', () => {
+  it('folds a coder\'s overlapping codings into one, so agreement and counts are right', async () => {
+    const { segmentAgreement } = await import('../core/qda/agreement');
+    const ctx = await makeTestProject();
+    const text = 'I trust my neighbours, they are always there when the garden needs water.';
+    const { document: doc } = await createDocument(ctx, { name: 'D', kind: 'text', text });
+    const trust = (await createCode(ctx, { name: 'Trust' })).code;
+    const conf = (await createCode(ctx, { name: 'Confidence' })).code;
+    const a1 = await applyCode(ctx, { documentId: doc.id, start: 0, end: 30, codeId: trust.id });
+    await setComment(ctx, a1.coding.id, 'first');
+    const a2 = await applyCode(ctx, { documentId: doc.id, start: 20, end: 50, codeId: conf.id });
+    await setComment(ctx, a2.coding.id, 'second');
+    await createMemo(ctx, { title: 'about the second', target: { kind: 'coding', id: a2.coding.id } });
+    const ana = ctx.me;
+    const rui = await ctx.store.put('coder', { name: 'Rui', color: '#29a37a' });
+    ctx.actAs(rui);
+    await applyCode(ctx, { documentId: doc.id, start: 0, end: 50, codeId: trust.id });
+    ctx.actAs(ana);
+    const r = await mergeCodes(ctx, [conf.id], trust.id);
+    expect(r.duplicatesRemoved).toBe(1);
+    const mine = await ctx.store.list('coding', { where: 'coder_id = ?', params: [ana.id] });
+    expect(mine.map((c) => [c.code_id, c.start, c.end])).toEqual([[trust.id, 0, a2.coding.end]]);
+    expect(mine[0]!.text).toBe(text.slice(0, a2.coding.end));
+    expect(mine[0]!.comment).toBe('first\nsecond');
+    const memos = await ctx.store.list('memo');
+    expect(memos[0]!.target).toEqual({ kind: 'coding', id: mine[0]!.id });
+    const all = await ctx.store.list('coding');
+    const res = segmentAgreement(all.filter((c) => c.coder_id === ana.id), all.filter((c) => c.coder_id === rui.id), [trust.id]);
+    expect(res.percent).toBe(100);
+  });
+
+  it('refuses a category as the target, and turning a coded code into a category', async () => {
+    const { ctx, doc } = await setup();
+    const cat = (await createCode(ctx, { name: 'Wellbeing', codable: false })).code;
+    const relief = (await createCode(ctx, { name: 'Stress relief' })).code;
+    await setShortcut(ctx, relief.id, 2);
+    await applyCode(ctx, { documentId: doc.id, ...span('trusts her neighbours'), codeId: relief.id });
+    await expect(mergeCodes(ctx, [relief.id], cat.id)).rejects.toMatchObject({ code: 'not_codable' });
+    await expect(updateCode(ctx, relief.id, { codable: false })).rejects.toMatchObject({ code: 'not_codable' });
+    const empty = (await createCode(ctx, { name: 'Empty' })).code;
+    await setShortcut(ctx, empty.id, 3);
+    const { code } = await updateCode(ctx, empty.id, { codable: false });
+    expect(code).toMatchObject({ codable: false, shortcut: null });
+  });
+});
+
+describe('restoring codings after the text changed', () => {
+  it('R1: restored codings follow pseudonymisation done since the delete, never past the end', async () => {
+    const { apply, createPseudonym } = await import('./pseudonyms');
+    const ctx = await makeTestProject();
+    const text = 'Ana: I started in Porto with Maria Silva.\nAna: Trust came later, Maria Silva said.';
+    const { document: doc } = await createDocument(ctx, { name: 'D', kind: 'transcript', text });
+    const trust = (await createCode(ctx, { name: 'Trust' })).code;
+    await applyCode(ctx, { documentId: doc.id, start: text.indexOf('Trust'), end: text.length, codeId: trust.id });
+    const del = await deleteCode(ctx, trust.id, { withChildren: 'delete' });
+    await createPseudonym(ctx, { original: 'Maria Silva', replacement: '[P1]' });
+    await apply(ctx);
+    expect((await restoreCodes(ctx, del.batch)).codings).toBe(1);
+    const now = (await ctx.store.get('doctext', doc.id))!.text;
+    const [c] = await ctx.store.list('coding');
+    expect(c!.text).toBe('Trust came later, [P1] said.');
+    expect(now.slice(c!.start, c!.end)).toBe(c!.text);
+    expect(c!.end).toBeLessThanOrEqual(now.length);
+  });
+});

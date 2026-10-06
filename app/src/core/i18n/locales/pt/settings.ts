@@ -6,9 +6,16 @@ export const settings: Messages['settings'] = {
   sections: {
     label: 'Secções das definições',
     general: 'Geral',
+    project: 'Este projeto',
     security: 'Segurança',
     privacy: 'Privacidade',
     about: 'Sobre',
+  },
+  materialLanguage: {
+    label: 'Língua do material',
+    hint: 'A língua em que os seus documentos estão escritos. As frequências de palavras deixam de fora as palavras comuns dessa língua (palavras vazias). Guardada com o projeto.',
+    unset: 'Não definida',
+    saved: 'Língua do material guardada.',
   },
   language: {
     label: 'Idioma',

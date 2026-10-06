@@ -81,7 +81,17 @@ export interface DocText extends Base {
   text: string;
   /** Transcript timestamps, sorted by pos (empty for other documents). */
   sync: SyncPoint[];
+  /**
+   * The text's revision history: short hashes (`textRev`) of the versions this text went
+   * through, oldest first, the current one last (up to REVS_MAX). A merge uses it to tell a
+   * teammate's later version of the text (it lists this one) from a text changed on both sides.
+   * Missing in projects made before it existed.
+   */
+  revs?: string[];
 }
+
+/** How many text revisions a DocText remembers. */
+export const REVS_MAX = 64;
 
 export interface Code extends Base {
   name: string;

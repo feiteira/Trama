@@ -16,7 +16,7 @@ import { TextArea, TextField } from '../../ui/components/Field';
 import { useToast } from '../../ui/components/Toast';
 import { type IncomingFile, pickFiles } from './files';
 import { say } from './messages';
-import { copyName, detectProjectFile, meIn, openTrama, projectFileError, sameProjectIn, summariseBundle, type BundleSummary } from './projectFile';
+import { importName, detectProjectFile, meIn, openTrama, projectFileError, sameProjectIn, summariseBundle, type BundleSummary } from './projectFile';
 import { groupQdpxWarnings, type QdpxNote } from './qdpxWarnings';
 import './importer.css';
 
@@ -65,7 +65,7 @@ export function ImportProjectDialog({ open, onClose }: { open: boolean; onClose:
   const toSummary = (file: string, type: 'trama' | 'qdpx', bundle: ProjectBundle, ownMe: string | null, issues: QdpxWarning[] = []) => {
     const summary = summariseBundle(bundle);
     const same = sameProjectIn(bundle, library.projects);
-    setName(same ? copyName(summary.name, library.projects.map((p) => p.name)) : summary.name || file.replace(/\.[^.]+$/, ''));
+    setName(importName(summary.name, file, library.projects.map((p) => p.name)));
     setMode('merge');
     setError(null);
     setStep({ name: 'summary', file, type, bundle, summary, same, ownMe, issues });

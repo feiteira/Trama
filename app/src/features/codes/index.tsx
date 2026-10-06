@@ -37,23 +37,44 @@ export default function CodesScreen({ route }: ScreenProps<'codes'>) {
   const undoToast = useUndoToast();
   const fail = useFail();
 
-  const select = (id: string | null) => {
+  // Whether the researcher chose the open code (a click, a link, a new code) rather than the
+  // screen picking the first one: only a chosen code is pre-ticked when merging.
+  const chosen = useRef(!!route.codeId);
+  // The code open before "New code": back to it if the new code is taken back (Escape).
+  const beforeNew = useRef<string | null>(null);
+  // A code just created, chosen before the codebook shown here has caught up with it.
+  const arriving = useRef<string | null>(null);
+  const select = (id: string | null, byUser = true) => {
+    chosen.current = byUser && id !== null;
+    beforeNew.current = null;
     setSelectedId(id);
     replace(id ? { name: 'codes', codeId: id } : { name: 'codes' });
   };
 
   // Arriving with a code (from the Workbench, a link).
   useEffect(() => {
-    if (route.codeId && route.codeId !== selectedId) setSelectedId(route.codeId);
+    if (route.codeId && route.codeId !== selectedId) {
+      chosen.current = true;
+      setSelectedId(route.codeId);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [route.codeId]);
 
   // Nothing chosen: the first code, so the page is never blank.
   useEffect(() => {
     if (!data) return;
-    if (selectedId && data.byId.has(selectedId)) return;
+    if (selectedId && data.byId.has(selectedId)) {
+      if (arriving.current === selectedId) arriving.current = null;
+      return;
+    }
+    if (selectedId && arriving.current === selectedId) return;
+    const back = beforeNew.current;
+    if (back && data.byId.has(back)) {
+      select(back);
+      return;
+    }
     const first = data.items[0]?.id ?? null;
-    if (first !== selectedId) select(first);
+    if (first !== selectedId) select(first, false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data, selectedId]);
 
@@ -62,7 +83,20 @@ export default function CodesScreen({ route }: ScreenProps<'codes'>) {
   const code = selectedId ? data?.byId.get(selectedId) : undefined;
 
   const newCode = async (under: string | null) => {
-    await treeRef.current?.createAndRename(under);
+    const before = selectedId;
+    const id = await treeRef.current?.createAndRename(under);
+    // The new code opens on the right, so its definition is the one being edited.
+    if (id) {
+      select(id);
+      arriving.current = id;
+      beforeNew.current = before;
+    }
+  };
+
+  /** The codes pre-ticked in the merge dialog: the open code, if the researcher chose it and it is not a category. */
+  const mergePreset = (): string[] => {
+    const c = selectedId ? data?.byId.get(selectedId) : undefined;
+    return c && chosen.current && c.codable ? [c.id] : [];
   };
 
   const merge = async (sources: string[], target: string) => {
@@ -80,7 +114,7 @@ export default function CodesScreen({ route }: ScreenProps<'codes'>) {
   useCommands(
     () => [
       { id: 'codes.new', label: t('codes.screen.newCode'), group: t('codes.screen.title'), icon: Plus, run: () => void newCode(null) },
-      { id: 'codes.merge', label: t('codes.merge.title'), group: t('codes.screen.title'), icon: Combine, run: () => setMergeSources(selectedId ? [selectedId] : []) },
+      { id: 'codes.merge', label: t('codes.merge.title'), group: t('codes.screen.title'), icon: Combine, run: () => setMergeSources(mergePreset()) },
       { id: 'codes.import', label: t('codes.screen.import'), group: t('codes.screen.title'), icon: FileUp, run: () => void files.importFile() },
       ...(['qdc', 'docx', 'csv', 'xlsx', 'md'] as const).map((f) => ({
         id: `codes.export.${f}`,
@@ -149,7 +183,7 @@ export default function CodesScreen({ route }: ScreenProps<'codes'>) {
         subtitle={subtitle}
         actions={
           <>
-            <IconButton icon={Combine} label={t('codes.merge.title')} disabled={!data || data.items.length < 2} onClick={() => setMergeSources(selectedId ? [selectedId] : [])} data-testid="codes-merge" />
+            <IconButton icon={Combine} label={t('codes.merge.title')} disabled={!data || data.items.length < 2} onClick={() => setMergeSources(mergePreset())} data-testid="codes-merge" />
             <IconButton icon={FileUp} label={t('codes.screen.importLong')} disabled={files.busy} onClick={() => void files.importFile()} data-testid="codes-import" />
             <MenuButton items={exportItems} label={t('common.export')} icon={Download} size="sm" variant="ghost" align="end" data-testid="codes-export" />
             <Button variant="primary" size="sm" icon={Plus} onClick={() => void newCode(null)} data-testid="codes-new">

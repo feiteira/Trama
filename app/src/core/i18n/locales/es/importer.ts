@@ -274,6 +274,10 @@ export const importer: Messages['importer'] = {
     cuesSkipped: { one: 'Se ha omitido {n} subtítulo sin tiempo legible.', other: 'Se han omitido {n} subtítulos sin tiempo legible.' },
     formulas: { one: '{n} fórmula no tenía resultado guardado y se ha dejado vacía.', other: '{n} fórmulas no tenían resultado guardado y se han dejado vacías.' },
     raggedRows: { one: '{n} fila tiene más o menos celdas que el encabezado.', other: '{n} filas tienen más o menos celdas que el encabezado.' },
+    malformedQuotes: {
+      one: 'Una celda entre comillas de la línea {lines} no se cierra bien, así que las líneas siguientes pueden haberse unido en una sola respuesta. Revise el archivo en una hoja de cálculo antes de importar.',
+      other: 'Hay celdas entre comillas en las líneas {lines} que no se cierran bien, así que las líneas siguientes pueden haberse unido en una sola respuesta. Revise el archivo en una hoja de cálculo antes de importar.',
+    },
     other: 'Nota del importador: {code}',
   },
 
@@ -382,6 +386,8 @@ export const importer: Messages['importer'] = {
       syncPoint: { one: '{n} marca de tiempo de la transcripción sin posición o tiempo', other: '{n} marcas de tiempo de la transcripción sin posición o tiempo' },
       richTextOnly: { one: '{n} texto se ha leído de un archivo de Word; las posiciones codificadas pueden estar desplazadas', other: '{n} textos se han leído de archivos de Word; las posiciones codificadas pueden estar desplazadas' },
       invalidRecord: { one: '{n} elemento con datos no válidos', other: '{n} elementos con datos no válidos' },
+      unknownUser: { one: '{n} codificador no figuraba en la lista de usuarios del proyecto y recibió un nombre a partir de su ID: cámbielo en Trama', other: '{n} codificadores no figuraban en la lista de usuarios del proyecto y recibieron un nombre a partir de su ID: cámbielos en Trama' },
+      badEncoding: { one: '{n} texto no estaba en UTF-8 válido: revise las letras acentuadas y los símbolos (los ilegibles aparecen como �)', other: '{n} textos no estaban en UTF-8 válido: revise las letras acentuadas y los símbolos (los ilegibles aparecen como �)' },
     },
     named: {
       pdfSkipped: 'El PDF «{name}»: no se incluyó ni el archivo ni su texto',

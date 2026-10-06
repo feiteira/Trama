@@ -407,12 +407,12 @@ export function rtfToText(src: string): RtfResult {
   flushBytes();
 
   // Empty paragraphs are spacing (double Enter): left out, as mammoth does for Word files.
-  let text = body.join('').replace(/\n[ \t\u{a0}]*(?=\n)/gu, '').replace(/\s+$/, '');
+  let text = body.join('').replace(/\n[ \t\u{a0}]*(?=\n)/gu, '').trimEnd();
   const noteTexts = notes.map((p) => p.join('').replace(/\s+/g, ' ').trim());
   if (noteTexts.some((t) => t)) {
     text += '\n' + noteTexts.map((t, idx) => `[${idx + 1}] ${t}`).join('\n');
   }
-  return { text: tidy(canonicalize(text).replace(/\u{a0}+$/gmu, '')), warnings: [...warnings] };
+  return { text: tidy(canonicalize(text).replace(/(?<!\u{a0})\u{a0}+$/gmu, '')), warnings: [...warnings] };
 }
 
 /** Reads RTF bytes: each byte becomes one char, so \'hh and raw bytes decode in rtfToText. */

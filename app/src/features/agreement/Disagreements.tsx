@@ -4,7 +4,7 @@ import type { Code, Coder, Coding } from '../../core/model/types';
 import { removeCoding } from '../../services/codings';
 import { useProject } from '../../shell/AppState';
 import { useRouter } from '../../shell/router';
-import { useUndo } from '../../shell/undo';
+import { useUndoToast } from '../common/CodeTreeActions';
 import { withAlpha } from '../../ui/color';
 import { Button } from '../../ui/components/Button';
 import { Checkbox } from '../../ui/components/Choice';
@@ -17,6 +17,7 @@ import {
   type DisagreementItem,
   EMPTY_REVIEW,
   fmtInt,
+  fmtOverlap,
   fmtPercent,
   isResolved,
   passageWindow,
@@ -200,7 +201,7 @@ export function Disagreements(p: DisagreementsProps) {
                     {done ? <Check size={12} aria-hidden /> : null}
                     {done ? t('agreement.dis.resolved') : kindText(i)}
                     {i.kind === 'boundary' ? (
-                      <span className="t-tabular"> · {t('agreement.dis.overlap', { p: fmtPercent(i.overlap * 100, meta.bcp47, 0) })}</span>
+                      <span className="t-tabular"> · {t('agreement.dis.overlap', { p: fmtOverlap(i.overlap, p.threshold, meta.bcp47) })}</span>
                     ) : null}
                   </div>
                 </div>
@@ -252,12 +253,13 @@ function Passage({
   docNames,
   resolved,
   kindText,
+  threshold,
   onResolved,
 }: DisagreementsProps & { item: DisagreementItem; resolved: boolean; kindText: string; onResolved: (c: Resolution) => void }) {
   const { t, meta } = useI18n();
   const project = useProject();
   const { go } = useRouter();
-  const { record } = useUndo();
+  const undoToast = useUndoToast();
   const toast = useToast();
   const [text, setText] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -329,9 +331,9 @@ function Passage({
     try {
       if (removes.length) {
         const { undo } = await removeCoding(project, removes);
-        record(undo);
         const loser = choice === 'acceptA' ? coderB : coderA;
-        toast.show({ message: t('agreement.dis.removedToast', { name: loser.name, code: code?.name ?? '?' }), tone: 'success' });
+        // A teammate's coding is gone: say so, with Undo on the toast.
+        undoToast(t('agreement.dis.removedToast', { name: loser.name, code: code?.name ?? '?' }), undo);
       } else {
         toast.show(t('agreement.dis.keptToast'));
       }
@@ -371,7 +373,7 @@ function Passage({
           <span className="agr-passage__code">{code?.name ?? '?'}</span>
           <span className="agr-passage__kind">
             {kindText}
-            {item.kind === 'boundary' ? ` · ${t('agreement.dis.overlap', { p: fmtPercent(item.overlap * 100, meta.bcp47, 0) })}` : ''}
+            {item.kind === 'boundary' ? ` · ${t('agreement.dis.overlap', { p: fmtOverlap(item.overlap, threshold, meta.bcp47) })}` : ''}
           </span>
         </div>
         <div className="agr-passage__doc">{docNames.get(item.documentId) ?? '?'}</div>

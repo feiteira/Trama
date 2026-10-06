@@ -361,3 +361,41 @@ describe('qdpx round trip', async () => {
     expect(twice.warnings).toEqual(back.warnings);
   });
 });
+
+describe('export warnings and Word originals', () => {
+  const DOCX = utf8('PK\u0003\u0004 fictional docx');
+  const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+  const withDocx = (edited: boolean) => {
+    const { bundle, ids } = buildBundle();
+    const d1 = bundle.records.find((r) => r.kind === 'document' && r.record.id === ids.d1)!.record as Entity<'document'>;
+    d1.original = { blob_id: 'docx1', filename: 'Entrevista 1.docx', mime: DOCX_MIME, size: DOCX.length };
+    if (edited) d1.source = { ...d1.source!, text_sha256: toHex(sha256(utf8('the text before pseudonymisation'))) };
+    bundle.blobs.set('docx1', DOCX);
+    return bundle;
+  };
+
+  it('reports what was left out as coded issues the screen can translate', () => {
+    const out = exportQdpx(buildBundle().bundle, { origin: 'Trama 0.1.0', now: NOW });
+    expect(out.issues.map((i) => i.code).sort()).toEqual(['choiceAsText', 'editedPdf']);
+    expect(out.issues.every((i) => i.count > 0 && out.warnings.includes(i.message))).toBe(true);
+  });
+
+  it('writes a Word original as richTextPath and brings it back on import', async () => {
+    const out = exportQdpx(withDocx(false), { origin: 'Trama 0.1.0', now: NOW });
+    const files = unzipSync(out.bytes);
+    const docx = Object.keys(files).filter((n) => n.endsWith('.docx'));
+    expect(docx).toHaveLength(1);
+    expect(strFromU8(files['project.qde']!)).toContain(`richTextPath="internal://${docx[0]!.slice('sources/'.length)}"`);
+    const back = await importQdpx(out.bytes, { defaultCoderName: 'Eu', now: NOW });
+    const d1 = byKind(back, 'document').find((d) => d.name === 'Entrevista 1')!;
+    expect(d1.original?.mime).toBe(DOCX_MIME);
+    expect(back.blobs.get(d1.original!.blob_id)).toEqual(DOCX);
+  });
+
+  it('never ships the Word original of an edited (for example pseudonymised) document', () => {
+    const out = exportQdpx(withDocx(true), { origin: 'Trama 0.1.0', now: NOW });
+    expect(Object.keys(unzipSync(out.bytes)).some((n) => n.endsWith('.docx'))).toBe(false);
+    expect(strFromU8(unzipSync(out.bytes)['project.qde']!)).not.toContain('richTextPath');
+    expect(out.issues.find((i) => i.code === 'editedDocx')?.count).toBe(1);
+  });
+});

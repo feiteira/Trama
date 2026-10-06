@@ -3,6 +3,7 @@ import type { Coding } from '../../core/model/types';
 import { segmentAgreement } from '../../core/qda/agreement';
 import {
   alphaBand,
+  fmtOverlap,
   alphaTone,
   codeRows,
   codeUse,
@@ -356,5 +357,16 @@ describe('performance', () => {
     expect(rows).toHaveLength(300);
     expect(items.length).toBeGreaterThan(0);
     expect(ms).toBeLessThan(3000);
+  });
+});
+
+describe('fmtOverlap', () => {
+  it('never reads as reaching the threshold it failed', () => {
+    expect(fmtOverlap(0.8469, 0.85, 'en-GB')).toBe('84.6%');
+    expect(fmtOverlap(0.5972, 0.6, 'en-GB')).toBe('59.7%');
+    expect(fmtOverlap(0.5952, 0.6, 'pt-PT')).toMatch(/^59,5\s?%$/);
+    expect(fmtOverlap(0.84999, 0.85, 'en-GB')).toBe('84.9%');
+    expect(fmtOverlap(0.84, 0.84, 'en-GB')).toBe('84%');
+    expect(fmtOverlap(0.4, 0.85, 'en-GB')).toBe('40%');
   });
 });

@@ -4,6 +4,7 @@ import { SETTING_KEYS } from '../../../core/model/types';
 import { buildTree, type CodeTree } from '../../../core/qda/tree';
 import { useLive } from '../../../shell/useLive';
 import { type CodeLine, codeLines, segmentCounts } from '../lib/codeLines';
+import { ALL_CODERS, type CoderCount, coderCounts, effectiveScope, scopeCodings } from '../lib/coders';
 import type { Theme } from '../lib/heat';
 
 // What every analysis tool reads: the project's records, loaded once for the screen and
@@ -19,8 +20,19 @@ export interface AnalysisData {
   tree: CodeTree<Code>;
   /** The codebook in display order. */
   lines: CodeLine[];
-  /** Live codings whose document and code are live. */
+  /**
+   * Live codings whose document and code are live, of the coder in scope; for all coders,
+   * a segment coded alike by several coders is here once (lib/coders.ts).
+   */
   codings: Coding[];
+  /** The same codings before identical segments were merged (co-occurrence within coders). */
+  rawCodings: Coding[];
+  /** Whose codings: a coder id, or ALL_CODERS. */
+  coderScope: string;
+  /** Coders who have codings, most first. */
+  coders: CoderCount[];
+  /** Several coders' codings are counted together. */
+  pooled: boolean;
   codingById: Map<string, Coding>;
   /** Own segments per code. */
   segments: Map<string, number>;
@@ -41,10 +53,11 @@ export function useAnalysisData(): AnalysisData {
   return v;
 }
 
-export function useLoadAnalysisData(): { data: AnalysisData | undefined; error: unknown } {
+/** `coderChoice`: the coder chosen on screen ('' lets the screen pick, see effectiveScope). */
+export function useLoadAnalysisData(coderChoice: string, meId: string): { data: AnalysisData | undefined; error: unknown } {
   const { data, error } = useLive(
     async (store) => {
-      const [documents, codes, codings, groups, cases, attributes, lang, extra] = await Promise.all([
+      const [documents, codes, codings, groups, cases, attributes, lang, extra, coders] = await Promise.all([
         store.list('document', { order: 'sort, id' }),
         store.list('code'),
         store.list('coding'),
@@ -53,18 +66,22 @@ export function useLoadAnalysisData(): { data: AnalysisData | undefined; error: 
         store.list('attribute', { order: 'sort, id' }),
         store.get('setting', SETTING_KEYS.textLanguage),
         store.get('setting', SETTING_KEYS.extraStopwords),
+        store.list('coder'),
       ]);
-      return { documents, codes, codings, groups, cases, attributes, lang, extra };
+      return { documents, codes, codings, groups, cases, attributes, lang, extra, coders };
     },
     [],
-    ['document', 'code', 'coding', 'docgroup', 'case', 'attribute', 'setting'],
+    ['document', 'code', 'coding', 'docgroup', 'case', 'attribute', 'setting', 'coder'],
   );
   const value = useMemo<AnalysisData | undefined>(() => {
     if (!data) return undefined;
     const tree = buildTree(data.codes);
     const docById = new Map(data.documents.map((d) => [d.id, d]));
     const codeById = new Map(data.codes.map((c) => [c.id, c]));
-    const codings = data.codings.filter((c) => docById.has(c.document_id) && codeById.has(c.code_id));
+    const live = data.codings.filter((c) => docById.has(c.document_id) && codeById.has(c.code_id));
+    const coders = coderCounts(live, new Map(data.coders.map((c) => [c.id, c.name])));
+    const coderScope = effectiveScope(coderChoice, coders, meId);
+    const { counted: codings, raw: rawCodings } = scopeCodings(live, coderScope, meId);
     const lang = data.lang && !data.lang.deleted && typeof data.lang.value === 'string' ? data.lang.value : null;
     const extraRaw = data.extra && !data.extra.deleted ? data.extra.value : null;
     const extra = Array.isArray(extraRaw) ? extraRaw.filter((w): w is string => typeof w === 'string') : typeof extraRaw === 'string' ? extraRaw.split(/[\s,;]+/).filter(Boolean) : [];
@@ -77,7 +94,11 @@ export function useLoadAnalysisData(): { data: AnalysisData | undefined; error: 
       tree,
       lines: codeLines(tree.flatten()),
       codings,
-      codingById: new Map(codings.map((c) => [c.id, c])),
+      rawCodings,
+      coderScope,
+      coders,
+      pooled: coderScope === ALL_CODERS && coders.length > 1,
+      codingById: new Map(rawCodings.map((c) => [c.id, c])),
       segments: segmentCounts(codings),
       groups: data.groups,
       cases: data.cases,
@@ -86,7 +107,7 @@ export function useLoadAnalysisData(): { data: AnalysisData | undefined; error: 
       extraStopwords: extra,
       descendants: (id: string) => tree.descendants(id),
     };
-  }, [data]);
+  }, [data, coderChoice, meId]);
   return { data: value, error };
 }
 

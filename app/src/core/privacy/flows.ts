@@ -59,19 +59,19 @@ export const FLOWS: readonly Flow[] = [
       en: {
         title: 'Project file (.trama)',
         when: 'Only when you choose Export → Trama project file.',
-        what: 'The whole project — documents, original files and recordings, codes, coded segments, memos, cases and the audit trail — without the content of anything deleted. The pseudonymisation key only if you switch it on.',
+        what: 'The whole project — documents, original files and recordings, codes, coded segments, memos, cases and the audit trail — without the content of anything deleted. Original files of documents edited since import (pseudonymised ones, for example) are left out. The pseudonymisation key only if you switch it on.',
         who: 'Anyone who has the file — unless you protect it with a password; then only someone who knows the password.',
       },
       pt: {
         title: 'Ficheiro de projeto (.trama)',
         when: 'Só quando escolhe Exportar → Ficheiro de projeto Trama.',
-        what: 'Todo o projeto — documentos, ficheiros originais e gravações, códigos, segmentos codificados, memorandos, casos e o registo de auditoria — sem o conteúdo do que foi eliminado. A chave de pseudonimização só se a incluir.',
+        what: 'Todo o projeto — documentos, ficheiros originais e gravações, códigos, segmentos codificados, memorandos, casos e o registo de auditoria — sem o conteúdo do que foi eliminado. Os ficheiros originais de documentos editados depois da importação (por exemplo, pseudonimizados) ficam de fora. A chave de pseudonimização só se a incluir.',
         who: 'Quem tiver o ficheiro — a menos que o proteja com uma palavra-passe; nesse caso, só quem a souber.',
       },
       es: {
         title: 'Archivo de proyecto (.trama)',
         when: 'Solo cuando elige Exportar → Archivo de proyecto Trama.',
-        what: 'Todo el proyecto — documentos, archivos originales y grabaciones, códigos, segmentos codificados, memorandos, casos y el registro de auditoría — sin el contenido de lo eliminado. La clave de seudonimización solo si la incluye.',
+        what: 'Todo el proyecto — documentos, archivos originales y grabaciones, códigos, segmentos codificados, memorandos, casos y el registro de auditoría — sin el contenido de lo eliminado. Los archivos originales de documentos editados después de la importación (por ejemplo, seudonimizados) se quedan fuera. La clave de seudonimización solo si la incluye.',
         who: 'Quien tenga el archivo — salvo que lo proteja con una contraseña; en ese caso, solo quien la conozca.',
       },
     },

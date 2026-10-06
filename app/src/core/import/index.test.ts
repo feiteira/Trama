@@ -185,3 +185,23 @@ describe('warnings', () => {
     expect(parseWarning('pdf.noText')).toEqual({ code: 'pdf.noText', arg: null });
   });
 });
+
+describe('long whitespace runs do not hang an importer', () => {
+  const sp = ' '.repeat(60_000);
+  const cases: [string, string][] = [
+    ['run.txt', `a${sp}b\n${'\n'.repeat(60_000)}c`],
+    ['run.md', `# Title${sp}x\n\n|-${sp}x\n\nline${sp}x\n\n# C#${'#'.repeat(60_000)}x`],
+    ['run.html', `<p>a${'&nbsp;'.repeat(60_000)}b</p><pre>a${sp}b</pre>`],
+    ['run.rtf', `{\\rtf1\\ansi a${sp}b\\par c${'\\~'.repeat(20_000)}d}`],
+  ];
+  for (const [name, text] of cases) {
+    it(`imports ${name} quickly`, async () => {
+      expect(await bestTime(() => importFile(name, utf8(text)))).toBeLessThan(1000);
+    });
+  }
+
+  it('keeps ATX headings as before: closing hashes go, "C#" stays', async () => {
+    const doc = await one('h.md', utf8('# Title ##\n\n## C#\n\n### Spaced   ###   \n\nText'));
+    expect(doc.text).toBe('Title\nC#\nSpaced\nText');
+  });
+});

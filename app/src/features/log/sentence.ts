@@ -197,10 +197,74 @@ export function tidyDetail(s: string, none: string, quotes: Quotes = CURLY): str
   return s.replace(/"([^"]*)"/g, `${quotes[0]}$1${quotes[1]}`).replace(/∅/g, none).trim();
 }
 
+// ---------------------------------------------------------------------------------------------
+// Details in the reader's language
+//
+// Summaries keep some plain identifiers after the names: the code fields that changed
+// (`"Trust": codable, color`), an attribute's type (`+ "Gender": choice`), what was exported
+// (`codebook .csv`, `.qdpx (MAXQDA line endings)`, `segments ×12 → file.docx`), how many records
+// an import brought. Entries are never rewritten, so these are translated when shown.
+
+export type DetailPhrase = 'crlf' | 'password' | 'pseudonyms' | 'codebook' | 'report' | 'agreement' | 'analysis';
+export type DetailCount = 'segments' | 'memos' | 'records' | 'leftOut';
+
+export interface DetailWords {
+  /** A code field id (`codable`, `color`…), or null when unknown. */
+  field(id: string): string | null;
+  /** An attribute type id (`choice`…), or null when unknown. */
+  attrType(id: string): string | null;
+  phrase(id: DetailPhrase): string;
+  count(id: DetailCount, n: number): string;
+}
+
+const CODE_FIELDS = new Set(['name', 'color', 'parent_id', 'shortcut', 'codable', 'description', 'inclusion', 'exclusion', 'example', 'order']);
+
+/** The part of a summary after its names, in the reader's words where it is a known shape. */
+export function localizeRest(action: LogAction, rest: string, w: DetailWords): string {
+  if (!rest) return rest;
+  const colon = /^:\s*/.exec(rest);
+  const body = colon ? rest.slice(colon[0].length) : rest;
+  const pre = colon ? ': ' : '';
+  if (action === 'code.edit') {
+    const ids = body.split(/,\s*/);
+    if (ids.every((id) => CODE_FIELDS.has(id))) {
+      const words = ids.map((id) => w.field(id));
+      if (words.every((x): x is string => !!x)) return pre + words.join(', ');
+    }
+    return rest;
+  }
+  if (action === 'attribute.edit') {
+    const m = /^(\w+)(?: → (\w+))?$/.exec(body);
+    if (!m) return rest;
+    const a = w.attrType(m[1]!);
+    const b = m[2] ? w.attrType(m[2]) : null;
+    if (!a || (m[2] && !b)) return rest;
+    return pre + (b ? `${a} → ${b}` : a);
+  }
+  if (action === 'project.import') {
+    return rest.replace(/(\d+) records/, (_, n: string) => w.count('records', Number(n))).replace(/, (\d+) left out/, (_, n: string) => `, ${w.count('leftOut', Number(n))}`);
+  }
+  if (action === 'export') {
+    let m = /^(segments|memos) ×(\d+) → (.*)$/s.exec(rest);
+    if (m) return `${w.count(m[1] as 'segments' | 'memos', Number(m[2]))} → ${m[3]}`;
+    m = /^(codebook|project report|agreement) (\.\w+)(.*)$/s.exec(rest);
+    if (m) return `${w.phrase(m[1] === 'project report' ? 'report' : (m[1] as 'codebook' | 'agreement'))} ${m[2]}${m[3]}`;
+    m = /^analysis: (.*)$/s.exec(rest);
+    if (m) return `${w.phrase('analysis')}: ${m[1]}`;
+    if (rest === '(pseudonyms)') return `(${w.phrase('pseudonyms')})`;
+    return rest
+      .replace(' (MAXQDA line endings)', ` (${w.phrase('crlf')})`)
+      .replace(' (password)', ` (${w.phrase('password')})`)
+      .replace(' + pseudonyms', ` + ${w.phrase('pseudonyms')}`);
+  }
+  return rest;
+}
+
 /** The sentence for one entry: the best template its summary fits, and what is left over. */
-export function buildSentence(entry: Pick<LogEntry, 'action' | 'summary'>, none = '∅', quotes: Quotes = CURLY): Sentence {
+export function buildSentence(entry: Pick<LogEntry, 'action' | 'summary'>, none = '∅', quotes: Quotes = CURLY, words?: DetailWords): Sentence {
   const action = entry.action;
   const p = parseSummary(entry.summary);
+  if (words) p.rest = localizeRest(action, p.rest, words);
   // The project's name is logged bare when it is created.
   if (action === 'project.create' && !p.a.length && p.rest && !p.rest.includes('"')) {
     p.a = [p.rest];

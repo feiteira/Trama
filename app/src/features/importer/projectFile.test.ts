@@ -8,7 +8,7 @@ import { createMemoryPlatform } from '../../platform/memory';
 import { projectToBundle } from '../../services/datafile';
 import { Library, LibraryError } from '../../services/library';
 import { FAST_KDF } from '../../services/testing';
-import { copyName, detectProjectFile, meIn, openTrama, projectFileError, sameProjectIn, summariseBundle } from './projectFile';
+import { copyName, detectProjectFile, importName, meIn, openTrama, projectFileError, sameProjectIn, summariseBundle } from './projectFile';
 
 async function setup() {
   const platform = createMemoryPlatform();
@@ -70,6 +70,10 @@ describe('project files', () => {
     expect(meIn(coders, 'Rui')).toBeNull();
     expect(meIn(coders, '')).toBeNull();
     expect(copyName('Garden study', ['Garden study'])).toBe('Garden study (2)');
+    // An import never takes the name of a project already in the library, copy or not.
+    expect(importName('Allotment gardens study', 'x.qdpx', ['Allotment gardens study'])).toBe('Allotment gardens study (2)');
+    expect(importName('', 'Field notes.qdpx', [])).toBe('Field notes');
+    expect(importName('New one', 'x.trama', ['Other'])).toBe('New one');
   });
 
   it('explains what went wrong', () => {

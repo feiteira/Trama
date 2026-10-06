@@ -4,7 +4,7 @@ import { formatHlc, parseHlc } from '../hlc';
 import type { Coding, Draft, Kind } from '../model/types';
 import { ValidationError } from '../model/validate';
 import { SCHEMA_VERSION } from './schema';
-import { Store } from './store';
+import { ErasedRecordError, Store } from './store';
 
 /** A clock the test moves by hand. */
 function clock(start = '2026-10-05T12:00:00Z') {
@@ -314,5 +314,55 @@ describe('clock and metadata', () => {
     const p = parseHlc(r.updated_at_hlc);
     expect(formatHlc(p)).toBe(r.updated_at_hlc);
     expect(p.ms).toBe(new Date('2026-10-05T12:00:00Z').getTime());
+  });
+});
+
+describe('batched lookups and erased records', () => {
+  /** Counts the queries a store issues. */
+  async function counted() {
+    const db = await SqlJsDb.create();
+    let queries = 0;
+    const query = db.query.bind(db);
+    db.query = ((sql: string, params?: never[]) => {
+      queries++;
+      return query(sql, params);
+    }) as typeof db.query;
+    const store = await Store.open(db, { now: clock().now });
+    return { store, count: () => queries, reset: () => void (queries = 0) };
+  }
+
+  it('looks records up per kind in chunks, never once per record', async () => {
+    const { store, count, reset } = await counted();
+    const a = await store.put('coder', coder());
+    const d = await store.put('document', doc('D'));
+    const c = await store.put('code', code('C'));
+    const drafts = Array.from({ length: 1200 }, (_, i) => ({ kind: 'coding' as Kind, draft: { ...coding(d.id, c.id, a.id, i, i + 1), id: `c${i}` } }));
+    reset();
+    await store.putMany(drafts);
+    expect(count()).toBeLessThanOrEqual(3);
+    reset();
+    await store.putMany(drafts);
+    expect(count()).toBeLessThanOrEqual(3);
+    reset();
+    expect(await store.remove('coding', drafts.map((x) => x.draft.id!))).toBe(1200);
+    expect(count()).toBeLessThanOrEqual(3);
+    reset();
+    expect(await store.restore('coding', drafts.map((x) => x.draft.id!))).toHaveLength(1200);
+    expect(count()).toBeLessThanOrEqual(3);
+    const all = await store.list('coding');
+    reset();
+    const newer = all.map((r) => ({ kind: 'coding' as Kind, record: { ...r, updated_at_hlc: store.hlc.tick() } }));
+    expect(await store.merge(newer)).toBe(1200);
+    expect(count()).toBeLessThanOrEqual(3);
+  });
+
+  it('refuses to write over an erased (scrubbed) record', async () => {
+    const { store } = await open();
+    const p = await store.put('pseudonym', { original: 'Maria Silva', replacement: 'P1', note: '', whole_word: true, case_sensitive: true, applied_at: null, applied_count: 0 });
+    await store.remove('pseudonym', [p.id]);
+    await store.scrub('pseudonym', [p.id], () => ({ original: '∅', replacement: '∅', note: '', whole_word: true, case_sensitive: true, applied_at: null, applied_count: 0 }));
+    const { id: _i, created_at: _c, updated_at_hlc: _h, deleted: _d, ...draft } = p;
+    await expect(store.put('pseudonym', { ...draft, id: p.id })).rejects.toBeInstanceOf(ErasedRecordError);
+    expect((await store.get('pseudonym', p.id))!.original).toBe('∅');
   });
 });

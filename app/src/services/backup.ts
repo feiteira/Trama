@@ -66,7 +66,6 @@ export async function setBackupFolder(project: Project, folder: string | null): 
 // ── Backup file names ────────────────────────────────────────────────────────────────
 
 const NAME = /^Trama backup ([0-9a-f]{6}) (\d{4}-\d{2}-\d{2} \d{6})\.trama$/;
-const TEMP = /^Trama backup .*\.trama\.tmp$/;
 
 /** `Trama backup <tag> 2026-10-05 093015.trama`, in the computer's local time. */
 export function backupFileName(tag: string, now: Date): string {
@@ -211,8 +210,6 @@ export interface BackupOptions {
 
 export type BackupResult = { written: true; path: string; name: string } | { written: false; reason: 'unchanged' };
 
-const TEMP_MAX_AGE_MS = 60 * 60 * 1000;
-
 const keyringPrint = (keyring: unknown) => toHex(sha256(utf8(JSON.stringify(keyring)))).slice(0, 16);
 
 /**
@@ -287,7 +284,16 @@ export async function runBackup(project: Project, opts: BackupOptions = {}): Pro
         .read(path)
         .then((b) => decryptTrama(b, { kind: 'library-key', libraryKey: keys.libraryKey }, platform.kdf))
         .catch(() => null);
-      if (!back || toHex(sha256(back.zip)) !== zipHash) {
+      // The hash proves the bytes; parsing proves the file is a project Trama can restore.
+      const readable = back && toHex(sha256(back.zip)) === zipHash && (() => {
+        try {
+          readTramaZip(back.zip);
+          return true;
+        } catch {
+          return false;
+        }
+      })();
+      if (!readable) {
         await files.remove(path).catch(() => undefined);
         throw new BackupError('ERROR', 'the backup did not read back');
       }
@@ -320,12 +326,9 @@ async function prune(files: Platform['files'], listed: FileEntry[], written: str
     const entry = byName.get(name);
     if (entry) await files.remove(entry.path).catch((e) => console.warn('could not remove an old backup', e));
   }
-  // Half-written files left by a crash or an unplugged drive.
-  for (const e of listed) {
-    if (!e.is_dir && TEMP.test(e.name) && opts.now.getTime() - e.modified_ms > TEMP_MAX_AGE_MS) {
-      await files.remove(e.path).catch(() => undefined);
-    }
-  }
+  // Half-written files a crash or an unplugged drive left behind are hidden temporary files of
+  // the shell's atomic write (`.<name>.<pid>-<n>.tmp`, which listings skip): the shell removes
+  // them itself once they are an hour old, on its next write to the folder (files.rs).
 }
 
 // ── Listing and restoring ────────────────────────────────────────────────────────────

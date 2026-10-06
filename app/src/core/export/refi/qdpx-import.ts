@@ -5,28 +5,27 @@
 // about producing valid Trama records. Every step that loses something adds a warning.
 import type { Element } from '@xmldom/xmldom';
 import { sha256 } from '@noble/hashes/sha2.js';
-import { decodeText, toHex, utf8 } from '../../bytes';
+import { toHex, utf8 } from '../../bytes';
 import { uuid } from '../../ids';
 import type { AttributeType, AttributeValue, DocKind, MediaRef, MemoTarget } from '../../model/types';
 import { LIMITS, PALETTE } from '../../model/types';
 import { validate } from '../../model/validate';
 import { fold } from '../../text/normalize';
 import type { ProjectBundle } from '../bundle';
-import { cleanName, excerpt, extOf, mimeOf, normColor, normGuid, parseDateTime, RefiError, splitCodeDescription } from './common';
+import { cleanName, decodeRefiText, excerpt, extOf, mimeOf, normColor, normGuid, parseDateTime, RefiError, splitCodeDescription } from './common';
 import {
   canonicalize,
   candidateModes,
   chooseMode,
   modeKey,
   scoreModes,
-  stripBom,
   type CanonicalText,
   type PositionMode,
   type SelectionProbe,
 } from './positions';
 import { RecordFactory } from './records';
 import { attr, child, children, localName, parseXml, textOf, XmlParseError } from './xml';
-import { basename, dirname, ZipIndex } from './zip';
+import { basename, dirname, MAX_QDE_BYTES, ZipIndex } from './zip';
 
 export interface QdpxImportOptions {
   /** Coder for codings whose author the file does not name (usually the researcher's own name). */
@@ -58,7 +57,8 @@ export async function importQdpx(zip: Uint8Array, opts: QdpxImportOptions): Prom
   const index = new ZipIndex(zip);
   const qde = findQde(index);
   if (!qde) throw new RefiError('No project.qde inside this file: it is not a REFI-QDA project.');
-  const xml = decodeText(index.read([qde]).get(qde)!);
+  const decoded = decodeRefiText(index.read([qde], MAX_QDE_BYTES).get(qde)!);
+  const xml = decoded.text;
   let root: Element;
   try {
     root = parseXml(xml);
@@ -68,6 +68,7 @@ export async function importQdpx(zip: Uint8Array, opts: QdpxImportOptions): Prom
   if (localName(root) !== 'Project') throw new RefiError('The project.qde inside this file is not a REFI-QDA project.');
   const reader = new ProjectReader(root, index, dirname(qde), opts);
   for (const name of index.refused) reader.note('unsafePath', name, `A file with an unsafe path was ignored: ${name}`);
+  if (decoded.damaged) reader.badEncoding();
   return reader.read();
 }
 
@@ -206,6 +207,8 @@ const COUNTED = {
   syncPoint: (n: number) => `${n} transcript time stamp(s) without a position or time were skipped.`,
   richTextOnly: (n: number) => `${n} text(s) were read from Word files because no plain text was included; coded positions in them may be off.`,
   invalidRecord: (n: number) => `${n} item(s) could not be imported because their data was invalid.`,
+  unknownUser: (n: number) => `${n} coder(s) were not listed among the project's users and were given a name from their ID; rename them in Trama.`,
+  badEncoding: (n: number) => `${n} text file(s) were not valid UTF-8; check their accented letters and symbols.`,
 } as const;
 
 /** Warnings about one named item. */
@@ -214,6 +217,11 @@ const NAMED_CODES = ['pdfSkipped', 'pdfNoText', 'videoSkipped', 'audioSkipped', 
 /** Every warning an import can give: the named ones, then the counted ones. */
 export const QDPX_WARNING_CODES = [...NAMED_CODES, ...(Object.keys(COUNTED) as (keyof typeof COUNTED)[])] as const;
 export type QdpxWarningCode = (typeof NAMED_CODES)[number] | keyof typeof COUNTED;
+
+/** push(...items) passes every item as an argument: past ~120 000 of them the call stack overflows. */
+function pushAll<T>(target: T[], items: readonly T[]): void {
+  for (const item of items) target.push(item);
+}
 
 class ProjectReader {
   private readonly now: () => Date;
@@ -264,6 +272,11 @@ class ProjectReader {
 
   note(code: (typeof NAMED_CODES)[number], detail: string, message: string): void {
     this.notes.push({ code, count: 1, detail, message });
+  }
+
+  /** A text (or project.qde) was not valid UTF-8 and was read with replacements. */
+  badEncoding(): void {
+    this.count('badEncoding');
   }
 
   private count(key: keyof typeof COUNTED, n = 1): void {
@@ -358,7 +371,12 @@ class ProjectReader {
     if (plain) {
       if (!this.isInternal(plain)) return { raw: '', found: false, external: true };
       const bytes = this.fileBytes(plain);
-      if (bytes) return { raw: stripBom(decodeText(bytes)), found: true, external: false };
+      if (bytes) {
+        // One BOM comes off here and nowhere else (positions.ts keeps any further U+FEFF in the count).
+        const decoded = decodeRefiText(bytes);
+        if (decoded.damaged) this.badEncoding();
+        return { raw: decoded.text, found: true, external: false };
+      }
     }
     const content = child(el, 'PlainTextContent');
     if (content) return { raw: textOf(content), found: true, external: false };
@@ -419,11 +437,29 @@ class ProjectReader {
     }
   }
 
-  /** The coder for the first of these user GUIDs that names a User, else the project's creator, else the default coder. */
+  /**
+   * The coder for the first of these user GUIDs that names a User, else the project's creator.
+   * A GUID missing from <Users> (which is optional) still stands for one person: it gets a coder
+   * of its own, so two people's codings are neither merged into one coder nor dropped as
+   * duplicates. Only when no GUID is given at all does the coding go to the default coder.
+   */
   private coderFor(...guids: (string | null)[]): string {
-    for (const g of [...guids, attr(this.root, 'creatingUserGUID')]) {
-      const plan = this.coders.get(normGuid(g) ?? '');
+    const all = [...guids, attr(this.root, 'creatingUserGUID')].map((g) => normGuid(g)).filter((g): g is string => !!g);
+    for (const g of all) {
+      const plan = this.coders.get(g);
       if (plan) return plan.id;
+    }
+    const unknown = all[0];
+    if (unknown) {
+      const taken = new Set(this.coderList.map((c) => c.name.toLowerCase()));
+      const base = `User ${unknown.slice(0, 8)}`;
+      let name = base;
+      for (let i = 2; taken.has(name.toLowerCase()); i++) name = `${base} (${i})`;
+      const plan = { id: uuid(), name: cleanName(name, LIMITS.nameMax, 'User') };
+      this.coders.set(unknown, plan);
+      this.coderList.push(plan);
+      this.count('unknownUser');
+      return plan.id;
     }
     if (!this.defaultCoder) {
       this.defaultCoder = { id: uuid(), name: cleanName(this.opts.defaultCoderName, LIMITS.nameMax, 'Coder') };
@@ -658,10 +694,10 @@ class ProjectReader {
     // Documents have no description field in Trama: a source's Description becomes its memo.
     const description = textOf(child(el, 'Description')).trim();
     if (description) this.memoPlans.push({ note: null, target: { kind: 'document', id: doc.id }, title: 'Description', body: description });
-    doc.textSelections.push(...children(el, 'PlainTextSelection'));
-    doc.wholeCodings.push(...children(el, 'Coding'));
-    doc.noteRefs.push(...children(el, 'NoteRef'));
-    doc.variableValues.push(...children(el, 'VariableValue'));
+    pushAll(doc.textSelections, children(el, 'PlainTextSelection'));
+    pushAll(doc.wholeCodings, children(el, 'Coding'));
+    pushAll(doc.noteRefs, children(el, 'NoteRef'));
+    pushAll(doc.variableValues, children(el, 'VariableValue'));
   }
 
   private async readPdf(s: Element, name: string): Promise<void> {
@@ -720,9 +756,12 @@ class ProjectReader {
       }
       if (!doc.media) doc.media = makeMedia();
       this.mapGuid(doc, t);
-      doc.syncPoints.push(...children(t, 'SyncPoint'));
-      doc.transcriptSelections.push(...children(t, 'TranscriptSelection'));
-      doc.noteRefs.push(...children(t, 'NoteRef'));
+      // A transcript's Description (who transcribed it, conventions) becomes a memo on it.
+      const description = textOf(child(t, 'Description')).trim();
+      if (description) this.memoPlans.push({ note: null, target: { kind: 'document', id: doc.id }, title: 'Description', body: description });
+      pushAll(doc.syncPoints, children(t, 'SyncPoint'));
+      pushAll(doc.transcriptSelections, children(t, 'TranscriptSelection'));
+      pushAll(doc.noteRefs, children(t, 'NoteRef'));
       if (key) transcriptByFile.set(key, doc);
       first ??= doc;
     }
@@ -1112,6 +1151,9 @@ class ProjectReader {
       if (!sources.length && notes.length) continue;
       const group = { id: uuid(), name: cleanName(attr(s, 'name'), LIMITS.nameMax, `Group ${this.groups.length + 1}`) };
       this.groups.push(group);
+      // Document groups have no description in Trama: keep it as a project memo named after the group.
+      const description = textOf(child(s, 'Description')).trim();
+      if (description) this.memoPlans.push({ note: null, target: { kind: 'project', id: null }, title: group.name, body: description });
       for (const m of sources) {
         const doc = this.docByGuid.get(normGuid(attr(m, 'targetGUID')) ?? '');
         if (doc && !doc.groupIds.includes(group.id)) doc.groupIds.push(group.id);

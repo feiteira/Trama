@@ -345,7 +345,7 @@ describe('importing a bundle', () => {
     const doc = await p.store.put('document', {
       name: 'Entrevista 1', kind: 'text', group_ids: [], case_id: null, source: null,
       original: await p.addBlob(new TextEncoder().encode('%PDF-1.7 fake'), 'e1.pdf', 'application/pdf'),
-      media: null, chars: 5, order: 1, color: null,
+      media: null, chars: 6, order: 1, color: null,
     });
     await p.store.put('doctext', { id: doc.id, text: 'Olá 🌍', sync: [] });
     const records = [];

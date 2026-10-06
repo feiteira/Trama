@@ -2,7 +2,7 @@ import React, { useEffect, useId, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { cx } from '../cx';
-import { focusBackTo, focusables, pushLayer, trapTab } from '../focus';
+import { focusables, focusBackTo, pushLayer, trapTab, useOpener } from '../focus';
 import { useI18n } from '../i18n';
 import { IconButton } from './Button';
 import './dialog.css';
@@ -38,12 +38,13 @@ export function Dialog({ open, onClose, title, description, children, footer, si
   const descId = useId();
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
+  const tracked = useOpener(open);
   const dismissRef = useRef(dismissible);
   dismissRef.current = dismissible;
 
   useEffect(() => {
     if (!open) return;
-    const opener = document.activeElement;
+    const opener = tracked.opener;
     const layer = pushLayer();
     const root = document.getElementById('root');
     // Only the first dialog marks the page inert; nested ones live in the body beside it.

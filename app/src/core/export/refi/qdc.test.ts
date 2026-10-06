@@ -114,3 +114,39 @@ describe('qdc', () => {
     expect(back.codes.map((c) => c.name).sort()).toEqual(['Ciclo A', 'Ciclo B', 'Órfão']);
   });
 });
+
+describe('code definitions with labels in their own text', () => {
+  const roundTrip = (extra: Partial<Code>) => {
+    const c = code('Pertença', null, extra);
+    const back = importQdc(exportQdc([c], { origin: 'Trama 0.1.0' })).codes[0]!;
+    return { description: back.description, inclusion: back.inclusion, exclusion: back.exclusion, example: back.example };
+  };
+
+  it('keeps an "Example:" line inside the definition, and the real example in its field', () => {
+    const description = 'Feeling part of the garden group.\nExample: "we are a family here" (Interview 3).\nAlso covers neighbours.';
+    expect(roundTrip({ description, inclusion: 'Statements of attachment.', example: '"I feel at home"' })).toEqual({
+      description,
+      inclusion: 'Statements of attachment.',
+      exclusion: '',
+      example: '"I feel at home"',
+    });
+  });
+
+  it('keeps a definition whose line reads exactly like a label, with no example of its own', () => {
+    const description = 'Feeling part of the group.\n\nExample:\n"we are a family here"\n\nInclusion criteria:\nwritten by hand';
+    expect(roundTrip({ description })).toEqual({ description, inclusion: '', exclusion: '', example: '' });
+    const inclusion = 'Use when…\n\nExclusion criteria:\nnot this';
+    expect(roundTrip({ inclusion, exclusion: 'Irony.' })).toEqual({ description: '', inclusion, exclusion: 'Irony.', example: '' });
+  });
+
+  it('reads files from older versions, which wrote labels without escaping', () => {
+    const qdc = (desc: string) =>
+      `<?xml version="1.0" encoding="utf-8"?><CodeBook xmlns="urn:QDA-XML:codebook:1.0" origin="Trama 0.1.0"><Codes><Code guid="a0000000-0000-4000-8000-000000000001" name="X" isCodable="true"><Description>${desc}</Description></Code></Codes></CodeBook>`;
+    const read = (desc: string) => importQdc(qdc(desc)).codes[0]!;
+    expect(read('Def.\n\nInclusion criteria:\nIn.\n\nExample:\nEx.')).toMatchObject({ description: 'Def.', inclusion: 'In.', exclusion: '', example: 'Ex.' });
+    // A heading out of order cannot be one of Trama's: it stays in the text before the block.
+    expect(read('Def.\n\nExample:\nmine\n\nInclusion criteria:\nIn.')).toMatchObject({ description: 'Def.\n\nExample:\nmine', inclusion: 'In.', example: '' });
+    // "Example: …" on one line is the researcher's text.
+    expect(read('Def.\nExample: one.\nExample: two.')).toMatchObject({ description: 'Def.\nExample: one.\nExample: two.', example: '' });
+  });
+});

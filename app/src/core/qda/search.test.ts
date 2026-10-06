@@ -241,3 +241,31 @@ describe('results', () => {
     expect(kwic(r.hits)[0]!.left).toBe('one two three four five ');
   });
 });
+
+describe('regex search: paragraph anchors and accent folding that respects syntax', () => {
+  const docs = (text: string) => [{ id: 'd', text }];
+  const matches = (text: string, query: string, extra: Partial<Parameters<typeof searchTexts>[1]> = {}) =>
+    searchTexts(docs(text), { query, mode: 'regex', ...extra }).hits.map((h) => h.match);
+
+  it('^ and $ anchor at every paragraph', () => {
+    expect(matches('Interviewer: a\nAna: b\nInterviewer: c', '^Interviewer:')).toHaveLength(2);
+    expect(matches('one end\ntwo end\nthree', 'end$')).toHaveLength(2);
+  });
+
+  it('folds class members and escapes, never widening a class', () => {
+    const text = 'bad soup, Straße';
+    expect(matches(text, '[à-ú]').join('')).toBe('aouae');
+    expect(matches(text, '[ß]')).toEqual(['ß']);
+    expect(matches('a café', 'caf\\u00e9')).toEqual(['café']);
+    expect(matches('a café', 'caf\\u{e9}')).toEqual(['café']);
+    expect(matches('a café, cafe', 'caf[é]')).toEqual(['café', 'cafe']);
+    expect(matches('ação', '[^ç]+')).toEqual(['a', 'ão']);
+    // Accent-sensitive patterns are left as written.
+    expect(matches(text, '[à-ú]', { accentSensitive: true })).toEqual([]);
+    expect(matches('à la', '[à-ú]', { accentSensitive: true })).toEqual(['à']);
+  });
+
+  it('a phrase matches typographic hyphens as plain ones', () => {
+    expect(searchTexts(docs('our well‐being'), { query: 'well-being', mode: 'phrase' }).total).toBe(1);
+  });
+});

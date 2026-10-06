@@ -29,11 +29,11 @@ Trama averigua cómo contó cada programa las posiciones en el texto (los progra
 
 ## Llevar un proyecto a otro programa
 
-En **Exportar y copias**, elija **Proyecto REFI-QDA** y guarde el archivo `.qdpx`. Después, impórtelo en el otro programa. Opciones:
+Abra **Proyecto**, pase a la pestaña **Exportar**, elija **Proyecto REFI-QDA** y guarde el archivo `.qdpx`. Después, impórtelo en el otro programa.
 
-- **Compatibilidad con MAXQDA**: escribe los archivos de texto como los espera MAXQDA, para que sus codificaciones no se desplacen. Actívela cuando el archivo vaya a MAXQDA.
-- Los **memorandos** y las **grabaciones** pueden dejarse fuera para que el archivo sea más pequeño.
-- Los **PDF originales de documentos editados** se dejan fuera de forma predeterminada (vea más abajo); puede incluirlos.
+- **Finales de línea para MAXQDA** es la única opción: escribe los archivos de texto con finales de línea de Windows para que los segmentos codificados queden en su sitio en MAXQDA. Actívela cuando el archivo vaya a MAXQDA y déjela desactivada para otros programas.
+- Los memorandos y las grabaciones se incluyen siempre.
+- Los PDF originales cuyo texto ha editado se escriben siempre como texto (consulte [Qué no se conserva](#lost)).
 
 El archivo `.qdpx` **no está cifrado** y nunca contiene la clave de seudonimización, los elementos eliminados ni el registro de auditoría.
 
@@ -72,7 +72,7 @@ El archivo `.qdpx` **no está cifrado** y nunca contiene la clave de seudonimiza
 - los atributos de **Opción** como opciones: pasan a ser texto, porque REFI-QDA no tiene listas de valores permitidos;
 - los colores de casos, grupos, memorandos y documentos, las teclas de atajo de los códigos y los tipos de documento *encuesta* y *nota* (pasan a ser documentos de texto corrientes);
 - el registro de auditoría, los elementos eliminados y la clave de seudonimización;
-- el PDF original de un documento cuyo texto ha editado (seudonimizado, por ejemplo). El original seguiría mostrando lo que se quitó, así que el documento se escribe como texto, salvo que incluya expresamente los originales.
+- el PDF original de un documento cuyo texto ha editado (seudonimizado, por ejemplo). El original seguiría mostrando lo que se quitó, así que el documento se escribe siempre como texto.
 
 La correspondencia completa, para los más curiosos, está en `docs/spec/refi-qda.md` en el código fuente de Trama.
 
@@ -82,7 +82,7 @@ La correspondencia completa, para los más curiosos, está en `docs/spec/refi-qd
 
 Un archivo `.trama` contiene un proyecto completo, sin pérdidas: los documentos con sus archivos originales y grabaciones, el libro de códigos, los segmentos codificados, los memorandos, los casos y atributos, los grupos de documentos y el registro de auditoría. Trama lo usa para:
 
-- **Exportar y copias → Archivo de proyecto Trama**: para guardar una copia, archivar un estudio terminado o cambiar de ordenador;
+- **Proyecto → Exportar → Archivo de proyecto Trama**: para guardar una copia, archivar un estudio terminado o cambiar de ordenador;
 - **copias para compañeros** ([Trabajo en equipo](08-teamwork-and-agreement.md#copies));
 - **copias de seguridad automáticas**, que siempre están cifradas ([Copias de seguridad](10-privacy-and-security.md#backups)).
 

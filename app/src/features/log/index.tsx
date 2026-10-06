@@ -1,7 +1,7 @@
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DateTime } from 'luxon';
 import { FileDown, FileText, Filter, Folders, Highlighter, History, type LucideIcon, NotebookPen, Package, Redo2, Tags, Undo2, Users, VenetianMask, X } from 'lucide-react';
-import type { LogEntry } from '../../core/model/types';
+import { ATTRIBUTE_TYPES, type AttributeType, type LogEntry } from '../../core/model/types';
 import { csvBytes } from '../../core/export/office/csv';
 import { listLog, logAsRows } from '../../services/log';
 import { listCoders, type CoderRow } from '../../services/queries';
@@ -21,9 +21,23 @@ import { useToast } from '../../ui/components/Toast';
 import { csvDelimiter, saveExport, stamp } from './exportFile';
 import {
   ACTION_GROUPS, type ActionGroup, actionsOf, afterBound, beforeBound, buildSentence, EMPTY_FILTER, filterActive, groupByDay, groupOf, type LogFilter,
-  quotesFor, type Quotes, type Sentence, sentenceText, splitTemplate,
+  type DetailWords, quotesFor, type Quotes, type Sentence, sentenceText, splitTemplate,
 } from './sentence';
 import './log.css';
+
+/** Code field ids as logged (services/codes.ts) → their labels. */
+const FIELD_KEYS = {
+  name: 'codes.fields.name',
+  color: 'codes.fields.colour',
+  parent_id: 'codes.fields.parent',
+  shortcut: 'codes.fields.shortcut',
+  codable: 'codes.fields.category',
+  description: 'codes.fields.description',
+  inclusion: 'codes.fields.inclusion',
+  exclusion: 'codes.fields.exclusion',
+  example: 'codes.fields.example',
+  order: 'log.details.order',
+} as const satisfies Record<string, MessageKey>;
 
 const PAGE = 150;
 
@@ -78,13 +92,23 @@ export default function LogScreen(_props: ScreenProps<'log'>) {
 
   const fmtN = useCallback((n: number) => n.toLocaleString(meta.bcp47), [meta.bcp47]);
   const quotes = useMemo(() => quotesFor(locale), [locale]);
+  // Field ids, attribute types and export kinds in summaries, in the reader's words.
+  const words = useMemo<DetailWords>(
+    () => ({
+      field: (id) => (id in FIELD_KEYS ? t(FIELD_KEYS[id as keyof typeof FIELD_KEYS]) : null),
+      attrType: (id) => ((ATTRIBUTE_TYPES as readonly string[]).includes(id) ? t(`cases.types.${id as AttributeType}`) : null),
+      phrase: (id) => t(`log.details.${id}`),
+      count: (id, n) => tp(`log.details.${id}`, n),
+    }),
+    [t, tp],
+  );
   const toRow = useCallback(
     (entry: LogEntry): Row => {
-      const sentence = buildSentence(entry, t('log.none'), quotes);
+      const sentence = buildSentence(entry, t('log.none'), quotes, words);
       const template = t(sentence.key as MessageKey);
       return { entry, sentence, template, text: sentenceText(template, sentence, fmtN, quotes) };
     },
-    [t, fmtN, quotes],
+    [t, fmtN, quotes, words],
   );
 
   // Every filter is applied by the service, the search included (on what each entry says in the

@@ -6,6 +6,7 @@ import { LIMITS, PALETTE } from '../core/model/types';
 import { TABLES } from '../core/store/schema';
 import { buildTree, orderAfterLast, placeBefore } from '../core/qda/tree';
 import type { ProjectContext } from './context';
+import { reanchorRestored } from './anchor';
 import { recentlyLogged } from './log';
 import { commit, listIn, need, noopUndo, Plan, q, restoreBatch, ServiceError, type LogSpec, type Undoable } from './undo';
 
@@ -144,6 +145,8 @@ export async function createCodes(
     if (!code) throw new ServiceError('not_found', `code ${u.id} not found`);
     const clean: CodePatch = { ...u.patch };
     if (clean.name !== undefined) clean.name = requireName(clean.name);
+    // A code with coded segments stays codable: a category cannot hold codings.
+    if (clean.codable === false && code.codable && (await ctx.store.count('coding', 'code_id = ?', [code.id])) > 0) delete clean.codable;
     const changed = (Object.keys(clean) as (keyof CodePatch)[]).filter((k) => clean[k] !== undefined && clean[k] !== code[k]);
     if (!changed.length) continue;
     plan.change('code', code, clean);
@@ -160,12 +163,21 @@ export async function createCodes(
   return { codes: ids.map((id) => saved.get('code', id)), updated, undo };
 }
 
-/** Edits a code. A rename is logged as such; definition edits typed over a few minutes log once. */
+/**
+ * Edits a code. A rename is logged as such; definition edits typed over a few minutes log once.
+ * Turning a code with coded segments into a category is refused ('not_codable': a category
+ * cannot hold codings); a code that becomes a category gives up its shortcut.
+ */
 export async function updateCode(ctx: ProjectContext, id: string, patch: CodePatch): Promise<{ code: Code; undo: Undoable }> {
   const code = await need(ctx, 'code', id);
-  const clean: CodePatch = { ...patch };
+  const clean: CodePatch & { shortcut?: null } = { ...patch };
   if (patch.name !== undefined) clean.name = requireName(patch.name);
-  const changed = (Object.keys(clean) as (keyof CodePatch)[]).filter((k) => clean[k] !== undefined && clean[k] !== code[k]);
+  if (patch.codable === false && code.codable) {
+    const n = await ctx.store.count('coding', 'code_id = ?', [id]);
+    if (n > 0) throw new ServiceError('not_codable', `${code.name} has ${n} coded segments; a category cannot hold them`);
+    if (code.shortcut !== null) clean.shortcut = null;
+  }
+  const changed = (Object.keys(clean) as (keyof typeof clean)[]).filter((k) => clean[k] !== undefined && clean[k] !== code[k]);
   if (!changed.length) return { code, undo: noopUndo('code.edit', q(code.name)) };
   const plan = new Plan();
   plan.change('code', code, clean);
@@ -283,18 +295,23 @@ export async function deleteCode(ctx: ProjectContext, id: string, opts: { withCh
  */
 export async function restoreCodes(ctx: ProjectContext, batch: string): Promise<{ codes: number; codings: number }> {
   const restored = await restoreBatch(ctx, batch, ['code', 'coding', 'memo']);
+  // The text may have changed since the delete (a typo fix, pseudonymisation).
+  const fixed = await reanchorRestored(ctx, restored.get('coding') ?? [], batch);
   const ids = restored.get('code') ?? [];
   for (const id of ids) {
     const c = await ctx.store.get('code', id);
     if (c) await ctx.log('code.restore', q(c.name), { kind: 'code', id });
   }
-  return { codes: ids.length, codings: restored.get('coding')?.length ?? 0 };
+  return { codes: ids.length, codings: (restored.get('coding')?.length ?? 0) - fixed.removed };
 }
 
 export interface MergeResult {
   /** Codings moved to the target. */
   moved: number;
-  /** Codings dropped because the target already had the same coding (document, span, coder). */
+  /**
+   * Codings folded into another coding of the same coder and document because their spans
+   * overlap or touch (the coding-merge rule), exact duplicates included.
+   */
   duplicatesRemoved: number;
   /** Child codes moved under the target. */
   childrenMoved: number;
@@ -302,7 +319,6 @@ export interface MergeResult {
 }
 
 const DEFINITION_FIELDS = ['description', 'inclusion', 'exclusion', 'example'] as const;
-const codingKey = (c: Coding) => `${c.document_id}\u0000${c.start}\u0000${c.end}\u0000${c.coder_id}`;
 
 function joinComments(a: string, b: string): string {
   if (!b.trim() || a.includes(b)) return a;
@@ -311,13 +327,16 @@ function joinComments(a: string, b: string): string {
 }
 
 /**
- * Merges codes into `targetId`: their codings move to it (exact duplicates — same document,
- * span and coder — are dropped, their comments and memos kept on the surviving coding), their
+ * Merges codes into `targetId` (a codable code; a category is refused with 'not_codable'): their
+ * codings move to it under the coding-merge rule (a coder's overlapping or touching codings
+ * become one, their comments and memos kept on the surviving coding), their
  * child codes move under it, memos about them move to it, and empty definition fields of the
  * target are filled from theirs. The merged codes are deleted.
  */
 export async function mergeCodes(ctx: ProjectContext, sourceIds: string[], targetId: string): Promise<MergeResult> {
   const target = await need(ctx, 'code', targetId);
+  // A category cannot hold codings (it cannot be applied, nor reached by a shortcut).
+  if (!target.codable) throw new ServiceError('not_codable', `${target.name} only groups other codes`);
   const sources: Code[] = [];
   for (const id of new Set(sourceIds)) if (id !== targetId) sources.push(await need(ctx, 'code', id));
   if (!sources.length) throw new ServiceError('invalid_argument', 'nothing to merge');
@@ -327,28 +346,71 @@ export async function mergeCodes(ctx: ProjectContext, sourceIds: string[], targe
   const sourceSet = new Set(sources.map((s) => s.id));
   const plan = new Plan();
 
-  // Codings: the target's first, so on a duplicate the target's coding is the one kept.
+  // Codings move to the target under the coding-merge rule (codings.ts): one coder never holds
+  // the same code twice on overlapping or touching spans of a document. Where a moved coding
+  // overlaps or touches one of the same coder's codings of the target (or another moved one),
+  // they become one coding over both spans, comments joined; the earliest-starting one is kept.
   const targetCodings = await ctx.store.list('coding', { where: 'code_id = ?', params: [targetId] });
   const sourceCodings = (await listIn(ctx.store, 'coding', 'code_id', [...sourceSet])).sort(
     (a, b) => (a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : 0),
   );
-  const kept = new Map<string, Coding>(targetCodings.map((c) => [codingKey(c), c]));
-  const dropped = new Map<string, string>(); // dropped coding id → kept coding id
+  const groupKey = (c: Coding) => `${c.document_id}\u0000${c.coder_id}`;
+  const held = new Map<string, Coding[]>(); // current versions of the target's codings, per document and coder
+  for (const c of targetCodings) (held.get(groupKey(c)) ?? held.set(groupKey(c), []).get(groupKey(c))!).push(c);
+  const dropped = new Map<string, string>(); // absorbed coding id → coding that took it over
+  const grown = new Set<string>(); // codings whose span grew: their text is read again below
   let moved = 0;
   for (const c of sourceCodings) {
-    const k = codingKey(c);
-    const keep = kept.get(k);
-    if (keep) {
-      const comment = joinComments(plan.view('coding', keep).comment, c.comment);
-      if (comment !== plan.view('coding', keep).comment) plan.change('coding', keep, { comment });
-      plan.remove('coding', c);
-      dropped.set(c.id, keep.id);
-    } else {
+    const mine = held.get(groupKey(c)) ?? held.set(groupKey(c), []).get(groupKey(c))!;
+    const touching = mine.filter((m) => m.start <= c.end && m.end >= c.start);
+    if (!touching.length) {
       plan.change('coding', c, { code_id: targetId });
-      kept.set(k, c);
+      mine.push({ ...c, code_id: targetId });
+      moved++;
+      continue;
+    }
+    const all = [...touching, c].sort((a, b) => a.start - b.start || (a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : 0));
+    const keep = all[0]!;
+    let start = keep.start;
+    let end = keep.end;
+    let comment = keep.comment;
+    for (const x of all.slice(1)) {
+      start = Math.min(start, x.start);
+      end = Math.max(end, x.end);
+      comment = joinComments(comment, x.comment);
+      plan.remove('coding', x);
+      dropped.set(x.id, keep.id);
+      const i = mine.findIndex((m) => m.id === x.id);
+      if (i >= 0) mine.splice(i, 1);
+    }
+    const next = { ...keep, code_id: targetId, start, end, comment };
+    plan.change('coding', keep, { code_id: targetId, start, end, comment });
+    if (start !== keep.start || end !== keep.end) grown.add(keep.id);
+    const i = mine.findIndex((m) => m.id === keep.id);
+    if (i >= 0) mine[i] = next;
+    else {
+      mine.push(next);
       moved++;
     }
   }
+  // A coding that grew shows the text it now covers.
+  const grownCodings = [...held.values()].flat().filter((c) => grown.has(c.id));
+  for (const docId of new Set(grownCodings.map((c) => c.document_id))) {
+    const dt = await ctx.store.get('doctext', docId);
+    if (!dt || dt.deleted) continue;
+    for (const c of grownCodings) {
+      if (c.document_id !== docId) continue;
+      const end = Math.min(c.end, dt.text.length);
+      const stored = sourceCodings.find((x) => x.id === c.id) ?? targetCodings.find((x) => x.id === c.id)!;
+      plan.change('coding', stored, { text: dt.text.slice(c.start, end), end });
+    }
+  }
+  // Chains (a absorbed into b, b into c) resolve to the coding that survived.
+  const survivor = (id: string) => {
+    let cur = id;
+    for (let i = 0; dropped.has(cur) && i <= dropped.size; i++) cur = dropped.get(cur)!;
+    return cur;
+  };
 
   // Memos about a merged code go to the target; memos about a dropped coding to the kept one.
   const memos: Memo[] = [
@@ -356,7 +418,7 @@ export async function mergeCodes(ctx: ProjectContext, sourceIds: string[], targe
     ...(await listIn(ctx.store, 'memo', 'target_id', [...dropped.keys()])).filter((m) => m.target.kind === 'coding'),
   ];
   for (const m of memos) {
-    const to = m.target.kind === 'code' ? targetId : dropped.get(m.target.id!)!;
+    const to = m.target.kind === 'code' ? targetId : survivor(m.target.id!);
     plan.change('memo', m, { target: { kind: m.target.kind, id: to } as Memo['target'] });
   }
 
@@ -446,10 +508,13 @@ export interface CodeUse {
   documents: number;
 }
 
-/** How many live codings each code has, and in how many documents. Reads no record data. */
+/**
+ * How many live codings each code has, and in how many live documents. Reads no record data.
+ * Codings in a deleted document are not counted (retrieval leaves them out too).
+ */
 export async function codeUsage(ctx: ProjectContext): Promise<Map<string, CodeUse>> {
   const rows = await ctx.store.db.query<{ code_id: string; n: number; d: number }>(
-    `SELECT code_id, count(*) AS n, count(DISTINCT document_id) AS d FROM ${TABLES.coding.table} WHERE deleted = 0 GROUP BY code_id`,
+    `SELECT code_id, count(*) AS n, count(DISTINCT document_id) AS d FROM ${TABLES.coding.table} WHERE deleted = 0 AND document_id IN (SELECT id FROM ${TABLES.document.table} WHERE deleted = 0) GROUP BY code_id`,
   );
   return new Map(rows.map((r) => [r.code_id, { codings: Number(r.n), documents: Number(r.d) }]));
 }

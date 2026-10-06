@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
+import { catalogs } from '../../core/i18n/catalogs';
 import { UI_LOCALES } from '../../core/i18n/languages';
 import type { Block, Inline } from '../../core/text/markdown';
 import { MANUAL_SOURCES, manualChapters } from './manual';
 import { CHAPTER_FILES, type Chapter, HELP_TOPICS, resolveLink, resolveTopic, ROUTE_TOPICS, SHORTCUTS_SLUG } from './manualModel';
 import { isKeyLabel } from './render';
+import { formatKeys, SHORTCUTS } from './shortcuts';
 
 // The real manual in docs/manual: every chapter in every language, links that land, topics
 // other screens use, and screenshot names the screenshot pipeline knows.
@@ -103,6 +105,50 @@ describe('the manual', () => {
         if (!k.startsWith(`${lang}/`)) continue;
         for (const m of src.matchAll(/`((?:Ctrl|Alt|Shift)\+[^`]+)`/g)) expect(isKeyLabel(m[1]!), `${k}: ${m[1]}`).toBe(true);
       }
+    }
+  });
+
+  it('names screens and controls the way the interface does', () => {
+    // The screen once called "Export & backup" is now Project, with Overview/Export/Backups tabs;
+    // the manual and the merge dialog must not send readers to a screen that does not exist.
+    const STALE = ['Export & backup', 'Exportar e cópias', 'Exportar y copias'];
+    for (const lang of UI_LOCALES) {
+      const m = catalogs[lang];
+      const src = (file: string) => MANUAL_SOURCES[`${lang}/${file}`] ?? '';
+      for (const [k, text] of Object.entries(MANUAL_SOURCES)) {
+        if (k.startsWith(`${lang}/`)) for (const s of STALE) expect(text.includes(s), `${k}: ${s}`).toBe(false);
+      }
+      expect(STALE.some((s) => m.agreement.merge.backup.includes(s)), `${lang} agreement.merge.backup`).toBe(false);
+      expect(m.agreement.merge.backup, `${lang} agreement.merge.backup`).toContain(`${m.app.nav.project} › ${m.exporter.tabs.backups}`);
+
+      // Every screen in the navigation table is a real navigation item.
+      const nav = Object.values(m.app.nav);
+      const table = src('01-getting-started.md').split('\n').filter((l) => /^\| \*\*[^*]+\*\* \|/.test(l));
+      expect(table.length, `${lang} navigation table`).toBeGreaterThan(8);
+      for (const row of table) expect(nav, `${lang}: ${row.slice(0, 40)}`).toContain(/^\| \*\*([^*]+)\*\*/.exec(row)![1]);
+
+      // The REFI-QDA export has one switch; restoring keeps the current project open.
+      const exchange = src('09-exchange.md');
+      expect(exchange, `${lang} 09-exchange`).toContain(`**${m.exporter.export.qdpx.maxqda}**`);
+      expect(exchange, `${lang} 09-exchange`).toContain(`**${m.exporter.tabs.export}**`);
+      const privacy = src('10-privacy-and-security.md');
+      for (const label of [m.exporter.tabs.backups, m.exporter.backups.list.restore, m.exporter.backups.restore.fromFile, m.exporter.backups.restore.openNow]) {
+        expect(privacy, `${lang} 10-privacy: ${label}`).toContain(`**${label}**`);
+      }
+      // The example restored name follows the app's pattern.
+      const pattern = m.exporter.backups.restore.restoredName.replace(/[.*+?^$()|[\]\\]/g, '\\$&').replace('{name}', '.+').replace('{date}', '\\d{4}-\\d{2}-\\d{2}');
+      expect(new RegExp(pattern).test(privacy), `${lang} 10-privacy: restored name like ${m.exporter.backups.restore.restoredName}`).toBe(true);
+    }
+  });
+
+  it('documents both ways to skip through a recording', () => {
+    // Alt+←/→ skip while the recording plays (Viewer.tsx); Alt+Shift+←/→ at any time.
+    const recording = SHORTCUTS.find((g) => g.group === 'recording')!.items.flatMap((s) => s.keys.map((k) => formatKeys(k, false)));
+    for (const k of ['Alt+←', 'Alt+→', 'Alt+Shift+←', 'Alt+Shift+→']) expect(recording, k).toContain(k);
+    for (const lang of UI_LOCALES) {
+      const docs = MANUAL_SOURCES[`${lang}/02-documents.md`] ?? '';
+      for (const k of ['Alt+←', 'Alt+→', 'Alt+Shift+←', 'Alt+Shift+→']) expect(docs, `${lang} 02-documents: ${k}`).toContain(`\`${k}\``);
+      expect(catalogs[lang].help.keys.labels.skip, lang).not.toBe(catalogs[lang].help.keys.labels.skipAlways);
     }
   });
 });

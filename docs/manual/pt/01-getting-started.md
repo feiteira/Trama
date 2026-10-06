@@ -88,11 +88,11 @@ A navegação à esquerda leva a todas as partes de um projeto:
 | **Análise** | Pesquisa, coocorrência, matrizes, frequência de palavras e gráficos ([Análise](07-analysis.md)) |
 | **Concordância** | Codificadores, cópias dos colegas e concordância entre codificadores ([Trabalho em equipa](08-teamwork-and-agreement.md)) |
 | **Importar** | Trazer documentos para o projeto ([Documentos](02-documents.md#import)) |
-| **Exportar e cópias** | Ficheiros de projeto, REFI-QDA, relatórios e cópias de segurança automáticas ([Trocar projetos](09-exchange.md), [Cópias de segurança](10-privacy-and-security.md#backups)) |
+| **Projeto** | Os dados do projeto, as exportações (ficheiros de projeto, REFI-QDA, livro de códigos, relatórios), as cópias de segurança automáticas e o seu restauro ([Trocar projetos](09-exchange.md), [Cópias de segurança](10-privacy-and-security.md#backups)) |
 | **Pseudonimização** | Substituir nomes de forma coerente ([Pseudonimização](10-privacy-and-security.md#pseudonymisation)) |
 | **Registo de auditoria** | Um registo de todas as alterações ([Registo de auditoria](10-privacy-and-security.md#audit-trail)) |
 
-A **paleta de comandos** (`Ctrl+K`) encontra qualquer ecrã, documento, projeto ou ação quando escreve parte do nome. **Voltar** (`Alt+←`, ou o botão de retroceder do rato) leva-o ao sítio onde estava.
+A **paleta de comandos** (`Ctrl+K`) encontra qualquer ecrã, documento, projeto ou ação quando escreve parte do nome. **Voltar** (`Alt+←`, ou o botão de retroceder do rato) leva-o ao sítio onde estava — exceto enquanto uma gravação está a tocar, em que `Alt+←` e `Alt+→` recuam e avançam na gravação (ver [Transcrições e gravações](02-documents.md#transcripts)).
 
 Tudo o que faz é guardado à medida que trabalha. Não há botão Guardar.
 
@@ -131,7 +131,7 @@ Tudo no Trama se pode fazer com o teclado. Os que vai usar mais:
 | `Ctrl+K` | Abrir a paleta de comandos |
 | `Ctrl+Z` / `Ctrl+Shift+Z` | Anular / refazer |
 | `Ctrl+L` | Bloquear o Trama |
-| `Alt+←` | Voltar |
+| `Alt+←` | Voltar (durante a reprodução de uma gravação: recuar 5 segundos) |
 | `Ctrl+F` | Procurar no documento que está a ler |
 | `1` … `9` | Com texto selecionado, aplicar o código que tem essa tecla de atalho |
 | `Enter` | Com texto selecionado, procurar ou criar um código; em texto codificado, ver os seus códigos |

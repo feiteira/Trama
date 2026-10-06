@@ -47,11 +47,11 @@ Unencrypted exports are ordinary files: store and share them as your data manage
 
 ## Backups
 
-![Export and backup](../img/en/project.png)
+![The Project screen](../img/en/project.png)
 
 A computer can break, be stolen or be lost. Set up automatic backups for every project that matters:
 
-1. Open **Export & backup** and choose a **backup folder** — a USB drive you keep somewhere safe, your institution’s network drive, or a folder synchronised with a cloud drive. The backup is encrypted before it gets there.
+1. Open **Project**, go to the **Backups** tab and choose a **backup folder** — a USB drive you keep somewhere safe, your institution’s network drive, or a folder synchronised with a cloud drive. The backup is encrypted before it gets there.
 2. Trama then backs up the project when it opens, once a day while it is open, when you lock Trama or close the project (if anything changed), and whenever you choose **Back up now**.
 3. Choose how far back backups go: 30, 90 or 365 days. Older backups thin out with age — everything from the last day, then one a day for two weeks, one a week for two months, one a month after that — and the newest three are always kept.
 
@@ -59,7 +59,7 @@ Trama warns you when a backup fails (the folder is missing, full or not writable
 
 **What a backup holds:** the whole project, deleted items and the pseudonymisation key included, encrypted under your library’s key, with the keyring inside. It opens with your passphrase or your recovery phrase — on this computer or another one.
 
-**Restoring:** in **Export & backup**, restore a backup file. It becomes a new project in your library, named with the date of the backup, so it never overwrites what you have. On a new computer, create your library first, then restore — Trama asks for the passphrase or recovery phrase of the library that made the backup.
+**Restoring:** in **Project → Backups**, choose **Restore…** next to a backup in the list, or **Restore from a backup file…** below the list. The backup becomes a new project in your library, named with the date you restored it — for example “Allotment gardens study (restored 2026-10-05)” — so it never overwrites what you have. The project you are working on stays open; choose **Open now** to switch to the restored copy. On a new computer, create your library first, then bring the backup in with **Import a project file** on the projects screen — Trama asks for the passphrase or recovery phrase of the library that made the backup.
 
 Anyone who can open the backup folder sees that backup files exist, their dates and sizes, but not what is in them.
 
@@ -86,7 +86,7 @@ Applying can be undone only with **Undo straight afterwards**; once you carry on
 
 **The key** (what replaced what) is the link back to who your participants are. It stays inside the encrypted project, is left out of every export and copy unless you explicitly include it, and is always in encrypted backups. **Export key** saves it as a CSV table for your records — store that file encrypted and apart from the pseudonymised material, as ethics approvals usually require. Deleting an entry erases the original name from the project immediately; it cannot be undone.
 
-Original PDF and Word files are kept as imported. When a document’s text has been edited (pseudonymised, say), REFI-QDA exports leave out its original PDF unless you include it, because the original would still show what was removed.
+Original PDF and Word files are kept as imported. When a document’s text has been edited (pseudonymised, say), REFI-QDA exports always leave out its original PDF, because the original would still show what was removed.
 
 <a id="audit-trail"></a>
 

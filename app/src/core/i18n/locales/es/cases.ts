@@ -51,7 +51,7 @@ export const cases: Messages['cases'] = {
     openDetails: 'Abrir detalles',
     openDetailsOf: 'Abrir los detalles de «{name}»',
     noDocuments: 'Sin documentos',
-    noValue: '(ninguno)',
+    choicePlaceholder: 'Elija o escriba un valor',
     addPlaceholder: 'Nuevo caso…',
     addHint: 'Pulse Intro para añadir',
   },

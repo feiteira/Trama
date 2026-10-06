@@ -47,11 +47,11 @@ As exportações sem cifra são ficheiros comuns: guarde-os e partilhe-os como o
 
 ## Cópias de segurança
 
-![Exportar e cópias](../img/pt/project.png)
+![O ecrã Projeto](../img/pt/project.png)
 
 Um computador pode avariar, ser roubado ou perder-se. Configure cópias de segurança automáticas para todos os projetos que importam:
 
-1. Abra **Exportar e cópias** e escolha uma **pasta de cópias** — uma pen USB guardada num sítio seguro, a unidade de rede da sua instituição ou uma pasta sincronizada com uma nuvem. A cópia é cifrada antes de lá chegar.
+1. Abra **Projeto**, passe ao separador **Cópias de segurança** e escolha uma **pasta de cópias** — uma pen USB guardada num sítio seguro, a unidade de rede da sua instituição ou uma pasta sincronizada com uma nuvem. A cópia é cifrada antes de lá chegar.
 2. O Trama passa então a copiar o projeto quando este abre, uma vez por dia enquanto está aberto, quando bloqueia o Trama ou fecha o projeto (se algo mudou), e sempre que escolher **Fazer cópia agora**.
 3. Escolha até onde vão as cópias: 30, 90 ou 365 dias. As cópias mais antigas vão sendo espaçadas — tudo do último dia, depois uma por dia durante duas semanas, uma por semana durante dois meses e uma por mês a partir daí — e as três mais recentes são sempre mantidas.
 
@@ -59,7 +59,7 @@ O Trama avisa quando uma cópia falha (a pasta não existe, está cheia ou não 
 
 **O que uma cópia contém:** o projeto inteiro, incluindo os itens eliminados e a chave de pseudonimização, cifrado com a chave da sua biblioteca, com o porta-chaves lá dentro. Abre com a sua frase-passe ou com a sua frase de recuperação — neste computador ou noutro.
 
-**Restaurar:** em **Exportar e cópias**, restaure um ficheiro de cópia. Torna-se um projeto novo na sua biblioteca, com a data da cópia no nome, para nunca substituir o que tem. Num computador novo, crie primeiro a sua biblioteca e depois restaure — o Trama pede a frase-passe ou a frase de recuperação da biblioteca que fez a cópia.
+**Restaurar:** em **Projeto → Cópias de segurança**, escolha **Restaurar…** ao lado de uma cópia da lista, ou **Restaurar de um ficheiro de cópia…**, por baixo da lista. A cópia torna-se um projeto novo na sua biblioteca, com a data em que a restaurou no nome — por exemplo, “Estudo das hortas (restaurado a 2026-10-05)” —, para nunca substituir o que tem. O projeto em que está a trabalhar continua aberto; escolha **Abrir agora** para passar à cópia restaurada. Num computador novo, crie primeiro a sua biblioteca e depois traga a cópia com **Importar um ficheiro de projeto**, no ecrã dos projetos — o Trama pede a frase-passe ou a frase de recuperação da biblioteca que fez a cópia.
 
 Quem conseguir abrir a pasta das cópias vê que existem ficheiros de cópia, as datas e os tamanhos, mas não o que contêm.
 
@@ -86,7 +86,7 @@ Aplicar só se pode anular com **Anular logo a seguir**; quando continua a traba
 
 **A chave** (o que substituiu o quê) é a ligação a quem são os seus participantes. Fica dentro do projeto cifrado, fica de fora de todas as exportações e cópias a menos que a inclua explicitamente, e está sempre nas cópias de segurança cifradas. **Exportar chave** guarda-a como tabela CSV para os seus registos — guarde esse ficheiro cifrado e separado do material pseudonimizado, como as aprovações éticas costumam exigir. Eliminar uma entrada apaga de imediato o nome original do projeto; não se pode anular.
 
-Os ficheiros PDF e Word originais ficam como foram importados. Quando o texto de um documento foi editado (pseudonimizado, por exemplo), as exportações REFI-QDA deixam de fora o PDF original, a menos que o inclua, porque o original continuaria a mostrar o que foi removido.
+Os ficheiros PDF e Word originais ficam como foram importados. Quando o texto de um documento foi editado (pseudonimizado, por exemplo), as exportações REFI-QDA deixam sempre de fora o PDF original, porque o original continuaria a mostrar o que foi removido.
 
 <a id="audit-trail"></a>
 

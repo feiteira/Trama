@@ -1,4 +1,4 @@
-import React, { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import React, { memo, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ArrowDown, ArrowUp, Calendar, Check, Hash, List, type LucideIcon, PanelRightOpen, Plus, SquareCheck, Trash2, Type } from 'lucide-react';
 import type { Attribute, AttributeType } from '../../core/model/types';
 import { cx } from '../../ui/cx';
@@ -195,7 +195,7 @@ export function CasesGrid(props: CasesGridProps) {
           onSelectOnly(rows.map((r) => r.case.id));
           return;
         }
-        if (startsTyping(ev.key, { ...mods, alt: ev.altKey, meta: ev.metaKey }) && (col.kind === 'name' || (col.kind === 'attr' && col.attr.type !== 'boolean' && col.attr.type !== 'choice'))) {
+        if (startsTyping(ev.key, { ...mods, alt: ev.altKey, meta: ev.metaKey }) && (col.kind === 'name' || (col.kind === 'attr' && col.attr.type !== 'boolean'))) {
           ev.preventDefault();
           startEdit(pos, ev.key);
         }
@@ -518,6 +518,7 @@ function CellEditor({
 }) {
   const { t } = useI18n();
   const [text, setText] = useState(initial);
+  const listId = useId();
   const ref = useRef<HTMLInputElement | HTMLSelectElement | null>(null);
   const setRef = (el: HTMLInputElement | HTMLSelectElement | null) => {
     ref.current = el;
@@ -560,26 +561,31 @@ function CellEditor({
   return (
     <div className="cgrid__editor">
       {kind === 'choice' ? (
-        <select
-          ref={setRef}
-          className="cgrid__input cgrid__select"
-          value={text}
-          aria-label={label}
-          aria-invalid={!!error || undefined}
-          aria-describedby={errId}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={onKeyDown}
-          onBlur={() => finish('none')}
-          data-testid="cell-editor"
-        >
-          <option value="">{t('cases.grid.noValue')}</option>
-          {options.map((o) => (
-            <option key={o} value={o}>
-              {o}
-            </option>
-          ))}
-          {text && !options.includes(text) ? <option value={text}>{text}</option> : null}
-        </select>
+        // A combobox, not a closed list: a value typed here that is not an option yet becomes
+        // one (setCaseValue), as the attribute's options hint promises.
+        <>
+          <input
+            ref={setRef}
+            className="cgrid__input cgrid__select"
+            type="text"
+            value={text}
+            list={listId}
+            placeholder={t('cases.grid.choicePlaceholder')}
+            aria-label={label}
+            aria-invalid={!!error || undefined}
+            aria-describedby={errId}
+            autoComplete="off"
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={onKeyDown}
+            onBlur={() => finish('none')}
+            data-testid="cell-editor"
+          />
+          <datalist id={listId}>
+            {options.map((o) => (
+              <option key={o} value={o} />
+            ))}
+          </datalist>
+        </>
       ) : (
         <input
           ref={setRef}

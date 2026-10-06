@@ -1,5 +1,5 @@
 import type { Draft, Kind } from './types';
-import { ATTRIBUTE_TYPES, DOC_KINDS, HEX_COLOR, LIMITS, LOG_ACTIONS, MEMO_TARGETS } from './types';
+import { ATTRIBUTE_TYPES, DOC_KINDS, HEX_COLOR, LIMITS, LOG_ACTIONS, MEMO_TARGETS, REVS_MAX } from './types';
 
 export class ValidationError extends Error {
   constructor(
@@ -88,7 +88,9 @@ export function validate<K extends Kind>(kind: K, draft: Draft<K>): Draft<K> {
         return { pos: s.pos, ms: s.ms };
       });
       sync.sort((a, b) => a.pos - b.pos || a.ms - b.ms);
-      return { ...draft, text, sync } as Draft<K>;
+      if (d.revs === undefined) return { ...draft, text, sync } as Draft<K>;
+      const revs = Array.isArray(d.revs) ? (d.revs as unknown[]).filter((r): r is string => typeof r === 'string' && /^[0-9a-f]{16}$/.test(r)) : [];
+      return { ...draft, text, sync, revs: revs.slice(-REVS_MAX) } as Draft<K>;
     }
 
     case 'code': {

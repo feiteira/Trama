@@ -50,13 +50,25 @@ export function markdownInline(line: string): string {
 }
 
 const FENCE = /^\s{0,3}(`{3,}|~{3,})/;
-const ATX = /^\s{0,3}(#{1,6})(?:\s+(.*?))?(?:\s+#+)?\s*$/;
+// Only the opening sequence: the closing one is taken off in atxHeading(), since a regex for it
+// backtracks quadratically over a long run of spaces inside the heading.
+const ATX = /^\s{0,3}(#{1,6})(?:\s+(.*))?$/;
 const SETEXT = /^\s{0,3}(=+|-+)\s*$/;
 const RULE = /^\s{0,3}([-*_])(?:\s*\1){2,}\s*$/;
 const LIST = /^(\s*)([-*+]|\d{1,9}[.)])(?:\s+(.*))?$/;
 const QUOTE = /^\s{0,3}>\s?/;
 const REF_DEF = /^\s{0,3}\[[^\]]+\]:\s*\S+/;
 const TABLE_SEP = /^\s*\|?\s*:?-{1,}:?\s*(\|\s*:?-{1,}:?\s*)*\|?\s*$/;
+
+/** The text of an ATX heading ("## Title ##" → "Title"), or null when the line is not one. */
+function atxHeading(line: string): string | null {
+  const m = ATX.exec(line);
+  if (!m) return null;
+  const text = (m[2] ?? '').trimEnd();
+  const open = text.replace(/(?<!#)#+$/, '');
+  // A closing run of # counts only after a space (or alone); "C#" keeps its #.
+  return open === '' || /\s$/.test(open) ? open.trimEnd() : text;
+}
 
 const cells = (line: string) =>
   line
@@ -98,17 +110,17 @@ export function markdownToText(src: string): string {
       continue;
     }
     inTable = false;
-    if (line.includes('|') && TABLE_SEP.test(lines[i + 1] ?? '') && (lines[i + 1] ?? '').includes('-')) {
+    if (line.includes('|') && TABLE_SEP.test((lines[i + 1] ?? '').trim()) && (lines[i + 1] ?? '').includes('-')) {
       flush();
       out.push(cells(line));
       i++;
       inTable = true;
       continue;
     }
-    const atx = ATX.exec(line);
-    if (atx) {
+    const atx = atxHeading(line);
+    if (atx !== null) {
       flush();
-      if (atx[2]) out.push(markdownInline(atx[2]));
+      if (atx) out.push(markdownInline(atx));
       continue;
     }
     // "Title\n=====": the underline turns the paragraph above into a heading.
@@ -128,7 +140,7 @@ export function markdownToText(src: string): string {
       para.push(marker + item[3]!.trim());
       continue;
     }
-    const hardBreak = / {2,}$|\\$/.test(line);
+    const hardBreak = line.endsWith('  ') || line.endsWith('\\');
     para.push(line.trim().replace(/\\$/, ''));
     if (hardBreak) flush();
   }

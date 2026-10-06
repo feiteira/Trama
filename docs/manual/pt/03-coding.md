@@ -99,4 +99,4 @@ Há duas formas de tomar nota sobre uma passagem:
 
 ## Codificar enquanto ouve
 
-Nas transcrições com gravação associada, o leitor fica por cima do texto. Codifique enquanto ouve: `Ctrl+Space` reproduz e pausa sem sair do texto, `Alt+Shift+←` repete os últimos 5 segundos e **Acompanhar a gravação no texto** mantém à vista a intervenção que está a ser ouvida. Ver [Transcrições e gravações](02-documents.md#transcripts).
+Nas transcrições com gravação associada, o leitor fica por cima do texto. Codifique enquanto ouve: `Ctrl+Space` reproduz e pausa sem sair do texto, `Alt+←` repete os últimos 5 segundos durante a reprodução (`Alt+Shift+←` a qualquer momento) e **Acompanhar a gravação no texto** mantém à vista a intervenção que está a ser ouvida. Ver [Transcrições e gravações](02-documents.md#transcripts).

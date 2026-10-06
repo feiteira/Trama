@@ -16,6 +16,7 @@ import { TABLES } from '../core/store/schema';
 import { Store } from '../core/store/store';
 import { type Platform, PlatformError } from '../platform/types';
 import { BLOB_ID, type LibraryKeys, Project, type ProjectInfo, projectKeyOf } from './project';
+import { repairImported } from './reconcile';
 
 export type { ProjectInfo } from './project';
 
@@ -737,6 +738,9 @@ export class Library {
     try {
       project = await this.attach(id, store, key, gate);
       await store.merge(records);
+      // Derived data follows the texts: a file whose codings or lengths disagree with them
+      // (merged by an older Trama, say) is put right.
+      await repairImported(store);
       for (const [blobId, bytes] of blobs) {
         this.ensureOpen();
         await project.restoreBlob(blobId, bytes);

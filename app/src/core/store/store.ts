@@ -29,6 +29,23 @@ export interface TombstoneInfo {
 
 export type Tombstone<K extends Kind> = Entity<K> & TombstoneInfo;
 
+/**
+ * A write that would bring back a record whose content was erased for good (a scrubbed
+ * tombstone, e.g. a deleted entry of the pseudonymisation key). Nothing of the batch is written.
+ */
+export class ErasedRecordError extends Error {
+  constructor(
+    readonly kind: Kind,
+    readonly id: string,
+  ) {
+    super(`${kind} ${id} was erased and cannot be written again`);
+    this.name = 'ErasedRecordError';
+  }
+}
+
+/** Lookups by id are batched: SQLite limits bound parameters, so `IN (…)` takes this many at a time. */
+const ID_CHUNK = 500;
+
 /** One group of a `summarise`: how many live records share a value, and the newest of them. */
 export interface Summary {
   key: string | null;
@@ -105,6 +122,36 @@ export class Store {
     return row ? toEntity<K>(row) : null;
   }
 
+  /** Several records by id (deleted ones included), in as few queries as possible. */
+  async getMany<K extends Kind>(kind: K, ids: Iterable<string>): Promise<Map<string, Entity<K>>> {
+    const out = new Map<string, Entity<K>>();
+    const unique = [...new Set(ids)];
+    for (let i = 0; i < unique.length; i += ID_CHUNK) {
+      const part = unique.slice(i, i + ID_CHUNK);
+      const rows = await this.db.query<RecordRow>(
+        `SELECT id, created_at, hlc, deleted, data FROM ${TABLES[kind].table} WHERE id IN (${part.map(() => '?').join(', ')})`,
+        part,
+      );
+      for (const r of rows) out.set(r.id, toEntity<K>(r));
+    }
+    return out;
+  }
+
+  /** Creation time, stamp and erasure of several records, without reading their data. */
+  async stamps(kind: Kind, ids: Iterable<string>): Promise<Map<string, { created_at: string; hlc: string; scrubbed: boolean }>> {
+    const out = new Map<string, { created_at: string; hlc: string; scrubbed: boolean }>();
+    const unique = [...new Set(ids)];
+    for (let i = 0; i < unique.length; i += ID_CHUNK) {
+      const part = unique.slice(i, i + ID_CHUNK);
+      const rows = await this.db.query<{ id: string; created_at: string; hlc: string; scrubbed: number | null }>(
+        `SELECT id, created_at, hlc, json_extract(data, '$.scrubbed') AS scrubbed FROM ${TABLES[kind].table} WHERE id IN (${part.map(() => '?').join(', ')})`,
+        part,
+      );
+      for (const r of rows) out.set(r.id, { created_at: r.created_at, hlc: r.hlc, scrubbed: !!r.scrubbed });
+    }
+    return out;
+  }
+
   async list<K extends Kind>(kind: K, opts: ListOptions = {}): Promise<Entity<K>[]> {
     const conds = [];
     if (!opts.includeDeleted) conds.push('deleted = 0');
@@ -162,13 +209,23 @@ export class Store {
     return saved as Entity<K>;
   }
 
+  /**
+   * Creates or replaces records in one transaction. A record whose content was erased (a
+   * scrubbed tombstone) is never written over: the whole batch is refused (ErasedRecordError).
+   */
   async putMany(items: { kind: Kind; draft: Draft<Kind> }[]): Promise<Base[]> {
     const saved: Base[] = [];
     const statements: SqlStatement[] = [];
-    for (const { kind, draft } of items) {
-      const clean = validate(kind, draft);
+    const cleaned = items.map(({ kind, draft }) => ({ kind, clean: validate(kind, draft) }));
+    // Existing records, looked up once per kind rather than once per record.
+    const byKind = new Map<Kind, string[]>();
+    for (const { kind, clean } of cleaned) if (clean.id) (byKind.get(kind) ?? byKind.set(kind, []).get(kind)!).push(clean.id);
+    const known = new Map<Kind, Map<string, { created_at: string; scrubbed: boolean }>>();
+    for (const [kind, ids] of byKind) known.set(kind, await this.stamps(kind, ids));
+    for (const { kind, clean } of cleaned) {
       const id = clean.id ?? uuid();
-      const existing = clean.id ? await this.get(kind, id) : null;
+      const existing = clean.id ? known.get(kind)?.get(id) : undefined;
+      if (existing?.scrubbed) throw new ErasedRecordError(kind, id);
       const record = {
         ...clean,
         id,
@@ -200,8 +257,9 @@ export class Store {
    */
   async remove(kind: Kind, ids: string[], opts: { batch?: string } = {}): Promise<number> {
     const statements: SqlStatement[] = [];
-    for (const id of ids) {
-      const current = await this.get(kind, id);
+    const found = await this.getMany(kind, ids);
+    for (const id of new Set(ids)) {
+      const current = found.get(id);
       if (!current || current.deleted) continue;
       const tomb: Tombstone<Kind> = { ...current, deleted: true, updated_at_hlc: this.hlc.tick() };
       if (opts.batch) tomb.deleted_batch = opts.batch;
@@ -220,8 +278,9 @@ export class Store {
   async restore<K extends Kind>(kind: K, ids: string[]): Promise<Entity<K>[]> {
     const restored: Entity<K>[] = [];
     const statements: SqlStatement[] = [];
-    for (const id of ids) {
-      const current = (await this.get(kind, id)) as Tombstone<K> | null;
+    const found = await this.getMany(kind, ids);
+    for (const id of new Set(ids)) {
+      const current = (found.get(id) ?? null) as Tombstone<K> | null;
       if (!current || !current.deleted || current.scrubbed) continue;
       const { created_at, updated_at_hlc: _h, deleted: _d, deleted_batch: _b, scrubbed: _s, ...rest } = current as Tombstone<K> & Base;
       const clean = validate(kind, { ...rest, id } as Draft<K>);
@@ -258,8 +317,9 @@ export class Store {
    */
   async scrub<K extends Kind>(kind: K, ids: string[], blank: (record: Entity<K>) => Draft<K>): Promise<number> {
     const statements: SqlStatement[] = [];
-    for (const id of ids) {
-      const current = (await this.get(kind, id)) as Tombstone<K> | null;
+    const found = await this.getMany(kind, ids);
+    for (const id of new Set(ids)) {
+      const current = (found.get(id) ?? null) as Tombstone<K> | null;
       if (!current || !current.deleted || current.scrubbed) continue;
       const clean = validate(kind, { ...blank(current), id } as Draft<K>) as Draft<Kind>;
       const info: TombstoneInfo = { scrubbed: true };
@@ -279,12 +339,23 @@ export class Store {
   async merge(records: { kind: Kind; record: Entity<Kind> }[]): Promise<number> {
     const statements: SqlStatement[] = [];
     const kinds = new Set<Kind>();
+    // Stamps of the records here, read per kind in chunks (never one query per record).
+    const byKind = new Map<Kind, string[]>();
+    for (const { kind, record } of records) {
+      if (KINDS.includes(kind)) (byKind.get(kind) ?? byKind.set(kind, []).get(kind)!).push(record.id);
+    }
+    const here = new Map<Kind, Map<string, { hlc: string }>>();
+    for (const [kind, ids] of byKind) here.set(kind, await this.stamps(kind, ids));
+    // Within one call the newest version of an id wins too.
+    const written = new Map<string, string>();
     for (const { kind, record } of records) {
       if (!KINDS.includes(kind)) continue;
       this.hlc.observe(record.updated_at_hlc);
-      const current = await this.get(kind, record.id);
-      if (current && compareHlc(current.updated_at_hlc, record.updated_at_hlc) >= 0) continue;
+      const key = `${kind}\u0000${record.id}`;
+      const current = written.get(key) ?? here.get(kind)?.get(record.id)?.hlc;
+      if (current !== undefined && compareHlc(current, record.updated_at_hlc) >= 0) continue;
       statements.push(upsert(kind, record));
+      written.set(key, record.updated_at_hlc);
       kinds.add(kind);
     }
     // Large imports are written in chunks so one transaction never holds everything.

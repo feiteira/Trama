@@ -9,6 +9,7 @@ import { HeatTable, type HeatRow } from '../charts/HeatTable';
 import { visibleLines } from '../lib/codeLines';
 import { formatPercent, formatValue, matrixRows, pathLabel } from '../lib/format';
 import { heatScale } from '../lib/heat';
+import { presenceTotals } from '../lib/matrixTotals';
 import { useAnalysisData, useDeferredCompute, useTheme } from '../parts/data';
 import { useExporter } from '../parts/exporting';
 import { HeatLegend } from '../parts/HeatLegend';
@@ -45,7 +46,8 @@ export function MatrixTool() {
     () => codeDocumentMatrix(codings, lines.map((l) => l.id), documents, { measure: s.measure, includeChildren: s.subcodes, descendants: data.descendants, groupBy: grouping }),
     [codings, lines, documents, s.measure, s.subcodes, grouping],
   );
-  const m = result.value;
+  // Presence: every total counts documents, like the cells (lib/matrixTotals.ts).
+  const m = useMemo(() => (result.value ? presenceTotals(result.value, codings) : undefined), [result.value, codings]);
 
   const rowIndex = useMemo(() => new Map(lines.map((l, i) => [l.id, i])), [lines]);
   const collapsed = useMemo(() => new Set(s.collapsed), [s.collapsed]);

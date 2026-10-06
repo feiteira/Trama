@@ -47,11 +47,11 @@ Las exportaciones sin cifrar son archivos corrientes: guárdelas y compártalas 
 
 ## Copias de seguridad
 
-![Exportar y copias](../img/es/project.png)
+![La pantalla Proyecto](../img/es/project.png)
 
 Un ordenador puede averiarse, perderse o ser robado. Configure copias de seguridad automáticas para cada proyecto que importe:
 
-1. Abra **Exportar y copias** y elija una **carpeta de copias**: un USB que guarde en un lugar seguro, la unidad de red de su institución o una carpeta sincronizada con una nube. La copia se cifra antes de llegar allí.
+1. Abra **Proyecto**, pase a la pestaña **Copias de seguridad** y elija una **carpeta de copias**: un USB que guarde en un lugar seguro, la unidad de red de su institución o una carpeta sincronizada con una nube. La copia se cifra antes de llegar allí.
 2. A partir de entonces, Trama copia el proyecto al abrirlo, una vez al día mientras está abierto, al bloquear Trama o cerrar el proyecto (si algo ha cambiado) y siempre que elija **Hacer copia ahora**.
 3. Elija hasta dónde llegan las copias: 30, 90 o 365 días. Las copias más antiguas se van espaciando —todo lo del último día, después una al día durante dos semanas, una a la semana durante dos meses y una al mes a partir de ahí—, y las tres más recientes se conservan siempre.
 
@@ -59,7 +59,7 @@ Trama avisa cuando una copia falla (la carpeta no existe, está llena o no permi
 
 **Qué contiene una copia:** el proyecto completo, incluidos los elementos eliminados y la clave de seudonimización, cifrado con la clave de su biblioteca, con el llavero dentro. Se abre con su frase de contraseña o con su frase de recuperación, en este ordenador o en otro.
 
-**Restaurar:** en **Exportar y copias**, restaure un archivo de copia. Se convierte en un proyecto nuevo de su biblioteca, con la fecha de la copia en el nombre, para no sustituir nunca lo que tiene. En un ordenador nuevo, cree primero su biblioteca y después restaure: Trama pide la frase de contraseña o la frase de recuperación de la biblioteca que hizo la copia.
+**Restaurar:** en **Proyecto → Copias de seguridad**, elija **Restaurar…** junto a una copia de la lista, o **Restaurar desde un archivo de copia…**, debajo de la lista. La copia se convierte en un proyecto nuevo de su biblioteca, con la fecha en que la restauró en el nombre (por ejemplo, «Estudio de los huertos (restaurado el 2026-10-05)»), para no sustituir nunca lo que tiene. El proyecto en el que trabaja sigue abierto; elija **Abrir ahora** para pasar a la copia restaurada. En un ordenador nuevo, cree primero su biblioteca y después traiga la copia con **Importar un archivo de proyecto**, en la pantalla de proyectos: Trama pide la frase de contraseña o la frase de recuperación de la biblioteca que hizo la copia.
 
 Quien pueda abrir la carpeta de copias ve que existen archivos de copia, sus fechas y sus tamaños, pero no lo que contienen.
 
@@ -86,7 +86,7 @@ Aplicarla solo se puede deshacer con **Deshacer justo después**; en cuanto sigu
 
 **La clave** (qué se sustituyó por qué) es el vínculo con la identidad de sus participantes. Se queda dentro del proyecto cifrado, se deja fuera de todas las exportaciones y copias salvo que la incluya expresamente, y siempre está en las copias de seguridad cifradas. **Exportar clave** la guarda como tabla CSV para su archivo: guarde ese archivo cifrado y separado del material seudonimizado, como suelen exigir las aprobaciones éticas. Al eliminar una entrada se borra al instante el nombre original del proyecto; no se puede deshacer.
 
-Los archivos PDF y Word originales se conservan tal como se importaron. Cuando el texto de un documento se ha editado (seudonimizado, por ejemplo), las exportaciones REFI-QDA dejan fuera su PDF original salvo que lo incluya, porque el original seguiría mostrando lo que se quitó.
+Los archivos PDF y Word originales se conservan tal como se importaron. Cuando el texto de un documento se ha editado (seudonimizado, por ejemplo), las exportaciones REFI-QDA dejan siempre fuera su PDF original, porque el original seguiría mostrando lo que se quitó.
 
 <a id="audit-trail"></a>
 

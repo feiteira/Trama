@@ -124,6 +124,15 @@ export function copyName(name: string, taken: readonly string[]): string {
   return uniqueName(name.trim() || 'Project', taken);
 }
 
+/**
+ * The name suggested for an imported project: its own (or the file's), never one a project in
+ * the library already has. A .qdpx of one's own project comes back with a new id but the same
+ * name, and two identical entries make deleting the wrong one easy.
+ */
+export function importName(projectName: string, fileName: string, taken: readonly string[]): string {
+  return copyName(projectName.trim() || fileName.replace(/\.[^.]+$/, ''), taken);
+}
+
 /** Why a project file could not be read or imported. */
 export function projectFileError(e: unknown, protection?: 'password' | 'library-key' | 'none'): Msg {
   if (e instanceof NotTramaFileError) {

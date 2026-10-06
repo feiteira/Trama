@@ -4,11 +4,13 @@
 // The key is personal data. It never goes into the audit log (which is exported): logs say how
 // many replacements were made in which documents, never what was replaced.
 
-import type { Pseudonym } from '../core/model/types';
-import { replaceAll, type TextEdit } from '../core/qda/ranges';
+import type { Case, Document, Pseudonym } from '../core/model/types';
+import { LIMITS } from '../core/model/types';
+import { findMatches, planText, pseudonymiseText } from '../core/qda/pseudonymise';
+import { replaceAll } from '../core/qda/ranges';
 import type { ProjectContext } from './context';
-import { applyTextEdits } from './documents';
-import { combineUndo, commit, need, noopUndo, Plan, q, ServiceError, type Undoable } from './undo';
+import { applyTextEdits, uniqueName } from './documents';
+import { combineUndo, commit, need, noopUndo, Plan, q, ServiceError, undoKey, type Undoable } from './undo';
 
 // ---------------------------------------------------------------------------------------------
 // The key
@@ -67,6 +69,9 @@ export async function updatePseudonym(
 /**
  * Deletes an entry of the key. With `erase`, its content is wiped from the database at once
  * (not undoable): a deleted key entry would otherwise keep the original name in its tombstone.
+ * The Undoable returned then carries `forget`: recording it on the UndoManager drops every
+ * earlier step about this entry (creating or editing it), which hold the name in memory and
+ * could otherwise bring it back. The store refuses to write over the erased record anyway.
  */
 export async function deletePseudonym(ctx: ProjectContext, id: string, opts: { erase?: boolean } = {}): Promise<Undoable> {
   const p = await need(ctx, 'pseudonym', id);
@@ -83,7 +88,7 @@ export async function deletePseudonym(ctx: ProjectContext, id: string, opts: { e
     applied_at: null,
     applied_count: 0,
   }));
-  return noopUndo('pseudonym.edit');
+  return { ...noopUndo('pseudonym.edit'), forget: [undoKey('pseudonym', id)] };
 }
 
 /** The key, sorted by original. */
@@ -94,58 +99,7 @@ export async function listPseudonyms(ctx: ProjectContext): Promise<Pseudonym[]> 
 // ---------------------------------------------------------------------------------------------
 // Matching
 
-type Rule = Pick<Pseudonym, 'original' | 'whole_word' | 'case_sensitive'>;
-
-const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\/-]/g, '\\$&');
-const WORD_CHAR = '[\\p{L}\\p{N}\\p{M}_]';
-
-/**
- * Where `rule.original` occurs in `text`. Spaces inside the original match any run of spaces or
- * tabs (not line breaks), so "Ana  Lima" is found too; `whole_word` keeps "Ana" out of "Anabela".
- */
-export function findMatches(text: string, rule: Rule): { start: number; end: number }[] {
-  const original = tidy(rule.original);
-  if (!original) return [];
-  let src = original.split(' ').map(escapeRe).join('[ \\t\\u00A0]+');
-  if (rule.whole_word) src = `(?<!${WORD_CHAR})${src}(?!${WORD_CHAR})`;
-  const re = new RegExp(src, rule.case_sensitive ? 'gu' : 'giu');
-  const out: { start: number; end: number }[] = [];
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(text))) out.push({ start: m.index, end: m.index + m[0].length });
-  return out;
-}
-
-interface Planned {
-  edits: TextEdit[];
-  /** Matches per pseudonym id. */
-  counts: Map<string, number>;
-  matches: { start: number; end: number; pseudonymId: string }[];
-}
-
-/**
- * The replacements for one text: longer originals first, so "Ana Lima" wins over "Ana", and no
- * two replacements overlap.
- */
-function planText(text: string, rules: readonly Pseudonym[]): Planned {
-  const taken = new Uint8Array(text.length);
-  const counts = new Map<string, number>();
-  const matches: Planned['matches'] = [];
-  const ordered = [...rules].sort((a, b) => tidy(b.original).length - tidy(a.original).length || (a.created_at < b.created_at ? -1 : 1));
-  for (const p of ordered) {
-    for (const m of findMatches(text, p)) {
-      let free = true;
-      for (let i = m.start; i < m.end && free; i++) if (taken[i]) free = false;
-      if (!free) continue;
-      taken.fill(1, m.start, m.end);
-      matches.push({ ...m, pseudonymId: p.id });
-      counts.set(p.id, (counts.get(p.id) ?? 0) + 1);
-    }
-  }
-  matches.sort((a, b) => a.start - b.start);
-  const byId = new Map(rules.map((r) => [r.id, r]));
-  return { edits: matches.map((m) => ({ start: m.start, end: m.end, insert: byId.get(m.pseudonymId)!.replacement })), counts, matches };
-}
-
+export { findMatches } from '../core/qda/pseudonymise';
 async function selected(ctx: ProjectContext, ids?: string[]): Promise<Pseudonym[]> {
   const all = await ctx.store.list('pseudonym');
   if (!ids) return all;
@@ -168,14 +122,83 @@ export interface PreviewDocument {
   samples: PreviewSample[];
 }
 
+/** Where an original occurs outside document texts: a name, a comment, a memo, a definition. */
+export type FieldKind = 'document' | 'case' | 'coding' | 'memo' | 'code' | 'docgroup';
+
+export interface PreviewField {
+  kind: FieldKind;
+  id: string;
+  /** The field: name, description, comment, title, body, inclusion, exclusion, example, or `values.<attribute id>`. */
+  field: string;
+  /** What the record is called (its name or title as it is now), to show it. */
+  label: string;
+  count: number;
+  sample: PreviewSample;
+}
+
 export interface Preview {
   documents: PreviewDocument[];
-  /** Replacements per pseudonym id. */
+  /**
+   * Hits outside document texts, replaced by `apply` too: document, case, code and group names,
+   * case descriptions and text attribute values, code definitions, segment comments, memos.
+   */
+  fields: PreviewField[];
+  /** Replacements per pseudonym id (texts and fields). */
   counts: Map<string, number>;
+  /** Every replacement: in document texts and in fields. */
   total: number;
+  /** Replacements in document texts. */
+  textTotal: number;
+  /**
+   * Audit-trail entries that mention an original. The trail is never edited: they keep the name
+   * (and travel in .trama copies of the project).
+   */
+  logEntries: number;
 }
 
 const CONTEXT = 40;
+
+interface FieldHit {
+  kind: FieldKind;
+  record: { id: string };
+  field: string;
+  label: string;
+  value: string;
+  planned: ReturnType<typeof planText>;
+}
+
+/** Free-text fields outside document texts that hold an original of the rules. */
+async function fieldHits(ctx: ProjectContext, rules: readonly Pseudonym[]): Promise<FieldHit[]> {
+  const out: FieldHit[] = [];
+  const look = (kind: FieldKind, record: { id: string }, label: string, field: string, value: unknown) => {
+    if (typeof value !== 'string' || !value) return;
+    const planned = planText(value, rules);
+    if (planned.matches.length) out.push({ kind, record, field, label, value, planned });
+  };
+  for (const d of await ctx.store.list('document', { order: 'sort, id' })) look('document', d, d.name, 'name', d.name);
+  const textAttributes = new Set((await ctx.store.list('attribute')).filter((a) => a.type === 'text').map((a) => a.id));
+  for (const c of await ctx.store.list('case')) {
+    look('case', c, c.name, 'name', c.name);
+    look('case', c, c.name, 'description', c.description);
+    for (const [k, v] of Object.entries(c.values)) if (textAttributes.has(k)) look('case', c, c.name, `values.${k}`, v);
+  }
+  for (const c of await ctx.store.list('code')) {
+    for (const f of ['name', 'description', 'inclusion', 'exclusion', 'example'] as const) look('code', c, c.name, f, c[f]);
+  }
+  for (const g of await ctx.store.list('docgroup')) look('docgroup', g, g.name, 'name', g.name);
+  for (const c of await ctx.store.list('coding', { where: "json_extract(data, '$.comment') != ''" })) look('coding', c, c.text.slice(0, 60), 'comment', c.comment);
+  for (const m of await ctx.store.list('memo')) {
+    look('memo', m, m.title, 'title', m.title);
+    look('memo', m, m.title, 'body', m.body);
+  }
+  return out;
+}
+
+async function logMentions(ctx: ProjectContext, rules: readonly Pseudonym[]): Promise<number> {
+  let n = 0;
+  for (const l of await ctx.store.list('log')) if (rules.some((r) => findMatches(l.summary, r).length > 0)) n++;
+  return n;
+}
 
 /** What applying the key (or some entries of it) would replace, per document. Changes nothing. */
 export async function preview(ctx: ProjectContext, pseudonymIds?: string[]): Promise<Preview> {
@@ -183,7 +206,7 @@ export async function preview(ctx: ProjectContext, pseudonymIds?: string[]): Pro
   const counts = new Map<string, number>();
   const documents: PreviewDocument[] = [];
   let total = 0;
-  if (!rules.length) return { documents, counts, total };
+  if (!rules.length) return { documents, fields: [], counts, total, textTotal: 0, logEntries: 0 };
   for (const doc of await ctx.store.list('document', { order: 'sort, id' })) {
     const dt = await ctx.store.get('doctext', doc.id);
     if (!dt || dt.deleted) continue;
@@ -203,12 +226,35 @@ export async function preview(ctx: ProjectContext, pseudonymIds?: string[]): Pro
       })),
     });
   }
-  return { documents, counts, total };
+  const textTotal = total;
+  const fields: PreviewField[] = [];
+  for (const h of await fieldHits(ctx, rules)) {
+    for (const [id, n] of h.planned.counts) counts.set(id, (counts.get(id) ?? 0) + n);
+    total += h.planned.matches.length;
+    const m = h.planned.matches[0]!;
+    fields.push({
+      kind: h.kind,
+      id: h.record.id,
+      field: h.field,
+      label: h.label,
+      count: h.planned.matches.length,
+      sample: {
+        pseudonymId: m.pseudonymId,
+        before: h.value.slice(Math.max(0, m.start - CONTEXT), m.start),
+        match: h.value.slice(m.start, m.end),
+        after: h.value.slice(m.end, m.end + CONTEXT),
+      },
+    });
+  }
+  return { documents, fields, counts, total, textTotal, logEntries: await logMentions(ctx, rules) };
 }
 
 export interface ApplyResult {
+  /** Every replacement made: in document texts and in fields. */
   replacements: number;
   documents: number;
+  /** Replacements made outside document texts (names, comments, memos, definitions). */
+  fieldReplacements: number;
   /** Codings removed because their whole text was replaced by nothing (never with a non-empty replacement). */
   removedCodings: number;
   undo: Undoable;
@@ -226,7 +272,7 @@ export interface ApplyOptions {
 
 export async function apply(ctx: ProjectContext, pseudonymIds?: string[], opts: ApplyOptions = {}): Promise<ApplyResult> {
   const rules = await selected(ctx, pseudonymIds);
-  if (!rules.length) return { replacements: 0, documents: 0, removedCodings: 0, undo: noopUndo('pseudonym.apply') };
+  if (!rules.length) return { replacements: 0, documents: 0, fieldReplacements: 0, removedCodings: 0, undo: noopUndo('pseudonym.apply') };
   const counts = new Map<string, number>();
   const parts: Undoable[] = [];
   const docNames: string[] = [];
@@ -252,15 +298,48 @@ export async function apply(ctx: ProjectContext, pseudonymIds?: string[], opts: 
     // The last step reports once the key's entries are marked applied too.
     if (i + 1 < docs.length) await opts.onProgress?.(i + 1, docs.length);
   }
-  const now = new Date().toISOString();
+  // Then every other free-text field, in the same undo step: names, comments, memos, definitions.
+  // Codings' own text already follows their document's text (applyTextEdits).
   const plan = new Plan();
+  let fieldReplacements = 0;
+  const hits = await fieldHits(ctx, rules);
+  const docNamesTaken = new Set((await ctx.store.list('document')).map((d) => d.name));
+  const patches = new Map<string, { kind: FieldKind; record: { id: string }; patch: Record<string, unknown> }>();
+  for (const h of hits) {
+    const { text } = replaceAll(h.value, h.planned.edits);
+    for (const [id, n] of h.planned.counts) counts.set(id, (counts.get(id) ?? 0) + n);
+    fieldReplacements += h.planned.matches.length;
+    const key = `${h.kind}:${h.record.id}`;
+    const entry = patches.get(key) ?? patches.set(key, { kind: h.kind, record: h.record, patch: {} }).get(key)!;
+    if (h.field.startsWith('values.')) {
+      const current = (entry.patch.values as Record<string, unknown> | undefined) ?? { ...(h.record as Case).values };
+      current[h.field.slice('values.'.length)] = text;
+      entry.patch.values = current;
+    } else entry.patch[h.field] = text;
+  }
+  for (const { kind, record, patch } of patches.values()) {
+    if (kind === 'document' && typeof patch.name === 'string') {
+      const own = (record as Document).name;
+      docNamesTaken.delete(own);
+      const name = uniqueName(patch.name, docNamesTaken);
+      patch.name = name;
+      docNamesTaken.add(name);
+    }
+    if (kind === 'code' && typeof patch.name === 'string') patch.name = patch.name.slice(0, LIMITS.codeNameMax);
+    if (kind === 'coding' && typeof patch.comment === 'string') patch.comment = patch.comment.slice(0, LIMITS.commentMax);
+    plan.change(kind, record as never, patch as never);
+  }
+  replacements += fieldReplacements;
+
+  const now = new Date().toISOString();
   for (const p of rules) plan.change('pseudonym', p, { applied_at: now, applied_count: counts.get(p.id) ?? 0 });
-  const shown = docNames.slice(0, 5).map(q).join(', ') + (docNames.length > 5 ? ', …' : '');
+  // The log never names what was replaced: document names are logged as they now read.
+  const shown = docNames.slice(0, 5).map((n) => q(pseudonymiseText(n, rules))).join(', ') + (docNames.length > 5 ? ', …' : '');
   const summary = `×${replacements} → ${shown || '∅'}`;
   const { undo } = await commit(ctx, plan, { label: 'pseudonym.apply', detail: summary, logs: [{ action: 'pseudonym.apply', summary }] });
   parts.push(undo);
   await opts.onProgress?.(docs.length, docs.length);
-  return { replacements, documents: docNames.length, removedCodings, undo: combineUndo('pseudonym.apply', summary, parts) };
+  return { replacements, documents: docNames.length, fieldReplacements, removedCodings, undo: combineUndo('pseudonym.apply', summary, parts) };
 }
 
 // ---------------------------------------------------------------------------------------------

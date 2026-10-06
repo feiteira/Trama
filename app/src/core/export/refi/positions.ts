@@ -137,15 +137,18 @@ export const SPEC_MODE: PositionMode = { unit: 'codepoint', crlf: 2 };
 export const modeKey = (m: PositionMode) => `${m.unit}/${m.crlf}`;
 
 /**
- * Turns a text as decoded from a REFI file (BOM already removed) into LF-only text, with a map
- * from the file's positions (counted as `mode` says) to UTF-16 offsets of the LF text.
- * A lone CR (classic Mac) becomes LF one-for-one.
+ * Turns a text as decoded from a REFI file (the file's BOM already removed) into LF-only text,
+ * with a map from the file's positions (counted as `mode` says) to UTF-16 offsets of the LF text.
+ * A lone CR (classic Mac) becomes LF one-for-one. A U+FEFF left in the text (QualCoder keeps
+ * the BOM of a file it imported, then writes its own in front) counts as a position but is not
+ * kept, since canonical text has none: the file's BOM is never stripped twice.
  */
 export function rawToLf(raw: string, mode: PositionMode): { text: string; map: OffsetMap } {
   const b = new OffsetMapBuilder();
   const cp = mode.unit === 'codepoint';
   const hasCr = raw.includes('\r');
-  if (!hasCr && (!cp || !hasAstral(raw))) return { text: raw, map: OffsetMap.identity(raw.length) };
+  const hasBom = raw.includes('\u{feff}');
+  if (!hasCr && !hasBom && (!cp || !hasAstral(raw))) return { text: raw, map: OffsetMap.identity(raw.length) };
   let u = 0; // position in the file's units
   let o = 0; // offset in the LF text
   for (let i = 0; i < raw.length; i++) {
@@ -162,12 +165,16 @@ export function rawToLf(raw: string, mode: PositionMode): { text: string; map: O
       u += 1;
       o += 2;
       i++;
+    } else if (c === 0xfeff) {
+      b.add(u, o, 1, 0);
+      u += 1;
     } else {
       u++;
       o++;
     }
   }
-  const text = hasCr ? raw.replace(/\r\n?/g, '\n') : raw;
+  let text = hasCr ? raw.replace(/\r\n?/g, '\n') : raw;
+  if (hasBom) text = text.replace(/\u{feff}/gu, '');
   return { text, map: new OffsetMap(b, u, o) };
 }
 
@@ -237,7 +244,7 @@ export function stripBom(s: string): string {
 
 /** Canonical (LF, NFC) text and position converter for a raw REFI text under `mode`. */
 export function canonicalize(raw: string, mode: PositionMode): CanonicalText {
-  const lf = rawToLf(stripBom(raw), mode);
+  const lf = rawToLf(raw, mode);
   const nfc = toNfc(lf.text);
   return {
     text: nfc.text,
@@ -293,7 +300,7 @@ export function sampleProbes(probes: SelectionProbe[]): SelectionProbe[] {
 /** How many probes each candidate mode explains (by `modeKey`). */
 export function scoreModes(raw: string, probes: SelectionProbe[]): Map<string, number> {
   const scores = new Map<string, number>();
-  const body = stripBom(raw);
+  const body = raw;
   const sample = sampleProbes(probes);
   for (const mode of candidateModes(body)) {
     let score = 0;
@@ -319,7 +326,7 @@ export function scoreModes(raw: string, probes: SelectionProbe[]): Map<string, n
  * evidence) the one closest to `prior` (counting unit and CRLF rule judged separately).
  */
 export function chooseMode(raw: string, scores: Map<string, number>, prior: PositionMode): PositionMode {
-  const candidates = candidateModes(stripBom(raw));
+  const candidates = candidateModes(raw);
   let best = candidates[0]!;
   let bestScore = -Infinity;
   for (const m of candidates) {

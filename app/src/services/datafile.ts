@@ -13,6 +13,9 @@ import type { Platform } from '../platform/types';
 import { JobStopped, stopper } from './jobs';
 import { type Library, sanitizeRecords } from './library';
 import { BLOB_ID, isLocked, type Project } from './project';
+import { textSha256 } from './documents';
+import { findMatches } from './pseudonyms';
+import { mergeTouches, reconcile, textConflicts, type TextConflict } from './reconcile';
 
 // .trama files: exporting the open project, opening and importing a file as a new project,
 // and merging a teammate's copy of the same project into this one.
@@ -36,6 +39,20 @@ export class DataFileError extends Error {
 export interface OmittedInfo extends TombstoneInfo {
   content_omitted?: boolean;
 }
+
+/**
+ * How an export marks a document it left something out of: the original file of a document
+ * whose text was edited since import (it would hold the text from before: names replaced by
+ * pseudonymisation, say), and a source file name that holds an original of the
+ * pseudonymisation key. A merge back keeps what the project it came from still has.
+ */
+export interface ExportOmitted {
+  original_omitted?: boolean;
+  filename_omitted?: boolean;
+}
+
+/** Spaces for the separators file names use instead ("Maria_Silva-interview.pdf"). */
+const fileWords = (name: string) => name.replace(/[_.+-]+/g, ' ');
 
 /** The record with its content blanked; ids, positions and links stay so it can be indexed. */
 function blankContent(kind: Kind, r: Entity<Kind>): Entity<Kind> {
@@ -77,6 +94,12 @@ export interface BundleOptions {
   readBlob?: (ref: MediaRef) => Promise<Uint8Array>;
   /** Asked before each file is read; once it says yes, the build throws `JobStopped`. */
   shouldStop?: () => boolean;
+  /**
+   * Leaves out the original file (PDF, Word…) of every document whose text no longer matches
+   * it (edited after import: typo fixes, pseudonymisation), and source file names holding an
+   * original of the pseudonymisation key (exports; backups keep everything).
+   */
+  omitEditedOriginals?: boolean;
 }
 
 /**
@@ -93,6 +116,7 @@ export async function projectToBundle(project: Project, opts: BundleOptions): Pr
     const omit = r.record.deleted && opts.omitDeletedContent && !(r.record as Tombstone<Kind>).scrubbed;
     records.push((omit ? { kind: r.kind, record: withoutContent(r.kind, r.record) } : r) as BundleRecord);
   }
+  if (opts.omitEditedOriginals) await omitEditedOriginals(project, records);
   const blobs = new Map<string, Uint8Array>();
   const warnings: string[] = [];
   for (const r of records) {
@@ -119,10 +143,45 @@ export async function projectToBundle(project: Project, opts: BundleOptions): Pr
   };
 }
 
+/**
+ * Applies `omitEditedOriginals` to bundle records in place: the REFI-QDA export's rule (an
+ * original whose text no longer matches the document is left out) for .trama files too.
+ */
+async function omitEditedOriginals(project: Project, records: BundleRecord[]): Promise<void> {
+  const texts = new Map<string, string>();
+  for (const r of records) if (r.kind === 'doctext' && !r.record.deleted) texts.set(r.record.id, r.record.text);
+  const key = (await project.store.list('pseudonym')).map((p) => ({ ...p, whole_word: false, case_sensitive: false }));
+  const named = (filename: string) => !!filename && key.some((p) => findMatches(fileWords(filename), { ...p, original: fileWords(p.original) }).length > 0);
+  for (let i = 0; i < records.length; i++) {
+    const r = records[i]!;
+    if (r.kind !== 'document' || r.record.deleted) continue;
+    const d = r.record;
+    const text = texts.get(d.id);
+    const edited = !!d.original && (!d.source || text === undefined || d.source.text_sha256 !== textSha256(text));
+    const leak = !!d.source && named(d.source.filename);
+    if (!edited && !leak) continue;
+    const out: Document & ExportOmitted = { ...d };
+    if (edited) {
+      out.original = null;
+      out.original_omitted = true;
+    }
+    if (leak && d.source) {
+      out.source = { ...d.source, filename: '' };
+      out.filename_omitted = true;
+    }
+    records[i] = { kind: 'document', record: out };
+  }
+}
+
 export interface ExportOptions {
   /** Protects the file with this password (Argon2id). */
   password?: string;
   includePseudonyms: boolean;
+  /**
+   * Keeps the original files (PDF, Word…) of documents edited since import. Off by default: such
+   * a file still holds the text from before the edits — names replaced by pseudonymisation too.
+   */
+  includeEditedOriginals?: boolean;
   now?: Date;
   readme?: string;
   shouldStop?: () => boolean;
@@ -137,6 +196,7 @@ export async function exportProjectFile(project: Project, opts: ExportOptions): 
     includeDeleted: true,
     includePseudonyms: opts.includePseudonyms,
     omitDeletedContent: true,
+    omitEditedOriginals: !opts.includeEditedOriginals,
     shouldStop: opts.shouldStop,
   });
   const info = await project.platform.info();
@@ -190,7 +250,23 @@ export async function importProjectFile(library: Library, bytes: Uint8Array, unl
  */
 async function readyToMerge(store: Store, records: readonly BundleRecord[]): Promise<BundleRecord[]> {
   const out: BundleRecord[] = [];
+  const docs = records.filter((r) => r.kind === 'document' && ((r.record as ExportOmitted).original_omitted || (r.record as ExportOmitted).filename_omitted));
+  const localDocs = docs.length ? await store.getMany('document', docs.map((r) => r.record.id)) : new Map<string, Document>();
   for (const r of records) {
+    const omitted = r.record as Document & ExportOmitted;
+    if (r.kind === 'document' && (omitted.original_omitted || omitted.filename_omitted)) {
+      // What an export left out of a document is still here: a newer version from the copy keeps it.
+      const local = localDocs.get(r.record.id);
+      if (local) {
+        const kept: Document & ExportOmitted = { ...omitted };
+        if (omitted.original_omitted && !omitted.original && local.original) kept.original = local.original;
+        if (omitted.filename_omitted && kept.source && local.source) kept.source = { ...kept.source, filename: local.source.filename };
+        if (local.original && kept.original === local.original) delete kept.original_omitted;
+        if (kept.source?.filename) delete kept.filename_omitted;
+        out.push({ kind: 'document', record: kept });
+        continue;
+      }
+    }
     if (!(r.record as OmittedInfo).content_omitted) {
       out.push(r);
       continue;
@@ -220,6 +296,20 @@ export interface MergeResult {
   blobs: number;
   /** Records of the copy left out because they were invalid. */
   rejected: number;
+  /**
+   * Documents whose text was changed both here and in the copy: this project's text is kept,
+   * the copy's changes to it are not merged (reported so they can be brought over by hand).
+   */
+  textConflicts: TextConflict[];
+  /** Codings moved back onto their words because they were made against another version of the text. */
+  reanchored: number;
+  /** Codings removed: their words are gone from the merged text, or their code or document is deleted. */
+  removedCodings: number;
+  /**
+   * Documents changed by the merge whose text holds an original of this project's applied
+   * pseudonymisation key (a teammate's text from before it was applied, say).
+   */
+  originalsFound: { documentId: string; name: string }[];
 }
 
 export interface KindCounts {
@@ -230,7 +320,7 @@ export interface KindCounts {
 }
 
 /** What merging a copy would do, worked out without writing anything (`previewMerge`). */
-export interface MergePreview extends Omit<MergeResult, 'blobs'> {
+export interface MergePreview extends Omit<MergeResult, 'blobs' | 'reanchored' | 'removedCodings' | 'originalsFound'> {
   /** The project name the copy carries. */
   projectName: string;
   /** By kind; kinds the copy changes nothing of are left out. */
@@ -276,7 +366,7 @@ export function classifyMerge(projectName: string, records: readonly BundleRecor
     } else unchanged++;
   }
   for (const k of Object.keys(byKind) as Kind[]) if (!byKind[k]!.added && !byKind[k]!.updated) delete byKind[k];
-  return { projectName, added, updated, unchanged, rejected, byKind, newCoders };
+  return { projectName, added, updated, unchanged, rejected, byKind, newCoders, textConflicts: [] };
 }
 
 function checkSameProject(project: Pick<Project, 'id'>, bundle: ProjectBundle): void {
@@ -285,9 +375,15 @@ function checkSameProject(project: Pick<Project, 'id'>, bundle: ProjectBundle): 
   }
 }
 
-/** A copy's records as a merge would store them: readied (see `readyToMerge`) and checked. */
-async function mergeable(store: Store, bundle: ProjectBundle): Promise<{ records: BundleRecord[]; rejected: number }> {
-  return sanitizeRecords(await readyToMerge(store, bundle.records));
+/**
+ * A copy's records as a merge would store them: readied (see `readyToMerge`) and checked, less
+ * the copy's texts that would overwrite a text changed here too (see `textConflicts`).
+ */
+async function mergeable(store: Store, bundle: ProjectBundle): Promise<{ records: BundleRecord[]; all: BundleRecord[]; rejected: number; conflicts: TextConflict[] }> {
+  const sane = sanitizeRecords(await readyToMerge(store, bundle.records));
+  const { conflicts, drop } = await textConflicts(store, sane.records);
+  const records = drop.size ? sane.records.filter((r) => !(r.kind === 'doctext' && drop.has(r.record.id))) : sane.records;
+  return { records, all: sane.records, rejected: sane.rejected, conflicts };
 }
 
 /**
@@ -298,7 +394,7 @@ async function mergeable(store: Store, bundle: ProjectBundle): Promise<{ records
 export async function previewMerge(project: Pick<Project, 'id' | 'store'>, bundle: ProjectBundle): Promise<MergePreview> {
   checkSameProject(project, bundle);
   const sane = await mergeable(project.store, bundle);
-  return classifyMerge(bundle.project.name, sane.records, await localStamps(project.store), sane.rejected);
+  return { ...classifyMerge(bundle.project.name, sane.records, await localStamps(project.store), sane.rejected), textConflicts: sane.conflicts };
 }
 
 /**
@@ -313,7 +409,13 @@ export async function mergeTeammateCopy(project: Project, bundle: ProjectBundle,
   const { store } = project;
   const sane = await mergeable(store, bundle);
   const { added, updated, unchanged } = classifyMerge(bundle.project.name, sane.records, await localStamps(store), sane.rejected);
+  // Read before writing: which texts and codings the merge changes, and the texts as they were.
+  const touched = await mergeTouches(store, sane.records);
+  // The copy's own text versions help place its codings, also where its text lost.
+  for (const r of sane.all) if (r.kind === 'doctext' && !r.record.deleted) touched.theirs.set(r.record.id, r.record.text);
   await store.merge(sane.records);
+  const fixed = await reconcile(store, touched);
+  const originalsFound = await originalsIn(store, touched.docs, touched.before);
   // The newest write stamp may not move (a teammate's older work): the next backup is made anyway.
   await store.deleteMeta('backup.last_hlc');
 
@@ -332,6 +434,36 @@ export async function mergeTeammateCopy(project: Project, bundle: ProjectBundle,
     }
   }
   await project.reloadMe();
-  await project.log('project.merge', `"${bundle.project.name}" +${added} ~${updated} =${unchanged}${sane.rejected ? ` !${sane.rejected}` : ''}`);
-  return { added, updated, unchanged, blobs, rejected: sane.rejected };
+  const extra = [
+    sane.rejected ? ` !${sane.rejected}` : '',
+    sane.conflicts.length ? ` ⚠${sane.conflicts.length}` : '',
+    fixed.reanchored ? ` ↦${fixed.reanchored}` : '',
+    fixed.removedCodings ? ` −${fixed.removedCodings}` : '',
+  ].join('');
+  await project.log('project.merge', `"${bundle.project.name}" +${added} ~${updated} =${unchanged}${extra}`);
+  return {
+    added, updated, unchanged, blobs, rejected: sane.rejected,
+    textConflicts: sane.conflicts, reanchored: fixed.reanchored, removedCodings: fixed.removedCodings, originalsFound,
+  };
+}
+
+/**
+ * Documents among `candidates` whose text the merge changed (from `before`) and that now hold an
+ * original of an applied pseudonymisation key entry.
+ */
+async function originalsIn(store: Store, candidates: ReadonlySet<string>, before: ReadonlyMap<string, string>): Promise<{ documentId: string; name: string }[]> {
+  const ids = [...candidates].filter((id) => before.has(id));
+  if (!ids.length) return [];
+  const key = (await store.list('pseudonym')).filter((p) => p.applied_at !== null);
+  if (!key.length) return [];
+  const texts = await store.getMany('doctext', ids);
+  const docs = await store.getMany('document', ids);
+  const out: { documentId: string; name: string }[] = [];
+  for (const id of ids) {
+    const t = texts.get(id);
+    const d = docs.get(id);
+    if (!t || t.deleted || !d || d.deleted || t.text === before.get(id)) continue;
+    if (key.some((p) => findMatches(t.text, p).length > 0)) out.push({ documentId: id, name: d.name });
+  }
+  return out;
 }

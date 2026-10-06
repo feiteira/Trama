@@ -28,7 +28,7 @@ import * as docsService from '../../../services/documents';
 import * as groupsService from '../../../services/groups';
 import * as memosService from '../../../services/memos';
 import { listDocuments, type DocumentRow } from '../../../services/queries';
-import { combineUndo, commit, Plan, q, type Undoable } from '../../../services/undo';
+import { combineUndo, q, type Undoable } from '../../../services/undo';
 import { useProject } from '../../../shell/AppState';
 import { useRouter } from '../../../shell/router';
 import { useUndo } from '../../../shell/undo';
@@ -317,16 +317,7 @@ export function DocumentsPanel({ activeDocId, onOpen }: DocumentsPanelProps) {
       const sameGroups = ch.groupIds.length === doc.group_ids.length && ch.groupIds.every((g) => doc.group_ids.includes(g));
       if (!sameGroups) parts.push((await docsService.setDocumentGroups(project, doc.id, ch.groupIds)).undo);
       if (ch.color !== doc.color) parts.push((await docsService.setDocumentColor(project, doc.id, ch.color)).undo);
-      if (ch.kind !== doc.kind) {
-        // There is no service for the kind alone: a one-field change, through the same plumbing.
-        const current = await project.store.get('document', doc.id);
-        if (current && !current.deleted) {
-          const plan = new Plan();
-          plan.change('document', current, { kind: ch.kind });
-          const summary = `${q(doc.name)}: ${doc.kind} → ${ch.kind}`;
-          parts.push((await commit(project, plan, { label: 'document.edit', detail: summary, logs: [{ action: 'document.edit', summary, target: { kind: 'document', id: doc.id } }] })).undo);
-        }
-      }
+      if (ch.kind !== doc.kind) parts.push((await docsService.setDocumentKind(project, doc.id, ch.kind)).undo);
       if (parts.length) record(parts.length === 1 ? parts[0]! : combineUndo('document.edit', q(doc.name), parts));
       setPropsDoc(null);
     } catch (e) {

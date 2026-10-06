@@ -81,20 +81,27 @@ export function canonicalize(text: string): string {
   return text.replace(NEWLINES, '\n').replace(CONTROLS, '').replace(LONE_SURROGATE, '\u{fffd}').normalize('NFC');
 }
 
+// The lookbehinds make each match start only where a run of spaces (or newlines) begins. Without
+// them an end-anchored run that is not at the end is rescanned from every position inside it,
+// and a long run of spaces in the middle of a line hangs the importer for minutes.
+const TRAILING_SPACE = /(?<![ \t\u{a0}])[ \t\u{a0}]+$/gmu;
+const TRAILING_BLANKS = /(?<![ \t])[ \t]+$/gm;
+const EDGE_NEWLINES = /^\n+|(?<!\n)\n+$/g;
+
 /**
  * Tidies canonical text produced from a structured format: no trailing spaces on lines, at
  * most one blank line in a row, no blank lines at the start or end.
  */
 export function tidy(text: string): string {
   return text
-    .replace(/[ \t\u{a0}]+$/gmu, '')
+    .replace(TRAILING_SPACE, '')
     .replace(/\n{3,}/g, '\n\n')
-    .replace(/^\n+|\n+$/g, '');
+    .replace(EDGE_NEWLINES, '');
 }
 
 /** Tidies a plain-text file lightly: trailing spaces and the blank lines at both ends only. */
 export function tidyPlain(text: string): string {
-  return text.replace(/[ \t]+$/gm, '').replace(/^\n+|\n+$/g, '');
+  return text.replace(TRAILING_BLANKS, '').replace(EDGE_NEWLINES, '');
 }
 
 /** "folder/Entrevista 3.final.docx" → "Entrevista 3.final" (both / and \ separators). */

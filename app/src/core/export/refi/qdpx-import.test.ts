@@ -5,6 +5,7 @@ import { utf8 } from '../../bytes';
 import type { Entity, Kind } from '../../model/types';
 import { validate } from '../../model/validate';
 import type { ProjectBundle } from '../bundle';
+import { forgeSize } from '../forgeZip.testutil';
 import { buildDocx } from '../office/docx';
 import { RefiError } from './common';
 import { importQdpx, QDPX_WARNING_CODES, type QdpxBundle, type QdpxImportOptions } from './qdpx-import';
@@ -132,6 +133,7 @@ describe('the reference example project', async () => {
       'Code memo: Joy→code',
       'Comment→coding',
       'Description→document',
+      'Interviews→project', // the document group's Description
       'Memo on interview 1→coding', // the Link from the note to the selection
       'Memo on interview 1→document',
       'Memo on interview 1→project',
@@ -435,6 +437,7 @@ describe('robustness', () => {
             <Coding guid="10000000-0000-4000-8000-000000000001" creatingUser="99999999-0000-4000-8000-000000000000"><CodeRef targetGUID="a0000000-0000-4000-8000-000000000001"/><NoteRef targetGUID="d9999999-0000-4000-8000-000000000000"/></Coding>
             <Coding guid="10000000-0000-4000-8000-000000000002"><CodeRef targetGUID="a9999999-0000-4000-8000-000000000000"/></Coding>
             <Coding guid="10000000-0000-4000-8000-000000000003"><CodeRef targetGUID="a0000000-0000-4000-8000-000000000001"/></Coding>
+            <Coding guid="10000000-0000-4000-8000-000000000006"><CodeRef targetGUID="a0000000-0000-4000-8000-000000000001"/></Coding>
           </PlainTextSelection>
           <PlainTextSelection guid="f0000000-0000-4000-8000-000000000002" startPosition="50" endPosition="60"><Coding guid="10000000-0000-4000-8000-000000000004"><CodeRef targetGUID="a0000000-0000-4000-8000-000000000001"/></Coding></PlainTextSelection>
           <PlainTextSelection guid="f0000000-0000-4000-8000-000000000003" startPosition="5" endPosition="60"><Coding guid="10000000-0000-4000-8000-000000000005"><CodeRef targetGUID="a0000000-0000-4000-8000-000000000001"/></Coding></PlainTextSelection>
@@ -448,11 +451,12 @@ describe('robustness', () => {
     );
     const b = await importQdpx(zip({ 'project.qde': xml, 'sources/t.txt': 'Duas palavras.' }), OPTS);
     expectValid(b);
-    expect(codingsOf(b)).toEqual(['T|Pasta|Eu|Duas', 'T|Pasta|Eu|palavras.']);
+    // A user missing from <Users> is still a person of their own, not the importing researcher.
+    expect(codingsOf(b)).toEqual(['T|Pasta|Eu|Duas', 'T|Pasta|Eu|palavras.', 'T|Pasta|User 99999999|Duas']);
     expect(all(b, 'code')[0]!.codable).toBe(true);
     expect(all(b, 'document').map((d) => d.name)).toEqual(['T', 'Sem ficheiro']);
     const w = b.warnings.join('\n');
-    for (const re of [/1 coding\(s\) pointing to a code that does not exist/, /2 coded segment\(s\) with positions outside/, /1 coded segment\(s\) ran past the end/, /1 duplicate coding/, /1 file\(s\) referenced by the project were missing/, /1 source\(s\) whose text file is stored outside/, /1 code\(s\) marked as folders/, /1 document\(s\) had no text/]) {
+    for (const re of [/1 coding\(s\) pointing to a code that does not exist/, /2 coded segment\(s\) with positions outside/, /1 coded segment\(s\) ran past the end/, /1 duplicate coding/, /1 file\(s\) referenced by the project were missing/, /1 source\(s\) whose text file is stored outside/, /1 code\(s\) marked as folders/, /1 document\(s\) had no text/, /1 coder\(s\) were not listed/]) {
       expect(w).toMatch(re);
     }
   });
@@ -485,5 +489,111 @@ describe('robustness', () => {
     expectValid(b2);
     expect(all(b2, 'code').map((c) => c.name.length)).toEqual([120, 'Code 2'.length]);
     expect(all(b2, 'coder').map((c) => c.name)).toEqual(['User 1']);
+  });
+});
+
+describe('decoding and data that must not be lost or misattributed', () => {
+  const CODE = `<CodeBook><Codes><Code guid="a0000000-0000-4000-8000-000000000001" name="Calm" isCodable="true"/></Codes></CodeBook>`;
+  const sel = (start: number, end: number, name: string, user = '') =>
+    `<PlainTextSelection guid="${uuidLike()}" name="${name}" startPosition="${start}" endPosition="${end}"${user ? ` creatingUser="${user}"` : ''}>
+      <Coding guid="${uuidLike()}"${user ? ` creatingUser="${user}"` : ''}><CodeRef targetGUID="a0000000-0000-4000-8000-000000000001"/></Coding>
+    </PlainTextSelection>`;
+  let n = 0;
+  function uuidLike(): string {
+    return `c0000000-0000-4000-8000-${(n++).toString(16).padStart(12, '0')}`;
+  }
+  const textSource = (body: string) => `<Sources><TextSource guid="b0000000-0000-4000-8000-000000000001" name="T" plainTextPath="internal://t.txt">${body}</TextSource></Sources>`;
+  const cpIndex = (text: string, part: string) => Array.from(text.slice(0, text.indexOf(part))).length;
+
+  it('QualCoder double BOM: only the file BOM comes off, the counted U+FEFF keeps every coding in place', async () => {
+    // QualCoder keeps the BOM of a file it imported as U+FEFF in its text (and counts it), then
+    // writes the file with a BOM of its own in front.
+    const stored = '﻿Interviewer: How is the garden?\nP1: It keeps me sane.\n';
+    const bytes = new Uint8Array([0xef, 0xbb, 0xbf, ...utf8(stored)]);
+    const xml = project(CODE + textSource(sel(37, 54, 'It keeps me sane.')), 'origin="QualCoder 3.6"');
+    const b = await importQdpx(zip({ 'project.qde': xml, 't.txt': bytes }), OPTS);
+    expectValid(b);
+    expect(all(b, 'doctext')[0]!.text).toBe('Interviewer: How is the garden?\nP1: It keeps me sane.\n');
+    expect(all(b, 'coding').map((c) => c.text)).toEqual(['It keeps me sane.']);
+  });
+
+  it('a stray invalid byte becomes one U+FFFD instead of turning the whole text into mojibake', async () => {
+    const text = 'Entrevistadora: Como é a horta?\nParticipante: É ótima, ação coletiva e união.';
+    const bytes = new Uint8Array([...utf8(text), 0x96, 0x0a]);
+    const s = cpIndex(text, 'ação coletiva');
+    const xml = project(CODE + textSource(sel(s, s + 13, 'ação coletiva')), 'origin="MAXQDA 2022"');
+    const b = await importQdpx(zip({ 'project.qde': xml, 't.txt': bytes }), OPTS);
+    expect(all(b, 'doctext')[0]!.text).toBe(`${text}\uFFFD\n`);
+    expect(all(b, 'coding').map((c) => c.text)).toEqual(['ação coletiva']);
+    expect(b.issues.find((i) => i.code === 'badEncoding')?.count).toBe(1);
+  });
+
+  it('a text that is not UTF-8 at all is still read as Windows-1252, with a warning', async () => {
+    const latin1 = new Uint8Array([...'Ação é ótima.'].map((c) => c.charCodeAt(0)));
+    const xml = project(CODE + textSource(sel(0, 4, 'Ação')));
+    const b = await importQdpx(zip({ 'project.qde': xml, 't.txt': latin1 }), OPTS);
+    expect(all(b, 'doctext')[0]!.text).toBe('Ação é ótima.');
+    expect(all(b, 'coding').map((c) => c.text)).toEqual(['Ação']);
+    expect(b.issues.map((i) => i.code)).toContain('badEncoding');
+  });
+
+  it('codings by users missing from <Users> keep one coder per user and are not merged as duplicates', async () => {
+    const text = 'Interviewer: How are you?\nP1: I feel calm in the garden.';
+    const s = cpIndex(text, 'I feel calm');
+    const AA = 'A0000000-0000-4000-8000-0000000000AA';
+    const BB = 'A0000000-0000-4000-8000-0000000000BB';
+    const xml = project(CODE + textSource(sel(s, s + 19, 'I feel calm in the', AA) + sel(s, s + 19, 'I feel calm in the', BB) + sel(s, s + 19, 'I feel calm in the', AA)));
+    const b = await importQdpx(zip({ 'project.qde': xml, 't.txt': text }), OPTS);
+    expectValid(b);
+    expect(all(b, 'coder').map((c) => c.name).sort()).toEqual(['User a0000000', 'User a0000000 (2)']);
+    expect(all(b, 'coding')).toHaveLength(2);
+    expect(new Set(all(b, 'coding').map((c) => c.coder_id)).size).toBe(2);
+    expect(b.issues.find((i) => i.code === 'unknownUser')?.count).toBe(2);
+    expect(b.issues.find((i) => i.code === 'duplicateCoding')?.count).toBe(1); // AA twice is a real duplicate
+    // No GUID at all still goes to the researcher's own coder.
+    const none = await importQdpx(zip({ 'project.qde': project(CODE + textSource(sel(s, s + 19, ''))), 't.txt': text }), OPTS);
+    expect(all(none, 'coder').map((c) => c.name)).toEqual(['Eu']);
+  });
+
+  it('keeps the descriptions of document groups and transcripts as memos', async () => {
+    const xml = project(
+      `<Sources>
+        <TextSource guid="b0000000-0000-4000-8000-000000000001" name="T1" plainTextPath="internal://t.txt"/>
+        <AudioSource guid="b0000000-0000-4000-8000-000000000002" name="Rec">
+          <Transcript guid="b0000000-0000-4000-8000-000000000003" name="Rec" plainTextPath="internal://r.txt">
+            <Description>Transcribed by Rita, verbatim, pauses marked</Description>
+          </Transcript>
+        </AudioSource>
+      </Sources>
+      <Sets><Set guid="40000000-0000-4000-8000-000000000001" name="Document group 1">
+        <Description>Rural participants interviewed in March; recruitment via the parish</Description>
+        <MemberSource targetGUID="b0000000-0000-4000-8000-000000000001"/><MemberSource targetGUID="b0000000-0000-4000-8000-000000000002"/>
+      </Set></Sets>`,
+      'origin="ATLAS.ti 23.1.0"',
+    );
+    const b = await importQdpx(zip({ 'project.qde': xml, 't.txt': 'Texto.', 'r.txt': 'A: Olá.' }), OPTS);
+    expectValid(b);
+    const memos = all(b, 'memo').map((m) => `${m.title}|${m.target.kind}|${m.body}`).sort();
+    expect(memos).toEqual([
+      'Description|document|Transcribed by Rita, verbatim, pauses marked',
+      'Document group 1|project|Rural participants interviewed in March; recruitment via the parish',
+    ]);
+  });
+
+  it('imports a source with more selections than a spread call can take', async () => {
+    const count = 200_000;
+    const parts: string[] = [];
+    for (let i = 0; i < count; i++) parts.push(`<PlainTextSelection guid="c0000000-0000-4000-8000-${i.toString(16).padStart(12, '0')}" startPosition="0" endPosition="1"/>`);
+    const xml = project(textSource(parts.join('')));
+    const b = await importQdpx(zip({ 'project.qde': xml, 't.txt': 'abc' }), OPTS);
+    expect(all(b, 'document')).toHaveLength(1);
+  }, 60_000);
+
+  it('refuses a zip bomb before inflating it', async () => {
+    const qde = project(textSource(''));
+    const bomb = forgeSize(zip({ 'project.qde': qde, 't.txt': 'abc' }), 'project.qde', 400 * 1024 * 1024);
+    await expect(importQdpx(bomb, OPTS)).rejects.toThrow(/too large/);
+    const bigSource = forgeSize(zip({ 'project.qde': qde, 't.txt': 'abc' }), 't.txt', 0xf0000000);
+    await expect(importQdpx(bigSource, OPTS)).rejects.toThrow(RefiError);
   });
 });

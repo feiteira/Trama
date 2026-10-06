@@ -2,7 +2,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { open as openDialog, save as saveDialog } from '@tauri-apps/plugin-dialog';
 import { fromHex, toHex } from '../core/bytes';
-import type { Kdf } from '../core/crypto/kdf';
+import { checkKdfParams, type Kdf } from '../core/crypto/kdf';
 import type { Db, Row, SqlParam, SqlStatement } from '../core/store/db';
 import { type AppInfo, type FileEntry, type FileFilter, type Platform, PlatformError } from './types';
 
@@ -100,6 +100,8 @@ function forgetOpenDb(project?: string) {
 
 export const tauriKdf: Kdf = async (secret, salt, params) => {
   if (params.algo !== 'argon2id') throw new PlatformError('INVALID', `unsupported KDF ${String(params.algo)}`);
+  // Parameters may come from a file: bounded here as in the shell (kdf.rs).
+  checkKdfParams(params);
   return fromHex(
     await call<string>('kdf_argon2id', {
       secretHex: toHex(secret),

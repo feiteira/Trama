@@ -6,7 +6,7 @@ import { ARGON2_PARAMS, type Kdf, type KdfParams, normalizePassphrase } from '..
 import { type Keyring, type SlotKind, subkey, unlockKeyring } from '../crypto/keyring';
 import { parseHlc } from '../hlc';
 import type { Code, DocText, Document, Entity, Kind, Memo } from '../model/types';
-import { KINDS } from '../model/types';
+import { KINDS, LIMITS } from '../model/types';
 import type { BundleRecord, ProjectBundle } from './bundle';
 
 // The .trama file: one ZIP holding a whole project in open formats (docs/spec/trama-format-v1.md).
@@ -52,7 +52,7 @@ export interface TramaBundle extends ProjectBundle {
 
 export type NotTramaReason =
   | 'unknown-type' | 'not-zip' | 'no-manifest' | 'format' | 'newer-version' | 'checksum' | 'unlisted-file'
-  | 'unsafe-path' | 'bad-record' | 'header';
+  | 'unsafe-path' | 'bad-record' | 'header' | 'too-large';
 
 export class NotTramaFileError extends Error {
   constructor(readonly reason: NotTramaReason, detail = '') {
@@ -74,15 +74,20 @@ function alreadyCompressed(mime: string | undefined, bytes: Uint8Array): boolean
 
 const RESERVED = /^(con|prn|aux|nul|com\d|lpt\d)(\.|$)/i;
 
+/** Unpaired UTF-16 surrogates (with the u flag a pair is one code point and never matches). */
+const LONE_SURROGATE = /[\u{d800}-\u{dfff}]/gu;
+
 /** A file name that is valid on every desktop system, for the readable copies. */
 export function safeName(s: string, fallback = 'untitled'): string {
-  const name = s
+  const cleaned = s
+    .replace(LONE_SURROGATE, '\u{fffd}')
     .normalize('NFC')
     .replace(/[\\/:*?"<>|\u0000-\u001f\u007f]/g, '_')
     .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, 80)
-    .replace(/[. ]+$/, '');
+    .trim();
+  // Cut by code points: cutting UTF-16 units could split an emoji and leave half of it, which
+  // the UTF-8 entry name would read back as U+FFFD, no longer matching the manifest.
+  const name = Array.from(cleaned).slice(0, 80).join('').replace(/[. ]+$/, '');
   if (!name) return fallback;
   return RESERVED.test(name) ? `_${name}` : name;
 }
@@ -244,32 +249,78 @@ function checkRecord(kind: Kind, r: unknown): Entity<Kind> {
   return rec as Entity<Kind>;
 }
 
+/** Most a record file (data/*.jsonl) or the manifest may hold uncompressed: JS strings stop near there. */
+const MAX_DATA_ENTRY = 512 * 1024 * 1024;
+/** Uncompressed bytes any archive may hold, whatever its size: enough for a large text-only project. */
+const MIN_BUDGET = 1024 * 1024 * 1024;
+/** Beyond that floor, how much larger than the file itself its contents may be. Media are stored as they are. */
+const MAX_RATIO = 32;
+
+/**
+ * How many bytes the archive may expand to. fflate inflates each entry into a buffer of exactly
+ * its declared size, so declared sizes are a sound bound: a zip bomb is refused before anything
+ * is inflated rather than after gigabytes have been allocated.
+ */
+export function inflateBudget(zipLength: number): number {
+  return Math.max(MIN_BUDGET, zipLength * MAX_RATIO);
+}
+
+const isReadableCopy = (path: string) => path.startsWith('readable/');
+
 /** Reads and verifies an unencrypted .trama ZIP. */
 export function readTramaZip(zip: Uint8Array): TramaBundle {
-  let files: Record<string, Uint8Array>;
+  // 1. List the entries without inflating any, and refuse the archive on names and sizes alone.
+  const sizes = new Map<string, number>();
   try {
-    files = unzipSync(zip);
+    unzipSync(zip, {
+      filter: (f) => {
+        sizes.set(f.name, f.originalSize);
+        return false;
+      },
+    });
   } catch {
     throw new NotTramaFileError('not-zip');
   }
-  for (const path of Object.keys(files)) {
+  let total = 0;
+  for (const [path, size] of sizes) {
     if (!isSafePath(path)) throw new NotTramaFileError('unsafe-path', path);
+    // The readable copies are never inflated, so they cost nothing.
+    if (isReadableCopy(path)) continue;
+    const max = path.startsWith('blobs/') ? LIMITS.mediaMaxBytes : MAX_DATA_ENTRY;
+    total += size;
+    if (size > max || total > inflateBudget(zip.length)) throw new NotTramaFileError('too-large', path);
   }
-  const rawManifest = files['manifest.json'];
+
+  // 2. The manifest alone, then only the files it lists (never the readable copies: Trama ignores them).
+  if (!sizes.has('manifest.json')) throw new NotTramaFileError('no-manifest');
+  const inflate = (want: (path: string) => boolean): Record<string, Uint8Array> => {
+    try {
+      return unzipSync(zip, { filter: (f) => want(f.name) });
+    } catch {
+      throw new NotTramaFileError('not-zip');
+    }
+  };
+  const rawManifest = inflate((p) => p === 'manifest.json')['manifest.json'];
   if (!rawManifest) throw new NotTramaFileError('no-manifest');
   const manifest = parseJson(rawManifest, 'no-manifest', 'manifest.json') as Manifest;
   if (!manifest || typeof manifest !== 'object' || manifest.format !== FORMAT) throw new NotTramaFileError('format');
   if (typeof manifest.version !== 'number' || manifest.version > FORMAT_VERSION) throw new NotTramaFileError('newer-version', String(manifest.version));
   if (!manifest.files || typeof manifest.files !== 'object') throw new NotTramaFileError('no-manifest', 'files');
-  for (const [path, hash] of Object.entries(manifest.files)) {
+  // What the importer reads must be covered by a checksum: nothing slipped in afterwards.
+  for (const [path, size] of sizes) {
+    if (path === 'manifest.json' || isReadableCopy(path) || (path.endsWith('/') && size === 0)) continue;
+    if (!Object.hasOwn(manifest.files, path)) throw new NotTramaFileError('unlisted-file', path);
+  }
+  for (const path of Object.keys(manifest.files)) {
     if (!isSafePath(path)) throw new NotTramaFileError('unsafe-path', path);
+  }
+  const files = inflate((p) => p !== 'manifest.json' && !isReadableCopy(p) && Object.hasOwn(manifest.files, p));
+  for (const [path, hash] of Object.entries(manifest.files)) {
+    // A damaged readable copy (or one whose name did not survive the trip through UTF-8, as
+    // older versions could write) must not make the project itself unreadable.
+    if (isReadableCopy(path)) continue;
     const bytes = files[path];
     if (!bytes || typeof hash !== 'string' || toHex(sha256(bytes)) !== hash.toLowerCase()) throw new NotTramaFileError('checksum', path);
-  }
-  // What the importer reads must be covered by a checksum: nothing slipped in afterwards.
-  for (const [path, bytes] of Object.entries(files)) {
-    if (path === 'manifest.json' || (path.endsWith('/') && bytes.length === 0)) continue;
-    if (!(path in manifest.files)) throw new NotTramaFileError('unlisted-file', path);
   }
 
   // The newest version of a record wins should one appear twice.

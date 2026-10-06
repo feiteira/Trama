@@ -13,6 +13,7 @@ import { Frame, LanguagePicker } from './Frame';
 import { PassphraseFields } from './PassphraseFields';
 import { passphraseProblem } from './passphrase';
 import { SecretField } from './SecretField';
+import { forgetAllProjectPrefs } from '../common/localPrefs';
 
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
@@ -94,6 +95,7 @@ export function Unlock({ reason }: { reason?: LockedReason }) {
     if (!ok) return;
     try {
       await platform.eraseAll();
+      forgetAllProjectPrefs();
       erased();
     } catch (e) {
       setError(t('onboarding.unlock.eraseFailed', { message: message(e) }));

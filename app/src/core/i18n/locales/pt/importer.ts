@@ -274,6 +274,10 @@ export const importer: Messages['importer'] = {
     cuesSkipped: { one: '{n} legenda sem tempo legível foi ignorada.', other: '{n} legendas sem tempo legível foram ignoradas.' },
     formulas: { one: '{n} fórmula não tinha resultado guardado e ficou vazia.', other: '{n} fórmulas não tinham resultado guardado e ficaram vazias.' },
     raggedRows: { one: '{n} linha tem mais ou menos células do que o cabeçalho.', other: '{n} linhas têm mais ou menos células do que o cabeçalho.' },
+    malformedQuotes: {
+      one: 'Uma célula entre aspas na linha {lines} não fecha corretamente, pelo que as linhas seguintes podem ter sido juntas numa só resposta. Verifique o ficheiro numa folha de cálculo antes de importar.',
+      other: 'Há células entre aspas nas linhas {lines} que não fecham corretamente, pelo que as linhas seguintes podem ter sido juntas numa só resposta. Verifique o ficheiro numa folha de cálculo antes de importar.',
+    },
     other: 'Nota do importador: {code}',
   },
 
@@ -382,6 +386,8 @@ export const importer: Messages['importer'] = {
       syncPoint: { one: '{n} marca de tempo da transcrição sem posição ou tempo', other: '{n} marcas de tempo da transcrição sem posição ou tempo' },
       richTextOnly: { one: '{n} texto foi lido de um ficheiro Word; as posições codificadas podem estar desviadas', other: '{n} textos foram lidos de ficheiros Word; as posições codificadas podem estar desviadas' },
       invalidRecord: { one: '{n} elemento com dados inválidos', other: '{n} elementos com dados inválidos' },
+      unknownUser: { one: '{n} codificador não constava da lista de utilizadores do projeto e recebeu um nome a partir do seu ID: mude-lhe o nome no Trama', other: '{n} codificadores não constavam da lista de utilizadores do projeto e receberam um nome a partir do seu ID: mude-lhes o nome no Trama' },
+      badEncoding: { one: '{n} texto não estava em UTF-8 válido: verifique as letras acentuadas e os símbolos (os ilegíveis aparecem como �)', other: '{n} textos não estavam em UTF-8 válido: verifique as letras acentuadas e os símbolos (os ilegíveis aparecem como �)' },
     },
     named: {
       pdfSkipped: 'O PDF «{name}»: não foi incluído nem o ficheiro nem o texto',

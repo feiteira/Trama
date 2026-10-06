@@ -5,9 +5,16 @@ export const settings = {
   sections: {
     label: 'Settings sections',
     general: 'General',
+    project: 'This project',
     security: 'Security',
     privacy: 'Privacy',
     about: 'About',
+  },
+  materialLanguage: {
+    label: 'Language of the material',
+    hint: 'The language your documents are written in. Word frequencies leave out its common words (stop words). Saved with the project.',
+    unset: 'Not set',
+    saved: 'Language of the material saved.',
   },
   language: {
     label: 'Language',

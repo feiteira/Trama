@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { cx } from '../cx';
-import { focusBackTo, pushLayer } from '../focus';
+import { focusBackTo, pushLayer, useOpener } from '../focus';
 import type { Align, Side } from '../position';
 import { type Anchor, anchorElement, floatingStyle, useFloating } from './floating';
 import './floating.css';
@@ -36,10 +36,11 @@ export function Popover({ open, onClose, anchor, side = 'bottom', align = 'start
   const pos = useFloating(open, anchor, box, side, align);
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
+  const tracked = useOpener(open);
 
   useEffect(() => {
     if (!open) return;
-    const opener = document.activeElement;
+    const opener = tracked.opener;
     const layer = pushLayer();
     if (autoFocus) {
       // After layout, so the box is in place and focusing scrolls nothing.

@@ -184,3 +184,49 @@ describe('helpers', () => {
     await expect(listIn(ctx.store, 'document', 'nope', ['x'])).rejects.toThrow();
   });
 });
+
+describe('undo never writes over a change made since', () => {
+  it('refuses to undo a text edit after a recording was attached (it would drop the recording)', async () => {
+    const { attachMedia, editDocumentText } = await import('./documents');
+    const ctx = await makeTestProject();
+    const { document } = await createDocument(ctx, { name: 'Interview', kind: 'transcript', text: 'Ana: hello there.' });
+    const m = new UndoManager();
+    m.record((await editDocumentText(ctx, document.id, 'Ana: hello there!')).undo);
+    const ref = await attachMedia(ctx, document.id, { bytes: new Uint8Array([1, 2, 3]), filename: 'a.mp3', mime: 'audio/mpeg' });
+    await expect(m.undo()).rejects.toMatchObject({ code: 'changed_since' });
+    const after = await ctx.store.get('document', document.id);
+    expect(after!.media).toEqual(ref);
+    expect((await ctx.store.get('doctext', document.id))!.text).toBe('Ana: hello there!');
+    expect(m.canUndo).toBe(false);
+  });
+
+  it('refuses to undo a rename after a merged record changed the code', async () => {
+    const ctx = await makeTestProject();
+    const { code } = await createCode(ctx, { name: 'Trust' });
+    const m = new UndoManager();
+    m.record((await updateCode(ctx, code.id, { name: 'Trust (renamed)' })).undo);
+    // A teammate's newer version arrives through a merge (off the stack).
+    const theirs = { ...(await ctx.store.get('code', code.id))!, description: 'Rui wrote the definition' };
+    await ctx.store.merge([{ kind: 'code', record: { ...theirs, updated_at_hlc: ctx.store.hlc.tick() } }]);
+    await expect(m.undo()).rejects.toMatchObject({ code: 'changed_since' });
+    expect((await ctx.store.get('code', code.id))!.description).toBe('Rui wrote the definition');
+  });
+
+  it('still undoes and redoes a chain of steps on the same record, in order', async () => {
+    const ctx = await makeTestProject();
+    const m = new UndoManager();
+    const { code, undo } = await createCode(ctx, { name: 'A' });
+    m.record(undo);
+    m.record((await updateCode(ctx, code.id, { name: 'B' })).undo);
+    m.record((await updateCode(ctx, code.id, { description: 'def' })).undo);
+    await m.undo();
+    await m.undo();
+    expect((await ctx.store.get('code', code.id))!.name).toBe('A');
+    await m.undo();
+    expect((await ctx.store.get('code', code.id))!.deleted).toBe(true);
+    await m.redo();
+    await m.redo();
+    await m.redo();
+    expect(await ctx.store.get('code', code.id)).toMatchObject({ name: 'B', description: 'def', deleted: false });
+  });
+});

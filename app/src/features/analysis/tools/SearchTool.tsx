@@ -8,6 +8,7 @@ import { Notice, Spinner } from '../../../ui/components/Feedback';
 import { Select, TextField } from '../../../ui/components/Field';
 import { useI18n } from '../../../ui/i18n';
 import { countPerDocument, groupKwic, hitsWithin, kwicExportRows } from '../lib/kwic';
+import { describeSyntaxError } from '../lib/searchErrors';
 import { useAnalysisData, useDeferredCompute, useTexts } from '../parts/data';
 import { useExporter } from '../parts/exporting';
 import { KwicList } from '../parts/KwicList';
@@ -81,7 +82,7 @@ export function SearchTool({ initialQuery }: { initialQuery?: string }) {
   );
 
   const message = useCallback(
-    (e: SearchError) => {
+    (e: SearchError, typed: string) => {
       switch (e.code) {
         case 'empty':
           return t('analysis.search.errors.empty');
@@ -89,8 +90,12 @@ export function SearchTool({ initialQuery }: { initialQuery?: string }) {
           return t('analysis.search.errors.regex', { detail: e.detail });
         case 'negative-only':
           return t('analysis.search.errors.negativeOnly');
-        default:
-          return t('analysis.search.errors.syntax', { detail: e.detail });
+        default: {
+          // The parser names the token it stopped at; say what is wrong in words, and where.
+          const { what, near } = describeSyntaxError(e, typed);
+          const detail = t(`analysis.search.errors.problems.${what}`, { op: e.detail.toUpperCase() });
+          return near ? t('analysis.search.errors.syntaxNear', { detail, near }) : t('analysis.search.errors.syntax', { detail });
+        }
       }
     },
     [t],
@@ -100,7 +105,7 @@ export function SearchTool({ initialQuery }: { initialQuery?: string }) {
     const q = query(text);
     const err = validateQuery(q);
     if (err) {
-      setProblem(message(err));
+      setProblem(message(err, q.query));
       return;
     }
     setProblem(null);
@@ -139,7 +144,7 @@ export function SearchTool({ initialQuery }: { initialQuery?: string }) {
     return { hits: r?.hits ?? [], documents: r?.perDocument.size ?? 0 };
   }, [searchAll]);
 
-  const errorText = result.error instanceof SearchError ? message(result.error) : result.error ? String(result.error) : null;
+  const errorText = result.error instanceof SearchError ? message(result.error, run?.q.query ?? '') : result.error ? String(result.error) : null;
   const value = result.value;
 
   const exportName = `${t('analysis.search.exportName')} – ${run?.q.query ?? ''}`;
@@ -308,3 +313,4 @@ export function SearchTool({ initialQuery }: { initialQuery?: string }) {
     </ToolLayout>
   );
 }
+

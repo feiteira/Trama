@@ -8,7 +8,9 @@ Documents are your material: interview and focus-group transcripts, field notes,
 
 ![Importing documents](../img/en/import.png)
 
-Open **Import** in the navigation (or **Import documents** in the document list) and choose the files. Trama reads each file, shows you what it found and any problems, and adds the documents when you confirm.
+Open **Import** in the navigation (or **Import documents** in the document list) and choose the files, or drop them onto the screen. Trama reads each file and lists it for review: select one to check its name, what to **Import as** (a document or a transcript), its **Case** and its **Document groups**, any problems found, and a preview of the text. Untick the files you do not want, then import them all at once; one Undo takes the whole import back.
+
+The Import screen also offers **Paste text** (a transcript or notes copied from another program) and **New empty document** (for field notes written straight into Trama); once files are listed, they are in the **…** menu next to **Add files**. A file whose text is already in the project is marked **Already in the project** and left out unless you choose **Import it anyway**.
 
 | Kind of file | Extensions | Notes |
 |---|---|---|
@@ -36,16 +38,16 @@ A few things to know:
 Trama recognises transcripts and keeps **one speaker turn per paragraph**, written as `Speaker: what they said`. That makes it easy to code a whole turn, to compare speakers, and to read a focus group.
 
 - **Subtitle files** (`.vtt`, `.srt`) from Zoom, Teams, Otter or transcription software become transcripts with a time stamp at each turn.
-- **Text and Word files** are read as transcripts when they look like one: lines starting with a speaker’s name and a colon, or with time stamps such as `[00:01:23]`. Trama is careful: a field note with lines like `Date: …` stays an ordinary document. When importing, you can tell Trama to read a file as a transcript always, never, or when it looks like one.
+- **Text and Word files** are read as transcripts when they look like one: lines starting with a speaker’s name and a colon, or with time stamps such as `[00:01:23]`. Trama is careful: a field note with lines like `Date: …` stays an ordinary document. If Trama guessed wrong, change **Import as** for that file (**Transcript** or **Document**).
 - **Speaker names** that differ only in capitals (`INÊS` and `Inês`) are treated as one speaker. You can rename speakers before importing (“Speaker 1” → “Interviewer”).
-- You can ask Trama to **code each speaker’s turns** with a code named after the speaker, so you can later retrieve everything one person said.
+- **Auto-code speakers** creates a code for each speaker under a category called “Speakers” and codes every turn with it, so you can later retrieve everything one person said.
 
 **Recordings.** A transcript can carry its audio or video. In the document’s header, choose **Attach a recording…** and pick the file; it is encrypted and stored in the project. A player appears above the text:
 
 - `Ctrl+Space` plays or pauses.
 - `Alt+←` and `Alt+→` jump back or forward 5 seconds while the recording plays (or the player has the focus); at other times `Alt+←` is **Back**. `Alt+Shift+←` and `Alt+Shift+→` jump at any time, even when paused.
 - `Alt+Enter` plays from the paragraph where the cursor is.
-- **Follow the recording** highlights the turn being spoken as it plays.
+- **Follow the recording in the text** highlights the turn being spoken as it plays.
 - Removing a recording erases the file from the project; the transcript and its time stamps stay.
 
 <a id="surveys"></a>
@@ -54,13 +56,11 @@ Trama recognises transcripts and keeps **one speaker turn per paragraph**, writt
 
 Open answers from a questionnaire usually arrive as a spreadsheet: one row per respondent, one column per question. Import the `.csv` or `.xlsx` file and Trama asks how to read it:
 
-1. **The sheet** to read, for workbooks with several sheets.
-2. **The column with the respondent id**, or none (the rows are then numbered).
-3. **The columns with open answers** — the text you want to code.
-4. **The columns that describe respondents** (age, group, site…). They become [case attributes](06-cases-and-attributes.md), with one case per respondent.
-5. **The layout**: one document per respondent (each question as a heading with the answer under it), or one document per question (every respondent’s answer under their id).
-
-Trama can also code each answer with a code named after its question, so “everything answered to question 3” is one click away later.
+1. The **Sheet** to read, for workbooks with several sheets, and a **Survey name** for the documents.
+2. For each column, what to **Use as**: **Respondent id** (without one, the rows are numbered), **Open answer** (the text you want to code), **Attribute** (age, group, site… — they become [case attributes](06-cases-and-attributes.md)) or **Leave out**.
+3. **Documents**: **One document per respondent** (each question as a heading with the answer under it; recommended) or **One document per question** (every respondent’s answer under their id).
+4. **Create a case for each respondent**, with the attribute columns as attributes (only with one document per respondent). Respondents already in the project are updated.
+5. **Code each answer by question** creates a code for each question under a category called “Questions”, so “everything answered to question 3” is one click away later.
 
 <a id="documents"></a>
 

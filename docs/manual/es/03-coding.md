@@ -65,6 +65,7 @@ Para dar una tecla de atajo a un código, elija **Tecla de atajo…** en su men�
 - **Mostrar solo el código activo** atenúa todos los demás códigos, lo que ayuda a comprobar si un código se ha aplicado de forma coherente.
 - **Codificadores**: cuando varias personas han codificado el proyecto, elija qué codificación se muestra: la de todos, solo la suya o la de un compañero.
 - **Tamaño del texto**: aumente o reduzca el texto desde la cabecera. La elección se recuerda.
+- **Segmentos codificados**, en la cabecera, abre la lista de los segmentos codificados de este documento, y **Memorandos**, los memorandos sobre el documento y sus pasajes.
 - Haga clic en texto codificado (o ponga el cursor en él y pulse `Enter`) para ver los **segmentos codificados en este punto**. En cada uno puede añadir un comentario, **cambiar de código**, **ajustar los límites** (seleccione la nueva extensión y pulse `Enter`), escribir un memorando, abrir el código en el libro de códigos o **quitar esta codificación**.
 
 <a id="find"></a>

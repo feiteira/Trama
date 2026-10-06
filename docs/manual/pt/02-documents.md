@@ -8,7 +8,9 @@ Os documentos são o seu material: transcrições de entrevistas e grupos focais
 
 ![Importar documentos](../img/pt/import.png)
 
-Abra **Importar** na navegação (ou **Importar documentos** na lista de documentos) e escolha os ficheiros. O Trama lê cada ficheiro, mostra o que encontrou e eventuais problemas, e acrescenta os documentos quando confirmar.
+Abra **Importar** na navegação (ou **Importar documentos** na lista de documentos) e escolha os ficheiros, ou arraste-os para o ecrã. O Trama lê cada ficheiro e põe-no numa lista para rever: selecione um para verificar o nome, como o **Importar como** (documento ou transcrição), o **Caso** e os **Grupos de documentos**, eventuais problemas e uma pré-visualização do texto. Desmarque os ficheiros que não quer e importe-os todos de uma vez; um só Anular desfaz a importação inteira.
+
+O ecrã Importar oferece também **Colar texto** (uma transcrição ou notas copiadas de outro programa) e **Novo documento vazio** (para notas de campo escritas diretamente no Trama); depois de haver ficheiros na lista, estão no menu **…** ao lado de **Adicionar ficheiros**. Um ficheiro cujo texto já existe no projeto fica marcado como **Já está no projeto** e é deixado de fora, a menos que escolha **Importar mesmo assim**.
 
 | Tipo de ficheiro | Extensões | Notas |
 |---|---|---|
@@ -36,9 +38,9 @@ Algumas coisas a saber:
 O Trama reconhece transcrições e mantém **uma intervenção por parágrafo**, escrita como `Orador: o que disse`. Assim é fácil codificar uma intervenção inteira, comparar oradores e ler um grupo focal.
 
 - Os **ficheiros de legendas** (`.vtt`, `.srt`) do Zoom, do Teams, do Otter ou de programas de transcrição tornam-se transcrições com uma marca de tempo em cada intervenção.
-- Os **ficheiros de texto e de Word** são lidos como transcrições quando parecem uma: linhas que começam com o nome de quem fala seguido de dois pontos, ou com marcas de tempo como `[00:01:23]`. O Trama é cauteloso: uma nota de campo com linhas como `Data: …` continua a ser um documento comum. Ao importar, pode indicar que um ficheiro deve ser lido como transcrição sempre, nunca, ou quando parecer uma.
+- Os **ficheiros de texto e de Word** são lidos como transcrições quando parecem uma: linhas que começam com o nome de quem fala seguido de dois pontos, ou com marcas de tempo como `[00:01:23]`. O Trama é cauteloso: uma nota de campo com linhas como `Data: …` continua a ser um documento comum. Se o Trama se enganar, mude **Importar como** nesse ficheiro (**Transcrição** ou **Documento**).
 - Os **nomes de quem fala** que só diferem em maiúsculas (`INÊS` e `Inês`) são tratados como a mesma pessoa. Pode mudar os nomes antes de importar («Orador 1» → «Entrevistadora»).
-- Pode pedir ao Trama que **codifique as intervenções de cada pessoa** com um código com o nome dela, para mais tarde recuperar tudo o que alguém disse.
+- **Codificar interlocutores automaticamente** cria um código para cada interlocutor numa categoria chamada «Interlocutores» e codifica com ele todas as suas intervenções, para mais tarde recuperar tudo o que alguém disse.
 
 **Gravações.** Uma transcrição pode ter o respetivo áudio ou vídeo. No cabeçalho do documento, escolha **Associar uma gravação…** e escolha o ficheiro; fica cifrado e guardado no projeto. Aparece um leitor por cima do texto:
 
@@ -54,13 +56,11 @@ O Trama reconhece transcrições e mantém **uma intervenção por parágrafo**,
 
 As respostas abertas de um questionário costumam chegar numa folha de cálculo: uma linha por inquirido, uma coluna por pergunta. Importe o ficheiro `.csv` ou `.xlsx` e o Trama pergunta como o deve ler:
 
-1. **A folha** a ler, nos livros com várias folhas.
-2. **A coluna com o identificador do inquirido**, ou nenhuma (as linhas são então numeradas).
-3. **As colunas com respostas abertas** — o texto que quer codificar.
-4. **As colunas que descrevem os inquiridos** (idade, grupo, local…). Tornam-se [atributos dos casos](06-cases-and-attributes.md), com um caso por inquirido.
-5. **A organização**: um documento por inquirido (cada pergunta como título, com a resposta por baixo) ou um documento por pergunta (a resposta de cada inquirido por baixo do respetivo identificador).
-
-O Trama pode também codificar cada resposta com um código com o nome da pergunta, para que «tudo o que se respondeu à pergunta 3» fique à distância de um clique.
+1. A **Folha** a ler, nos livros com várias folhas, e um **Nome do inquérito** para os documentos.
+2. Para cada coluna, como a **Usar como**: **Identificador** (sem ele, as linhas são numeradas), **Resposta aberta** (o texto que quer codificar), **Atributo** (idade, grupo, local… — tornam-se [atributos dos casos](06-cases-and-attributes.md)) ou **Deixar de fora**.
+3. **Documentos**: **Um documento por inquirido** (cada pergunta como título, com a resposta por baixo; recomendado) ou **Um documento por pergunta** (a resposta de cada inquirido por baixo do respetivo identificador).
+4. **Criar um caso para cada inquirido**, com as colunas de atributos como atributos (só com um documento por inquirido). Os inquiridos que já existem no projeto são atualizados.
+5. **Codificar cada resposta pela pergunta** cria um código para cada pergunta numa categoria chamada «Perguntas», para que «tudo o que se respondeu à pergunta 3» fique à distância de um clique.
 
 <a id="documents"></a>
 

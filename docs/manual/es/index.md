@@ -10,7 +10,7 @@ Este manual también está dentro de la aplicación: elija **Ayuda** en la naveg
 4. [El libro de códigos](04-codebook.md) — la jerarquía de códigos, definiciones, fusionar y separar códigos, intercambiar libros de códigos
 5. [Segmentos codificados y memorandos](05-retrieval-and-memos.md) — recuperar lo codificado, filtros, copiar y exportar segmentos, escribir memorandos
 6. [Casos y atributos](06-cases-and-attributes.md) — casos, atributos, importar atributos de una hoja de cálculo
-7. [Análisis](07-analysis.md) — búsqueda de texto, coocurrencia, matrices código × documento, tablas código × atributo, frecuencia de palabras, gráficos
+7. [Análisis](07-analysis.md) — de quién son las codificaciones que se cuentan, búsqueda de texto, coocurrencia, matrices código × documento, tablas código × atributo, frecuencia de palabras, gráficos
 8. [Trabajo en equipo y acuerdo entre codificadores](08-teamwork-and-agreement.md) — copias para compañeros, fusión, codificadores, estadísticos de acuerdo y qué significan
 9. [Intercambiar proyectos](09-exchange.md) — REFI-QDA con NVivo, MAXQDA y ATLAS.ti, el archivo `.trama`, qué se conserva y qué no
 10. [Privacidad y seguridad](10-privacy-and-security.md) — cifrado, copias de seguridad, seudonimización, registro de auditoría, textos para comités de ética y planes de gestión de datos

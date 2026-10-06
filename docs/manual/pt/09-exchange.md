@@ -33,7 +33,9 @@ Abra **Projeto**, passe ao separador **Exportar**, escolha **Projeto REFI-QDA** 
 
 - **Fins de linha para o MAXQDA** é a única opção: escreve os ficheiros de texto com fins de linha do Windows, para que os segmentos codificados fiquem no sítio certo no MAXQDA. Ative-a quando o ficheiro for para o MAXQDA e deixe-a desativada para outros programas.
 - Os memorandos e as gravações são sempre incluídos.
-- Os PDF originais cujo texto editou são sempre escritos como texto (ver [O que não passa](#lost)).
+- Os ficheiros PDF e Word originais cujo texto editou são sempre escritos como texto (ver [O que não passa](#lost)).
+
+Depois de guardar, o Trama indica o que não foi possível levar.
 
 O ficheiro `.qdpx` **não é cifrado** e nunca contém a chave de pseudonimização, os itens eliminados nem o registo de auditoria.
 
@@ -44,7 +46,7 @@ O ficheiro `.qdpx` **não é cifrado** e nunca contém a chave de pseudonimizaç
 | | Para o Trama | Do Trama |
 |---|---|---|
 | Documentos (texto) | Sim | Sim |
-| Ficheiros PDF e Word originais | Guardados como ficheiro original | Os PDF cujo texto não foi editado |
+| Ficheiros PDF e Word originais | Guardados como ficheiro original | Os que não tiveram o texto editado |
 | Transcrições com marcas de tempo e gravações | Sim | Sim (as marcas de tempo precisam da gravação) |
 | Códigos, hierarquia, cores | Sim | Sim |
 | Definições dos códigos | Sim | Sim, com *quando usar*, *quando não usar* e *exemplo* como partes identificadas da descrição |
@@ -65,14 +67,20 @@ O ficheiro `.qdpx` **não é cifrado** e nunca contém a chave de pseudonimizaç
 - ficheiros a que o `.qdpx` se refere mas que não contém (o Trama nunca vai buscar nada a um caminho no disco nem à rede);
 - conjuntos de códigos e de memorandos, grafos e redes, ligações que não associam um memorando, e referências a códigos em casos;
 - valores de atributos que não correspondem ao tipo, e a parte da hora em valores de data e hora;
-- codificações de códigos que não existem, com posições impossíveis, ou duplicadas.
+- codificações de códigos que não existem, com posições impossíveis, ou duplicadas (as codificações que passam do fim de um texto são encurtadas).
+
+Os códigos marcados como pastas que, ainda assim, têm codificações entram como códigos comuns, para que as codificações continuem visíveis. Um ficheiro de texto que não seja UTF-8 válido é lido o melhor possível, e o resumo indica-o.
 
 **Ao sair**, o outro programa não recebe:
 
 - os atributos de **Escolha** como escolhas: passam a texto, porque o REFI-QDA não tem listas de valores permitidos;
 - as cores de casos, grupos, memorandos e documentos, as teclas de atalho dos códigos e os tipos de documento *inquérito* e *nota* (passam a documentos de texto comuns);
 - o registo de auditoria, os itens eliminados e a chave de pseudonimização;
-- o PDF original de um documento cujo texto editou — pseudonimizado, por exemplo. O original continuaria a mostrar o que foi removido, por isso o documento é sempre escrito como texto.
+- o PDF ou o ficheiro Word original de um documento cujo texto editou — pseudonimizado, por exemplo. O original continuaria a mostrar o que foi removido, por isso o documento é sempre escrito como texto. Os ficheiros originais noutros formatos (OpenDocument, RTF…) nunca são escritos, porque o REFI-QDA não os comporta; o texto deles é;
+- as marcas de tempo de uma transcrição cuja gravação falta;
+- ficheiros com mais de 2 GB, o máximo que o REFI-QDA permite.
+
+Os memorandos sobre algo que foi eliminado ficam associados ao projeto.
 
 O mapeamento completo, para os mais curiosos, está em `docs/spec/refi-qda.md` no código-fonte do Trama.
 
@@ -91,3 +99,5 @@ Ao exportar, pode **proteger o ficheiro com uma palavra-passe** (muito recomenda
 Por dentro, um ficheiro `.trama` sem palavra-passe é um arquivo ZIP comum: os dados em linhas JSON, os ficheiros originais e uma pasta `readable` com cada documento em texto simples, o livro de códigos em Markdown e cada memorando num ficheiro Markdown — para que um projeto continue legível durante décadas, com ou sem o Trama. Um ficheiro protegido com palavra-passe é esse mesmo arquivo, cifrado.
 
 Importe um ficheiro `.trama` com **Importar um ficheiro de projeto** no ecrã de projetos.
+
+**Projeto → Exportar → Relatório do projeto** não serve para trocar, mas para ler: um documento Word ou uma página web com uma visão geral do projeto, o livro de códigos com definições e contagens, os memorandos e a tabela de casos — para um orientador, um anexo ou um arquivo. Não contém o texto dos documentos e não é cifrado.

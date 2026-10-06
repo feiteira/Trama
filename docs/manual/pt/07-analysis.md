@@ -4,6 +4,14 @@ A **Análise** reúne as ferramentas para olhar para todo o material: pesquisá-
 
 Toda a análise corre no seu computador, sobre o projeto inteiro, e atualiza-se quando codifica mais.
 
+<a id="coders-counted"></a>
+
+## De quem são as codificações contadas
+
+Quando mais do que um codificador codificou no projeto — uma cópia de um colega integrada, ou um segundo codificador para verificar a concordância —, **Codificações de**, no canto superior direito da **Análise**, escolhe de quem são os segmentos codificados que as ferramentas contam. Por omissão, é a sua própria codificação; se ainda não codificou nada, são todos os codificadores. O Trama lembra-se da escolha para este projeto, neste computador, e uma nota por baixo das ferramentas indica quantas codificações de outros codificadores não são contadas.
+
+Escolha **Todos os codificadores** para contar em conjunto a codificação de todos. Uma passagem que vários codificadores codificaram com o mesmo código conta então uma só vez, mesmo que os segmentos comecem ou acabem em palavras diferentes, e dois códigos só aparecem juntos quando foi o mesmo codificador a aplicar ambos — assim, dois codificadores que discordam sobre uma passagem nunca parecem uma coocorrência. A escolha aplica-se a tudo o que conta segmentos codificados; pesquisar e contar palavras em documentos inteiros não depende dela.
+
 <a id="search"></a>
 
 ## Pesquisa de texto
@@ -69,7 +77,7 @@ Com os subcódigos incluídos, a linha de um código-pai soma os seus subcódigo
 
 ## Código × atributo
 
-Os participantes mais velhos e os mais novos falam de um tema de forma diferente? Escolha um [atributo](06-cases-and-attributes.md#attributes): os seus valores passam a colunas e os códigos a linhas. Os atributos numéricos podem ser agrupados em grupos iguais (de dois a cinco) ou mostrados com uma coluna por valor.
+Os participantes mais velhos e os mais novos falam de um tema de forma diferente? Escolha um [atributo](06-cases-and-attributes.md#attributes): os seus valores passam a colunas e os códigos a linhas. Os atributos numéricos podem ser agrupados em grupos iguais (de dois a cinco) ou mostrados com uma coluna por valor; **Automático** mostra uma coluna por valor quando há no máximo oito valores, e quatro grupos iguais nos outros casos.
 
 Conte **segmentos**, **documentos** (com o código pelo menos uma vez) ou **casos** (com o código em qualquer dos seus documentos), opcionalmente em percentagem da linha ou da coluna. Os documentos sem caso aparecem em *(sem valor)*.
 

@@ -21,14 +21,14 @@
 
 **What it does**
 
-- **Bring in your material.** Plain text, Word, OpenDocument, RTF, Markdown, web pages and PDF; transcripts from Zoom, Teams, Otter or a transcriptionist (one speaker turn per paragraph, with time stamps) and their audio or video; open survey answers from CSV or Excel, with respondents' details as attributes.
+- **Bring in your material.** Plain text, Word, OpenDocument, RTF, Markdown, web pages and PDF; transcripts from Zoom, Teams, Otter or a transcriptionist (one speaker turn per paragraph, with time stamps) and their audio or video; open survey answers from CSV or Excel, with respondents' details as attributes. Paste text, or write field notes straight into Trama.
 - **Code it.** Select a passage and apply a code from a hierarchical codebook — with the mouse, or entirely from the keyboard (favourite codes on 1–9, in-vivo codes, find-and-code). Coding stripes in the margin, comments on segments, memos on passages, and text corrections that keep every coding in place.
 - **Build the codebook.** Definitions with when to use and when not to use, examples, categories, merge and split, and codebook exchange as REFI-QDA (`.qdc`), Word, CSV, Excel or Markdown.
 - **Retrieve and write.** Gather coded segments across documents with filters (codes, documents and groups, cases and attributes, coders, words, co-location), read them in context, copy or export them. Memos on the project, documents, codes, segments and cases.
-- **Analyse.** Text search with keyword in context and code-all-hits, code co-occurrence (matrix and network, counts or Jaccard), code × document and code × attribute tables (with a chi-square test, honestly caveated), word frequencies and distinctive words, document portraits and charts.
-- **Work as a team, without a cloud.** Hand a teammate an encrypted copy, merge it back, and measure inter-coder agreement (percent agreement, Cohen's κ and Krippendorff's α, pooled correctly; segment-level agreement with Brennan–Prediger κ) with a disagreement review and a report that shows its working.
+- **Analyse.** Text search with keyword in context and code-all-hits, code co-occurrence (matrix and network, counts or Jaccard), code × document and code × attribute tables (with a chi-square test, honestly caveated), word frequencies and distinctive words, document portraits and charts — counting one coder's work or every coder's together, never double-counting a passage two people coded.
+- **Work as a team, without a cloud.** Hand a teammate an encrypted copy and merge it back — the newer change wins, and a document text edited on both sides is kept and reported, never silently overwritten — then measure inter-coder agreement (percent agreement, Cohen's κ and Krippendorff's α, pooled correctly; segment-level agreement with Brennan–Prediger κ) with a disagreement review and a report that shows its working.
 - **Exchange with other programs.** Import and export whole projects with NVivo, MAXQDA, ATLAS.ti and others through the open **REFI-QDA** standard (`.qdpx`); Trama always tells you what could not be carried over.
-- **Protect participants.** Consistent pseudonymisation across documents, with the key kept apart from exports; an append-only audit trail for ethics audits and methods sections.
+- **Protect participants.** Consistent pseudonymisation across documents and everywhere else a name can hide (document and file names, memos, comments, definitions, deleted items), with the key kept apart from exports; an append-only audit trail for ethics audits and methods sections, whose exports leave out the names the key replaced.
 
 **Why**
 
@@ -54,7 +54,7 @@ O **Trama** é um programa gratuito e de código aberto para análise qualitativ
 
 There are no published installers yet: build Trama from source (below). Test builds are not yet code-signed, so Windows SmartScreen and macOS Gatekeeper will warn before opening them.
 
-Every installer also adds **Trama (example)**, which opens a fictional example study (passphrase `trama`) in a separate folder that is emptied every time — a safe place to try everything.
+The Windows installers and the Linux `.deb` and `.rpm` packages also add **Trama (example)** (elsewhere, start Trama with `--example`), which opens a fictional example study (passphrase `trama`) in a separate folder that is emptied every time — a safe place to try everything.
 
 ## Build from source
 
@@ -71,7 +71,11 @@ npm install
 npm run dev              # run the desktop app
 npm run dev:web          # or: a browser demo with the fictional example project, in memory only
 npm run build:desktop    # installers for your operating system (AppImage, .deb and .rpm on Linux)
+npm run typecheck && npm test   # type checks (including missing translations) and the test suite
+npm run test:rust        # the Rust tests (SQLCipher, Argon2 vectors, file helpers)
 ```
+
+Installers land in `desktop/src-tauri/target/release/bundle/`.
 
 Developer guide: [AGENTS.md](AGENTS.md). Contributing: [CONTRIBUTING.md](CONTRIBUTING.md). Security: [SECURITY.md](SECURITY.md). File formats: [`.trama`](docs/spec/trama-format-v1.md), [REFI-QDA mapping](docs/spec/refi-qda.md).
 
@@ -84,4 +88,27 @@ Fonts, self-hosted through Fontsource (never loaded from the internet):
 - **Instrument Sans**, by Rodrigo Fuenzalida and Jordan Egstad, under the SIL Open Font License 1.1.
 - **Literata**, by TypeTogether, under the SIL Open Font License 1.1.
 
-Icons are from [Lucide](https://lucide.dev) (ISC licence). The full list of third-party libraries and their licences is in the package lockfiles (`package-lock.json`, `desktop/src-tauri/Cargo.lock`).
+Icons are from [Lucide](https://lucide.dev) (ISC licence).
+
+Libraries bundled with Trama (also listed in the app under **Settings → About**):
+
+| Library | Licence |
+|---|---|
+| React, React DOM | MIT |
+| Luxon (dates) | MIT |
+| noble-ciphers, noble-hashes, scure-bip39 (encryption, recovery phrase) | MIT |
+| sql.js (SQLite for the browser demo and tests) | MIT; SQLite is public domain |
+| fflate (ZIP) | MIT |
+| xmldom (REFI-QDA XML) | MIT |
+| Mammoth (Word import) | BSD-2-Clause |
+| Papa Parse (CSV) | MIT |
+| PDF.js (PDF import) | Apache-2.0 |
+| Tauri and its dialog plugin (desktop shell) | Apache-2.0 / MIT |
+| SQLCipher (encrypted databases) | BSD-3-Clause |
+| rusqlite | MIT |
+| OpenSSL (SQLCipher's cryptography) | Apache-2.0 |
+| RustCrypto argon2 | Apache-2.0 / MIT |
+| serde, serde_json, hex, zeroize, thiserror, percent-encoding | Apache-2.0 / MIT |
+| walkdir | MIT / Unlicense |
+
+The complete list, with every transitive dependency, is in the lockfiles (`package-lock.json`, `desktop/src-tauri/Cargo.lock`).

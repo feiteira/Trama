@@ -4,6 +4,14 @@
 
 All analysis runs on your computer, on the whole project, and updates when you code more.
 
+<a id="coders-counted"></a>
+
+## Whose codings are counted
+
+When more than one coder has coded in the project — a teammate’s copy merged in, or a second coder checking agreement — **Codings by**, at the top right of **Analysis**, chooses whose coded segments the tools count. By default it is your own coding; if you have coded nothing yet, all coders. Trama remembers the choice for this project on this computer, and a note under the tools says how many codings by other coders are not counted.
+
+Choose **All coders** to count everyone’s coding together. A passage that several coders coded with the same code then counts once, even where their segments start or end at different words, and two codes occur together only when one coder applied both — so two coders who disagree about a passage never look like a co-occurrence. The choice applies to everything that counts coded segments; searching and counting words in whole documents does not depend on it.
+
 <a id="search"></a>
 
 ## Text search
@@ -69,7 +77,7 @@ With sub-codes included, a parent row adds up its sub-codes. Click a cell to rea
 
 ## Code × attribute
 
-Do older and younger participants talk differently about a theme? Choose an [attribute](06-cases-and-attributes.md#attributes): its values become the columns, codes the rows. Number attributes can be grouped into equal groups (two to five) or shown one column per value.
+Do older and younger participants talk differently about a theme? Choose an [attribute](06-cases-and-attributes.md#attributes): its values become the columns, codes the rows. Number attributes can be grouped into equal groups (two to five) or shown one column per value; **Automatic** shows one column per value when there are at most eight values, and four equal groups otherwise.
 
 Count **segments**, **documents** (with the code at least once) or **cases** (with the code in any of their documents), optionally as percentages of the row or of the column. Documents without a case appear under *(no value)*.
 

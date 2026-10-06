@@ -10,7 +10,7 @@ This manual is also inside the app: choose **Help** in the navigation, search it
 4. [The codebook](04-codebook.md) — the code hierarchy, definitions, merging and splitting codes, exchanging codebooks
 5. [Coded segments and memos](05-retrieval-and-memos.md) — retrieving what you coded, filters, copying and exporting segments, writing memos
 6. [Cases and attributes](06-cases-and-attributes.md) — cases, attributes, importing attributes from a spreadsheet
-7. [Analysis](07-analysis.md) — text search, co-occurrence, code × document matrices, code × attribute tables, word frequencies, charts
+7. [Analysis](07-analysis.md) — whose codings are counted, text search, co-occurrence, code × document matrices, code × attribute tables, word frequencies, charts
 8. [Teamwork and inter-coder agreement](08-teamwork-and-agreement.md) — copies for teammates, merging, coders, agreement statistics and what they mean
 9. [Exchanging projects](09-exchange.md) — REFI-QDA with NVivo, MAXQDA and ATLAS.ti, the `.trama` file, what carries over
 10. [Privacy and security](10-privacy-and-security.md) — encryption, backups, pseudonymisation, the audit trail, text for ethics applications and data management plans

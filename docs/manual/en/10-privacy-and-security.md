@@ -37,7 +37,7 @@ Data leaves Trama only when you make it leave. **Settings → What leaves this c
 | Copy for a teammate | When you make one | If you set a password (suggested) |
 | REFI-QDA project (`.qdpx`) | When you export it | No |
 | Codebook files | When you export them | No |
-| Tables and reports (CSV, Excel, Word, HTML) | When you export them | No |
+| Tables, reports and charts (CSV, Excel, Word, HTML, SVG, PNG) | When you export them | No |
 | The pseudonymisation key | Only if you export it or include it | Not as a table |
 | The clipboard | When you copy something | No |
 
@@ -53,7 +53,7 @@ A computer can break, be stolen or be lost. Set up automatic backups for every p
 
 1. Open **Project**, go to the **Backups** tab and choose a **backup folder** — a USB drive you keep somewhere safe, your institution’s network drive, or a folder synchronised with a cloud drive. The backup is encrypted before it gets there.
 2. Trama then backs up the project when it opens, once a day while it is open, when you lock Trama or close the project (if anything changed), and whenever you choose **Back up now**.
-3. Choose how far back backups go: 30, 90 or 365 days. Older backups thin out with age — everything from the last day, then one a day for two weeks, one a week for two months, one a month after that — and the newest three are always kept.
+3. Choose how far back backups go: 30, 90 or 365 days. Older backups thin out with age — up to ten from the last day, then one a day for two weeks, one a week for two months, one a month after that — and the newest three are always kept.
 
 Trama warns you when a backup fails (the folder is missing, full or not writable) and when the last good backup is more than three days old.
 
@@ -75,7 +75,7 @@ Anyone who can open the backup folder sees that backup files exist, their dates 
 
 ## Pseudonymisation
 
-**Pseudonymisation** replaces names and other identifying details consistently across every document — “Ana Lima” becomes “[Participant 1]” everywhere — while coded segments and transcript time stamps follow the changed text. The same replacements are made in the names of documents, cases, codes and groups, in file names, case descriptions and text attributes, memos, comments on coded segments and code definitions.
+**Pseudonymisation** replaces names and other identifying details consistently across every document — “Ana Lima” becomes “[Participant 1]” everywhere — while coded segments and transcript time stamps follow the changed text. The same replacements are made in the names of documents, cases, codes and groups, in file names, case descriptions and text attributes, memos, comments on coded segments and code definitions. Deleted items are pseudonymised too, so undoing a delete later cannot bring a name back, and anything restored afterwards or brought in by a teammate’s copy has the key applied again.
 
 1. **Build the key.** Add entries one by one (the original, exactly as it appears, and its replacement), or choose **Suggest names**: Trama lists capitalised words and phrases from your documents that may be names or places, and numbers the replacements for you (`[Participant 1]`, `[Place 2]`…). Suggestions are only a starting point: nicknames, streets, workplaces and rare details can identify someone just as well. Read your documents too.
 2. **Set each entry’s options.** **Whole word** leaves “Ana” inside “Anabela” alone. **Match case** replaces “Rose” the name, not “rose” the flower.
@@ -86,9 +86,9 @@ Applying can be undone only with **Undo straight afterwards**; once you carry on
 
 **The key** (what replaced what) is the link back to who your participants are. It stays inside the encrypted project, is left out of every export and copy unless you explicitly include it, and is always in encrypted backups. **Export key** saves it as a CSV table for your records — store that file encrypted and apart from the pseudonymised material, as ethics approvals usually require. Deleting an entry erases the original name from the project immediately; it cannot be undone.
 
-Original PDF and Word files are kept as imported. When a document’s text has been edited (pseudonymised, say), REFI-QDA exports and .trama copies leave out its original PDF, because the original would still show what was removed (backups keep everything).
+Original PDF and Word files are kept as imported. When a document’s text has been edited (pseudonymised, say), REFI-QDA exports and .trama copies leave out its original PDF or Word file, because the original would still show what was removed (backups keep everything). For the same reason, once pseudonymisation has been used, exports and copies leave out the original file names of documents whose text was edited, and of any document whose file name holds a replaced name inside a longer word (`consent_analima.docx`), which applying the key cannot rewrite.
 
-**The audit trail is not pseudonymised.** It is never edited, so entries written before you applied the key (“Added document “Interview — Ana Lima””) keep the names. The preview and the Apply dialog say how many entries do. Those entries stay as they are inside the project and in its backups. Exports, copies for a teammate and the trail’s CSV export leave their names out (the entry reads “…” (names left out)), and every other entry is written with the key applied — also after you delete the key entry.
+**The audit trail is not pseudonymised.** It is never edited, so entries written before you applied the key (“Added document “Interview — Ana Lima””) keep the names. The preview and the Apply dialog say how many entries do. Those entries stay as they are inside the project and in its backups. Exports, copies for a teammate and the trail’s CSV export leave their names out (the entry reads `"…" (names left out)`), and every other entry is written with the key applied — also after you delete the key entry.
 
 <a id="audit-trail"></a>
 

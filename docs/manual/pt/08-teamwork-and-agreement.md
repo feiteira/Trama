@@ -17,7 +17,7 @@ Um **codificador** é alguém que codifica no projeto — normalmente uma pessoa
 
 ## Cópias para colegas
 
-1. **Fazer uma cópia para um colega** guarda o projeto inteiro — documentos, livro de códigos, segmentos codificados, memorandos, casos — num único ficheiro `.trama`. Proteja-o com uma **palavra-passe** quando viajar por e-mail ou numa pen USB, e diga a palavra-passe ao colega por outra via, por telefone, por exemplo. A chave de pseudonimização fica de fora, a menos que a inclua.
+1. **Fazer uma cópia para um colega** (em **Concordância → Codificadores e equipa**) guarda o projeto inteiro — documentos, livro de códigos, segmentos codificados, memorandos, casos — num único ficheiro `.trama`. Proteja-o com uma **palavra-passe** quando viajar por e-mail ou numa pen USB, e diga a palavra-passe ao colega por outra via, por telefone, por exemplo. A chave de pseudonimização fica de fora, a menos que a inclua.
 2. O colega escolhe **Importar um ficheiro de projeto** no ecrã de projetos, abre o ficheiro (com a palavra-passe) e indica quem é. As codificações dele ficam assinadas com o seu nome.
 3. Codifica a sua cópia — os mesmos documentos, ou outros. Também pode acrescentar códigos e memorandos.
 4. Devolve a cópia da mesma forma: **Fazer uma cópia para um colega** no Trama dele.
@@ -28,11 +28,15 @@ Para avaliar a concordância de forma justa, combinem antes o livro de códigos 
 
 ## Integrar a cópia de um colega
 
-**Integrar a cópia de um colega** e escolha o ficheiro que ele devolveu. Antes de qualquer alteração, o Trama mostra o que a cópia traz: quantos documentos, códigos, segmentos codificados, memorandos e casos são **novos**, quantos são versões **mais recentes** de registos que já tem, e que codificadores são novos.
+Em **Concordância → Codificadores e equipa**, escolha **Integrar a cópia de um colega** e o ficheiro que ele devolveu. Antes de qualquer alteração, o Trama mostra o que a cópia traz: quantos documentos, códigos, segmentos codificados, memorandos e casos são **novos**, quantos são versões **mais recentes** de registos que já tem, e que codificadores são novos.
 
 - O trabalho novo entra e nada do seu se perde.
-- Quando um registo foi alterado dos dois lados, fica a versão **mais recente**.
-- Nada é removido do seu projeto, a menos que o colega o tenha eliminado depois da sua última alteração a esse registo.
+- Quando um registo foi alterado dos dois lados, fica a versão alterada **mais recentemente**. Só contam alterações reais: um segmento codificado que apenas se deslocou porque o texto à volta foi editado não se sobrepõe à edição ou à eliminação que o colega fez dele.
+- Os **textos de documentos editados dos dois lados** são a exceção. Fica o texto deste projeto — uma correção de gralha mais recente não pode desfazer a pseudonimização feita aqui, por exemplo — e o Trama indica o documento, para que compare os dois textos e passe à mão as alterações do colega, ou escolha **Usar o texto do colega**. Quando o colega integrar a sua cópia da próxima vez, recebe o texto que manteve, e o Trama avisa-o disso.
+- Os segmentos codificados numa outra versão de um texto voltam a ser colocados sobre as suas palavras. Um segmento codificado cujas palavras já não estão no texto, ou cujo código ou documento foi eliminado, é removido; o Trama diz quantos.
+- Nada é removido do seu projeto, a menos que o colega o tenha eliminado depois da sua última alteração a esse registo. Um código eliminado de um dos lados mantém-se se o outro lado codificou novos segmentos com ele depois da eliminação, e o mesmo acontece a um documento que o colega eliminou e que entretanto codificou; um documento que eliminou continua eliminado (um participante pode ter desistido). O Trama indica o que foi mantido, para que o elimine de novo se for caso disso.
+- Se aplicou a pseudonimização, os nomes de antes dela que a cópia traga de volta são substituídos de novo. Se o texto vindo da cópia ainda tiver nomes reais da sua chave, o Trama avisa e propõe **Pseudonimizar de novo** — faça-o antes de partilhar ou exportar o projeto.
+- Os registos danificados da cópia ficam de fora, e o Trama diz quantos.
 - Só se podem integrar cópias do **mesmo projeto**. Um projeto diferente (ou uma cópia de segurança automática) é reconhecido e recusado, com uma explicação; nesse caso, importe-o como projeto novo.
 
 Cada integração fica no [registo de auditoria](10-privacy-and-security.md#audit-trail). Integre com frequência: integrações pequenas e frequentes são mais fáceis de compreender do que uma grande no fim.
@@ -47,7 +51,7 @@ Cada integração fica no [registo de auditoria](10-privacy-and-security.md#audi
 
 1. Escolha o **Codificador A** e o **Codificador B**.
 2. Escolha os **documentos** — por omissão, os que ambos codificaram — e os **códigos** — por omissão, os que ambos usaram. Os códigos usados só por um dos codificadores podem ser incluídos, se quiser.
-3. Escolha o **método**: carateres, segmentos ou documentos (explicados abaixo). Para segmentos, defina a **sobreposição exigida** para que dois segmentos contem como o mesmo.
+3. Escolha o **método**: caracteres, segmentos ou documentos (explicados abaixo). Para segmentos, defina a **sobreposição exigida** para que dois segmentos contem como o mesmo.
 
 Os resultados mostram estatísticas-resumo, uma tabela **por código** e **por documento**, e a lista de **discordâncias**.
 
@@ -57,7 +61,7 @@ Os resultados mostram estatísticas-resumo, uma tabela **por código** e **por d
 
 As discordâncias são a parte útil: cada uma é uma passagem onde o livro de códigos pode ficar mais claro. A lista mostra todos os segmentos sem correspondência — codificados só por um dos codificadores, ou com **limites diferentes** demais. Selecione um para ler a passagem com as codificações dos dois lado a lado. Depois:
 
-- **Aceitar A** ou **Aceitar B** — manter a codificação de um e remover a do outro;
+- **Aceitar A** ou **Aceitar B** (os botões mostram os nomes dos codificadores) — manter a codificação de um e remover a do outro;
 - **Manter ambas** — deixar as duas e marcar a discordância como resolvida.
 
 **Ocultar as já resolvidas** ajuda a não se perder numa lista longa. Cada decisão pode ser anulada.
@@ -76,9 +80,9 @@ O Trama mostra as contas: cada estatística pode ser seguida até às contagens 
 
 <a id="character-level"></a>
 
-### Carateres (por omissão)
+### Caracteres (por omissão)
 
-Para cada código, cada caráter de cada documento escolhido recebe duas etiquetas: codificado ou não por A, codificado ou não por B. Os carateres são contados em quatro células:
+Para cada código, cada carácter de cada documento escolhido recebe duas etiquetas: codificado ou não por A, codificado ou não por B. Os caracteres são contados em quatro células:
 
 | | B codificou | B não codificou |
 |---|---|---|
@@ -87,7 +91,7 @@ Para cada código, cada caráter de cada documento escolhido recebe duas etiquet
 
 As contagens de todos os documentos são **somadas antes** de calcular qualquer estatística (uma estimativa *agregada*). Assim, uma entrevista longa pesa mais do que uma nota curta. Calcular a média de um kappa por documento, como fazem alguns programas, deixa um documento de duas linhas valer tanto como uma entrevista de uma hora. O valor agregado de todos os códigos soma da mesma forma as células de cada código.
 
-**Percentagem de concordância** — a proporção de carateres em que ambos concordam:
+**Percentagem de concordância** — a proporção de caracteres em que ambos concordam:
 
 ```
 N                        = ambos + só A + só B + nenhum
@@ -105,11 +109,11 @@ pₑ = a₁ × b₁ + a₀ × b₀
 κ  = (pₒ − pₑ) ÷ (1 − pₑ)
 ```
 
-Aqui, a₁ e b₁ são as proporções de carateres que A e B codificaram, e a₀ = 1 − a₁ e b₀ = 1 − b₁ as proporções que não codificaram.
+Aqui, a₁ e b₁ são as proporções de caracteres que A e B codificaram, e a₀ = 1 − a₁ e b₀ = 1 − b₁ as proporções que não codificaram.
 
 1 é concordância perfeita, 0 não é melhor do que o acaso, e abaixo de 0 é pior do que o acaso.
 
-**α (alfa) de Krippendorff** — como o κ, mas o acaso vem das etiquetas dos dois codificadores juntas. Para dois codificadores e dois valores (codificado / não codificado), com *N* carateres:
+**α (alfa) de Krippendorff** — como o κ, mas o acaso vem das etiquetas dos dois codificadores juntas. Para dois codificadores e dois valores (codificado / não codificado), com *N* caracteres:
 
 ```
 d  = só A + só B
@@ -130,7 +134,7 @@ Com dois codificadores e sem dados em falta, o α fica muito próximo do κ. Kri
 Um segmento de A **tem correspondência** quando B tem um segmento do mesmo código, no mesmo documento, que se sobrepõe a ele pelo menos na proporção escolhida da extensão conjunta:
 
 ```
-sobreposição = carateres partilhados
+sobreposição = caracteres partilhados
                ÷ (fim mais tardio − início mais cedo)
 concordância = segmentos com correspondência
                ÷ todos os segmentos dos dois
@@ -148,7 +152,7 @@ Ao nível dos segmentos não há célula «nenhum» a partir da qual estimar o a
 
 ### Documentos
 
-Para cada código e documento: cada codificador usou o código lá pelo menos uma vez? As mesmas quatro células são contadas sobre os pares código–documento, e a percentagem de concordância, o κ e o α calculam-se como para os carateres. É o nível mais tolerante, útil no início, quando a pergunta é se os codificadores reparam nos mesmos temas.
+Para cada código e documento: cada codificador usou o código lá pelo menos uma vez? As mesmas quatro células são contadas sobre os pares código–documento, e a percentagem de concordância, o κ e o α calculam-se como para os caracteres. É o nível mais tolerante, útil no início, quando a pergunta é se os codificadores reparam nos mesmos temas.
 
 <a id="interpreting"></a>
 

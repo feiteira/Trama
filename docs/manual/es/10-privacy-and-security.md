@@ -37,7 +37,7 @@ Los datos solo salen de Trama cuando usted los saca. **Ajustes → Qué sale de 
 | Copia para un compañero | Cuando la hace | Si pone una contraseña (se propone) |
 | Proyecto REFI-QDA (`.qdpx`) | Cuando lo exporta | No |
 | Archivos del libro de códigos | Cuando los exporta | No |
-| Tablas e informes (CSV, Excel, Word, HTML) | Cuando los exporta | No |
+| Tablas, informes y gráficos (CSV, Excel, Word, HTML, SVG, PNG) | Cuando los exporta | No |
 | La clave de seudonimización | Solo si la exporta o la incluye | No, como tabla |
 | El portapapeles | Cuando copia algo | No |
 
@@ -53,7 +53,7 @@ Un ordenador puede averiarse, perderse o ser robado. Configure copias de segurid
 
 1. Abra **Proyecto**, pase a la pestaña **Copias de seguridad** y elija una **carpeta de copias**: un USB que guarde en un lugar seguro, la unidad de red de su institución o una carpeta sincronizada con una nube. La copia se cifra antes de llegar allí.
 2. A partir de entonces, Trama copia el proyecto al abrirlo, una vez al día mientras está abierto, al bloquear Trama o cerrar el proyecto (si algo ha cambiado) y siempre que elija **Hacer copia ahora**.
-3. Elija hasta dónde llegan las copias: 30, 90 o 365 días. Las copias más antiguas se van espaciando —todo lo del último día, después una al día durante dos semanas, una a la semana durante dos meses y una al mes a partir de ahí—, y las tres más recientes se conservan siempre.
+3. Elija hasta dónde llegan las copias: 30, 90 o 365 días. Las copias más antiguas se van espaciando —hasta diez del último día, después una al día durante dos semanas, una a la semana durante dos meses y una al mes a partir de ahí—, y las tres más recientes se conservan siempre.
 
 Trama avisa cuando una copia falla (la carpeta no existe, está llena o no permite escribir) y cuando la última copia correcta tiene más de tres días.
 
@@ -75,7 +75,7 @@ Quien pueda abrir la carpeta de copias ve que existen archivos de copia, sus fec
 
 ## Seudonimización
 
-La **seudonimización** sustituye nombres y otros datos identificativos de forma coherente en todos los documentos —«Ana Lima» pasa a ser «[Participante 1]» en todas partes—, mientras los segmentos codificados y las marcas de tiempo de las transcripciones siguen al texto modificado. Las mismas sustituciones se hacen en los nombres de documentos, casos, códigos y grupos, en los nombres de archivo, en las descripciones y atributos de texto de los casos, en los memorandos, en los comentarios de los segmentos codificados y en las definiciones de los códigos.
+La **seudonimización** sustituye nombres y otros datos identificativos de forma coherente en todos los documentos —«Ana Lima» pasa a ser «[Participante 1]» en todas partes—, mientras los segmentos codificados y las marcas de tiempo de las transcripciones siguen al texto modificado. Las mismas sustituciones se hacen en los nombres de documentos, casos, códigos y grupos, en los nombres de archivo, en las descripciones y atributos de texto de los casos, en los memorandos, en los comentarios de los segmentos codificados y en las definiciones de los códigos. Los elementos eliminados también se seudonimizan, para que deshacer más tarde una eliminación no traiga un nombre de vuelta, y todo lo que se restaure después o llegue con la copia de un compañero vuelve a tener la clave aplicada.
 
 1. **Prepare la clave.** Añada entradas una a una (el original, tal como aparece, y su sustitución), o elija **Sugerir nombres**: Trama enumera palabras y expresiones con mayúscula de sus documentos que pueden ser nombres o lugares, y numera las sustituciones por usted (`[Participante 1]`, `[Lugar 2]`…). Las sugerencias son solo un punto de partida: los apodos, las calles, los lugares de trabajo y los detalles poco comunes pueden identificar a alguien igual de bien. Lea también sus documentos.
 2. **Ajuste las opciones de cada entrada.** **Palabra completa** deja tranquilo «Ana» dentro de «Anabel». **Mayúsculas** sustituye «Rosa» el nombre, no «rosa» la flor.
@@ -86,9 +86,9 @@ Aplicarla solo se puede deshacer con **Deshacer justo después**; en cuanto sigu
 
 **La clave** (qué se sustituyó por qué) es el vínculo con la identidad de sus participantes. Se queda dentro del proyecto cifrado, se deja fuera de todas las exportaciones y copias salvo que la incluya expresamente, y siempre está en las copias de seguridad cifradas. **Exportar clave** la guarda como tabla CSV para su archivo: guarde ese archivo cifrado y separado del material seudonimizado, como suelen exigir las aprobaciones éticas. Al eliminar una entrada se borra al instante el nombre original del proyecto; no se puede deshacer.
 
-Los archivos PDF y Word originales se conservan tal como se importaron. Cuando el texto de un documento se ha editado (seudonimizado, por ejemplo), las exportaciones REFI-QDA y las copias .trama dejan fuera su PDF original, porque el original seguiría mostrando lo que se quitó (las copias de seguridad lo guardan todo).
+Los archivos PDF y Word originales se conservan tal como se importaron. Cuando el texto de un documento se ha editado (seudonimizado, por ejemplo), las exportaciones REFI-QDA y las copias .trama dejan fuera su PDF o su archivo de Word original, porque el original seguiría mostrando lo que se quitó (las copias de seguridad lo guardan todo). Por la misma razón, una vez usada la seudonimización, las exportaciones y las copias dejan fuera los nombres de los archivos originales de los documentos cuyo texto se ha editado, y de cualquier documento cuyo nombre de archivo contenga un nombre sustituido dentro de una palabra más larga (`consentimiento_analima.docx`), que al aplicar la clave no se puede reescribir.
 
-**El registro de auditoría no se seudonimiza.** Nunca se edita, así que las entradas escritas antes de aplicar la clave («Añadió el documento «Entrevista — Ana Lima»») conservan los nombres. La vista previa y la ventana Aplicar dicen cuántas entradas lo hacen. Esas entradas se quedan como están dentro del proyecto y en sus copias de seguridad. Las exportaciones, las copias para un compañero y la exportación CSV del registro dejan fuera los nombres (la entrada se lee "…" (names left out)), y todas las demás entradas salen con la clave aplicada, también después de eliminar la entrada de la clave.
+**El registro de auditoría no se seudonimiza.** Nunca se edita, así que las entradas escritas antes de aplicar la clave («Añadió el documento «Entrevista — Ana Lima»») conservan los nombres. La vista previa y la ventana Aplicar dicen cuántas entradas lo hacen. Esas entradas se quedan como están dentro del proyecto y en sus copias de seguridad. Las exportaciones, las copias para un compañero y la exportación CSV del registro dejan fuera los nombres (la entrada se lee, en inglés, `"…" (names left out)`), y todas las demás entradas salen con la clave aplicada, también después de eliminar la entrada de la clave.
 
 <a id="audit-trail"></a>
 

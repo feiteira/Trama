@@ -17,7 +17,7 @@ Un **codificador** es alguien que codifica en el proyecto, normalmente una perso
 
 ## Copias para compañeros
 
-1. **Hacer una copia para un compañero** guarda el proyecto completo —documentos, libro de códigos, segmentos codificados, memorandos, casos— en un único archivo `.trama`. Protéjalo con una **contraseña** cuando viaje por correo electrónico o en un USB, y dígale la contraseña a su compañero por otra vía, por teléfono, por ejemplo. La clave de seudonimización se deja fuera, salvo que la incluya.
+1. **Hacer una copia para un compañero** (en **Acuerdo → Codificadores y equipo**) guarda el proyecto completo —documentos, libro de códigos, segmentos codificados, memorandos, casos— en un único archivo `.trama`. Protéjalo con una **contraseña** cuando viaje por correo electrónico o en un USB, y dígale la contraseña a su compañero por otra vía, por teléfono, por ejemplo. La clave de seudonimización se deja fuera, salvo que la incluya.
 2. Su compañero elige **Importar un archivo de proyecto** en su pantalla de proyectos, abre el archivo (con la contraseña) e indica quién es. Sus codificaciones se firman con su nombre.
 3. Codifica su copia: los mismos documentos u otros. También puede añadir códigos y memorandos.
 4. Le devuelve su copia del mismo modo: **Hacer una copia para un compañero** desde su Trama.
@@ -28,11 +28,15 @@ Para medir el acuerdo de forma justa, acuerden antes el libro de códigos (con d
 
 ## Fusionar la copia de un compañero
 
-**Fusionar la copia de un compañero** y elija el archivo que le ha devuelto. Antes de cambiar nada, Trama muestra lo que trae la copia: cuántos documentos, códigos, segmentos codificados, memorandos y casos son **nuevos**, cuántos son versiones **más recientes** de registros que ya tiene y qué codificadores son nuevos.
+En **Acuerdo → Codificadores y equipo**, elija **Fusionar la copia de un compañero** y el archivo que le ha devuelto. Antes de cambiar nada, Trama muestra lo que trae la copia: cuántos documentos, códigos, segmentos codificados, memorandos y casos son **nuevos**, cuántos son versiones **más recientes** de registros que ya tiene y qué codificadores son nuevos.
 
 - El trabajo nuevo entra y no se pierde nada de lo suyo.
-- Cuando un registro se ha cambiado en los dos lados, se conserva la versión **más reciente**.
-- No se quita nada de su proyecto salvo que su compañero lo eliminara después de su último cambio en ese registro.
+- Cuando un registro se ha cambiado en los dos lados, se conserva la versión cambiada **más recientemente**. Solo cuentan los cambios reales: un segmento codificado que solo se ha desplazado porque se editó el texto de alrededor no prevalece sobre la edición o la eliminación que su compañero hizo de él.
+- Los **textos de documentos editados en los dos lados** son la excepción. Se conserva el texto de este proyecto (una corrección de erratas más reciente no debe deshacer la seudonimización hecha aquí, por ejemplo) y Trama indica el documento, para que compare los dos textos y pase a mano los cambios de su compañero, o elija **Usar el texto del compañero**. Cuando su compañero fusione su copia la próxima vez, recibirá el texto que usted conservó, y Trama se lo indicará.
+- Los segmentos codificados sobre otra versión de un texto se vuelven a colocar sobre sus palabras. Un segmento codificado cuyas palabras ya no están en el texto, o cuyo código o documento se eliminó, se quita; Trama indica cuántos.
+- No se quita nada de su proyecto salvo que su compañero lo eliminara después de su último cambio en ese registro. Un código eliminado en un lado se conserva si en el otro se codificaron segmentos nuevos con él después de eliminarlo, y lo mismo ocurre con un documento que su compañero eliminó y que usted ha codificado desde entonces; un documento que usted eliminó sigue eliminado (puede que un participante se haya retirado). Trama indica lo que se ha conservado, para que lo elimine de nuevo si procede.
+- Si aplicó la seudonimización, los nombres de antes de ella que traiga la copia se vuelven a sustituir. Si el texto que llega de la copia aún contiene nombres reales de su clave, Trama le avisa y le ofrece **Seudonimizar de nuevo**; hágalo antes de compartir o exportar el proyecto.
+- Los registros dañados de la copia se dejan fuera, y Trama indica cuántos.
 - Solo se pueden fusionar copias del **mismo proyecto**. Un proyecto distinto (o una copia de seguridad automática) se reconoce y se rechaza con una explicación; en ese caso, impórtelo como proyecto nuevo.
 
 Cada fusión queda en el [registro de auditoría](10-privacy-and-security.md#audit-trail). Fusione a menudo: las fusiones pequeñas y frecuentes son más fáciles de entender que una grande al final.
@@ -57,7 +61,7 @@ Los resultados muestran estadísticos de resumen, una tabla **por código** y **
 
 Los desacuerdos son la parte útil: cada uno es un pasaje en el que el libro de códigos puede afinarse. La lista muestra todos los segmentos sin equivalente: codificados por un solo codificador, o con **límites distintos** en exceso. Seleccione uno para leer el pasaje con las codificaciones de los dos, una junto a otra. Después:
 
-- **Aceptar a A** o **Aceptar a B**: conservar la codificación de uno y quitar la del otro;
+- **Aceptar a A** o **Aceptar a B** (los botones muestran los nombres de los codificadores): conservar la codificación de uno y quitar la del otro;
 - **Mantener ambas**: dejar las dos y marcar el desacuerdo como resuelto.
 
 **Ocultar los resueltos** ayuda a no perderse en una lista larga. Cada decisión se puede deshacer.

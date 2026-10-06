@@ -67,6 +67,6 @@ All of these can be undone straight away with `Ctrl+Z`, and all of them are reco
 - **CSV table** or **Excel workbook** (`.xlsx`) — one row per code, with its path, parent, colour, whether it is a category, its shortcut key, the four definition fields, and how many segments and documents it has;
 - **Markdown** (`.md`).
 
-**Import** a codebook from a `.qdc`, `.csv` or `.xlsx` file — one made by Trama, by another program, or written by hand in a spreadsheet (a column called **Name** or **Path** is enough; a path such as `Barriers/Time` creates the hierarchy). Before anything changes, Trama shows which codes are new, which would be updated and which are already the same. Existing codes keep their definitions and colours unless you choose **Replace definitions and colours**; otherwise only their empty fields are filled in. Nothing is deleted by an import.
+**Import** a codebook from a `.qdc`, `.csv` or `.xlsx` file — one made by Trama, by another program, or written by hand in a spreadsheet (a column called **Name** or **Path** is enough; a path such as `Barriers > Time`, or a **Parent** column, creates the hierarchy). Before anything changes, Trama shows which codes are new, which would be updated and which are already the same. Existing codes keep their definitions and colours unless you choose **Replace definitions and colours**; otherwise only their empty fields are filled in. Nothing is deleted by an import.
 
 Code sets (a MAXQDA and NVivo feature) are not imported: Trama has no code sets. Document groups and the hierarchy cover most of their uses.

@@ -9,5 +9,5 @@ Comment[es]=Pruebe Trama con un proyecto de investigación ficticio que se reini
 Exec=trama-desktop --example
 Icon=trama-desktop
 StartupWMClass=trama-desktop
-Categories=Education;Science;
+Categories=Education;
 Terminal=false

@@ -37,7 +37,7 @@ Os dados só saem do Trama quando é o próprio a fazê-los sair. **Definições
 | Cópia para um colega | Quando a faz | Se definir uma palavra-passe (proposto) |
 | Projeto REFI-QDA (`.qdpx`) | Quando o exporta | Não |
 | Ficheiros do livro de códigos | Quando os exporta | Não |
-| Tabelas e relatórios (CSV, Excel, Word, HTML) | Quando os exporta | Não |
+| Tabelas, relatórios e gráficos (CSV, Excel, Word, HTML, SVG, PNG) | Quando os exporta | Não |
 | A chave de pseudonimização | Só se a exportar ou incluir | Não, quando em tabela |
 | A área de transferência | Quando copia algo | Não |
 
@@ -53,7 +53,7 @@ Um computador pode avariar, ser roubado ou perder-se. Configure cópias de segur
 
 1. Abra **Projeto**, passe ao separador **Cópias de segurança** e escolha uma **pasta de cópias** — uma pen USB guardada num sítio seguro, a unidade de rede da sua instituição ou uma pasta sincronizada com uma nuvem. A cópia é cifrada antes de lá chegar.
 2. O Trama passa então a copiar o projeto quando este abre, uma vez por dia enquanto está aberto, quando bloqueia o Trama ou fecha o projeto (se algo mudou), e sempre que escolher **Fazer cópia agora**.
-3. Escolha até onde vão as cópias: 30, 90 ou 365 dias. As cópias mais antigas vão sendo espaçadas — tudo do último dia, depois uma por dia durante duas semanas, uma por semana durante dois meses e uma por mês a partir daí — e as três mais recentes são sempre mantidas.
+3. Escolha até onde vão as cópias: 30, 90 ou 365 dias. As cópias mais antigas vão sendo espaçadas — até dez do último dia, depois uma por dia durante duas semanas, uma por semana durante dois meses e uma por mês a partir daí — e as três mais recentes são sempre mantidas.
 
 O Trama avisa quando uma cópia falha (a pasta não existe, está cheia ou não permite escrita) e quando a última cópia bem-sucedida tem mais de três dias.
 
@@ -75,7 +75,7 @@ Quem conseguir abrir a pasta das cópias vê que existem ficheiros de cópia, as
 
 ## Pseudonimização
 
-A **pseudonimização** substitui nomes e outros dados identificativos de forma coerente em todos os documentos — «Ana Lima» passa a «[Participante 1]» em todo o lado —, enquanto os segmentos codificados e as marcas de tempo das transcrições acompanham o texto alterado. As mesmas substituições são feitas nos nomes de documentos, casos, códigos e grupos, nos nomes de ficheiros, nas descrições e atributos de texto dos casos, nos memorandos, nos comentários aos segmentos codificados e nas definições dos códigos.
+A **pseudonimização** substitui nomes e outros dados identificativos de forma coerente em todos os documentos — «Ana Lima» passa a «[Participante 1]» em todo o lado —, enquanto os segmentos codificados e as marcas de tempo das transcrições acompanham o texto alterado. As mesmas substituições são feitas nos nomes de documentos, casos, códigos e grupos, nos nomes de ficheiros, nas descrições e atributos de texto dos casos, nos memorandos, nos comentários aos segmentos codificados e nas definições dos códigos. Os itens eliminados também são pseudonimizados, para que anular mais tarde uma eliminação não traga um nome de volta, e tudo o que for restaurado depois ou chegar pela cópia de um colega volta a ter a chave aplicada.
 
 1. **Construa a chave.** Acrescente entradas uma a uma (o original, exatamente como aparece, e a sua substituição), ou escolha **Sugerir nomes**: o Trama lista palavras e expressões com maiúscula dos seus documentos que podem ser nomes ou lugares, e numera as substituições por si (`[Participante 1]`, `[Lugar 2]`…). As sugestões são só um ponto de partida: alcunhas, ruas, locais de trabalho e pormenores raros podem identificar alguém da mesma forma. Leia também os seus documentos.
 2. **Defina as opções de cada entrada.** **Palavra inteira** deixa em paz «Ana» dentro de «Anabela». **Maiúsculas** substitui «Rosa» o nome, e não «rosa» a flor.
@@ -86,9 +86,9 @@ Aplicar só se pode anular com **Anular logo a seguir**; quando continua a traba
 
 **A chave** (o que substituiu o quê) é a ligação a quem são os seus participantes. Fica dentro do projeto cifrado, fica de fora de todas as exportações e cópias a menos que a inclua explicitamente, e está sempre nas cópias de segurança cifradas. **Exportar chave** guarda-a como tabela CSV para os seus registos — guarde esse ficheiro cifrado e separado do material pseudonimizado, como as aprovações éticas costumam exigir. Eliminar uma entrada apaga de imediato o nome original do projeto; não se pode anular.
 
-Os ficheiros PDF e Word originais ficam como foram importados. Quando o texto de um documento foi editado (pseudonimizado, por exemplo), as exportações REFI-QDA e as cópias .trama deixam de fora o PDF original, porque o original continuaria a mostrar o que foi removido (as cópias de segurança guardam tudo).
+Os ficheiros PDF e Word originais ficam como foram importados. Quando o texto de um documento foi editado (pseudonimizado, por exemplo), as exportações REFI-QDA e as cópias .trama deixam de fora o PDF ou o ficheiro Word original, porque o original continuaria a mostrar o que foi removido (as cópias de segurança guardam tudo). Pela mesma razão, depois de a pseudonimização ter sido usada, as exportações e as cópias deixam de fora os nomes dos ficheiros originais dos documentos cujo texto foi editado, e de qualquer documento cujo nome de ficheiro contenha um nome substituído no meio de uma palavra mais longa (`consentimento_analima.docx`), que a aplicação da chave não consegue reescrever.
 
-**O registo de auditoria não é pseudonimizado.** Nunca é editado, por isso as entradas escritas antes de aplicar a chave («Adicionou o documento «Entrevista — Ana Lima»») mantêm os nomes. A pré-visualização e a janela Aplicar dizem quantas entradas o fazem. Essas entradas ficam como estão dentro do projeto e nas suas cópias de segurança. As exportações, as cópias para um colega e a exportação CSV do registo deixam os nomes de fora (a entrada lê-se "…" (names left out)), e todas as outras entradas saem com a chave aplicada — também depois de eliminar a entrada da chave.
+**O registo de auditoria não é pseudonimizado.** Nunca é editado, por isso as entradas escritas antes de aplicar a chave («Adicionou o documento «Entrevista — Ana Lima»») mantêm os nomes. A pré-visualização e a janela Aplicar dizem quantas entradas o fazem. Essas entradas ficam como estão dentro do projeto e nas suas cópias de segurança. As exportações, as cópias para um colega e a exportação CSV do registo deixam os nomes de fora (a entrada lê-se, em inglês, `"…" (names left out)`), e todas as outras entradas saem com a chave aplicada — também depois de eliminar a entrada da chave.
 
 <a id="audit-trail"></a>
 

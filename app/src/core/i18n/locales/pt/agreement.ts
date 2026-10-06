@@ -32,10 +32,10 @@ export const agreement: Messages['agreement'] = {
   },
 
   methods: {
-    character: 'Carateres',
+    character: 'Caracteres',
     segment: 'Segmentos',
     document: 'Documentos',
-    characterHint: 'Cada caráter, codificado ou não, comparado código a código',
+    characterHint: 'Cada carácter, codificado ou não, comparado código a código',
     segmentHint: 'Cada segmento codificado precisa de um segmento correspondente do outro codificador',
     documentHint: 'Se cada codificador usou cada código em cada documento',
   },
@@ -69,7 +69,7 @@ export const agreement: Messages['agreement'] = {
   cards: {
     label: 'Resumo',
     kappaPooled: 'κ de Cohen, agregado',
-    kappaPooledSub: 'Todos os códigos e carateres selecionados em conjunto',
+    kappaPooledSub: 'Todos os códigos e caracteres selecionados em conjunto',
     kappaDocs: 'κ de Cohen, documentos',
     kappaDocsSub: 'Cada código em cada documento: usado ou não',
     kappaBP: 'κ de Brennan–Prediger',
@@ -110,10 +110,10 @@ export const agreement: Messages['agreement'] = {
     title: 'Como é calculado',
     pooledTitle: 'Agregado, não uma média',
     pooled:
-      'Para cada código, cada caráter de cada documento selecionado recebe duas etiquetas: codificado ou não por A, codificado ou não por B. Os carateres são contados em quatro células (ambos, só A, só B, nenhum) e as contagens de todos os documentos são somadas antes de se calcular qualquer estatística. Assim, uma entrevista longa pesa mais do que uma nota curta. Fazer a média de um kappa por documento, como alguns programas fazem, dá a um documento de duas linhas tanto peso como a uma entrevista de uma hora.',
+      'Para cada código, cada carácter de cada documento selecionado recebe duas etiquetas: codificado ou não por A, codificado ou não por B. Os caracteres são contados em quatro células (ambos, só A, só B, nenhum) e as contagens de todos os documentos são somadas antes de se calcular qualquer estatística. Assim, uma entrevista longa pesa mais do que uma nota curta. Fazer a média de um kappa por documento, como alguns programas fazem, dá a um documento de duas linhas tanto peso como a uma entrevista de uma hora.',
     percentTitle: 'Percentagem de concordância',
     percent:
-      'A proporção de carateres em que os dois codificadores concordam. A maior parte do texto não é codificada por ninguém, por isso este valor costuma ser alto; o segundo valor deixa de fora o texto que nenhum codificador codificou.',
+      'A proporção de caracteres em que os dois codificadores concordam. A maior parte do texto não é codificada por ninguém, por isso este valor costuma ser alto; o segundo valor deixa de fora o texto que nenhum codificador codificou.',
     percentFormula: 'concordância = (ambos + nenhum) ÷ todos\ndo codificado = ambos ÷ (ambos + só A + só B)',
     kappaTitle: 'κ (kappa) de Cohen',
     kappa:
@@ -129,13 +129,13 @@ export const agreement: Messages['agreement'] = {
     segmentTitle: 'Segmentos',
     segment:
       'Um segmento de A concorda quando B tem um segmento do mesmo código no mesmo documento que se sobrepõe a ele em pelo menos {threshold} da extensão conjunta (do início mais cedo ao fim mais tarde). Cada segmento dos dois codificadores é verificado por si, pelo que um segmento longo pode confirmar vários curtos.',
-    segmentFormula: 'sobreposição = carateres comuns ÷ (fim mais tarde − início mais cedo)\nconcordância = segmentos com correspondência ÷ todos os segmentos',
+    segmentFormula: 'sobreposição = caracteres comuns ÷ (fim mais tarde − início mais cedo)\nconcordância = segmentos com correspondência ÷ todos os segmentos',
     bpTitle: 'κ de Brennan–Prediger',
     bp: 'Ao nível dos segmentos não existe uma célula “nenhum” a partir da qual estimar o acaso, por isso a concordância ao acaso é 1/k, sendo k o número de códigos comparados (no mínimo 2).',
     bpFormula: 'κ = (pₒ − 1/k) ÷ (1 − 1/k)',
     documentTitle: 'Documentos',
     document:
-      'Para cada código e documento: cada codificador usou o código pelo menos uma vez nesse documento? As mesmas quatro células são contadas sobre os pares código–documento, e κ e α calculam-se como para os carateres.',
+      'Para cada código e documento: cada codificador usou o código pelo menos uma vez nesse documento? As mesmas quatro células são contadas sobre os pares código–documento, e κ e α calculam-se como para os caracteres.',
   },
 
   table: {
@@ -188,7 +188,7 @@ export const agreement: Messages['agreement'] = {
     removedToast: 'Removida a codificação de {name} com “{code}”.',
     keptToast: 'Marcada como resolvida.',
     notCoded: '{name} não codificou esta passagem com “{code}”.',
-    span: 'carateres {start}–{end}',
+    span: 'caracteres {start}–{end}',
     more: { one: 'Mostrar mais {n}', other: 'Mostrar mais {n}' },
   },
 
@@ -216,7 +216,7 @@ export const agreement: Messages['agreement'] = {
     statistic: 'Estatística',
     value: 'Valor',
     interpretation: 'Interpretação',
-    character: 'Carateres',
+    character: 'Caracteres',
     segment: 'Segmentos',
     document: 'Documentos',
     disagreements: 'Discordâncias',
@@ -230,13 +230,13 @@ export const agreement: Messages['agreement'] = {
     sheetDisagreements: 'Discordâncias',
     colCode: 'Código',
     colDocument: 'Documento',
-    colCharPercent: 'Carateres: concordância %',
-    colCharPercentCoded: 'Carateres: concordância no codificado %',
-    colCharKappa: 'Carateres: kappa de Cohen',
-    colCharAlpha: 'Carateres: alfa de Krippendorff',
-    colCharBoth: 'Carateres: ambos',
-    colCharAOnly: 'Carateres: só A',
-    colCharBOnly: 'Carateres: só B',
+    colCharPercent: 'Caracteres: concordância %',
+    colCharPercentCoded: 'Caracteres: concordância no codificado %',
+    colCharKappa: 'Caracteres: kappa de Cohen',
+    colCharAlpha: 'Caracteres: alfa de Krippendorff',
+    colCharBoth: 'Caracteres: ambos',
+    colCharAOnly: 'Caracteres: só A',
+    colCharBOnly: 'Caracteres: só B',
     colSegAgree: 'Segmentos: coincidem',
     colSegDisagree: 'Segmentos: não coincidem',
     colSegPercent: 'Segmentos: concordância %',

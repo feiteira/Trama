@@ -20,7 +20,7 @@ La forma más rápida de ver qué hace Trama es el proyecto de ejemplo: un estud
 
 - En la pantalla de bienvenida, elija **Probar el proyecto de ejemplo**. Se abre en memoria: no se conserva nada de lo que cambie, y una franja en la parte superior se lo recuerda. Elija **Salir del ejemplo** para volver.
 - En su biblioteca, **Añadir el proyecto de ejemplo** coloca una copia junto a sus proyectos, donde puede quedarse el tiempo que quiera; elimínela cuando ya no la necesite.
-- Los instaladores añaden también un acceso directo **Trama (ejemplo)**. Abre una biblioteca de ejemplo aparte, cuya frase de contraseña es **trama**, y empieza de cero cada vez. Su biblioteca nunca se toca.
+- Los instaladores para Windows y los paquetes `.deb` y `.rpm` para Linux añaden también un acceso directo **Trama (ejemplo)** (con la AppImage o en un Mac, abra Trama con `--example`). Abre una biblioteca de ejemplo aparte, cuya frase de contraseña es **trama**, y empieza de cero cada vez. Su biblioteca nunca se toca.
 
 Todas las personas y todos los lugares del ejemplo son inventados. No ponga nunca datos reales en él.
 
@@ -30,7 +30,7 @@ Todas las personas y todos los lugares del ejemplo son inventados. No ponga nunc
 
 ![La pantalla de bienvenida](../img/es/welcome.png)
 
-1. Elija el idioma en la parte superior. Puede cambiarlo más adelante.
+1. Elija el idioma en **Idioma**, debajo de los dos botones. Puede cambiarlo más adelante.
 2. Elija **Crear mi biblioteca**.
 3. Escriba su nombre o sus iniciales. Firma la codificación que haga, para que los coautores sepan qué es de quién. Se queda en este ordenador.
 4. Elija una frase de contraseña y anote su frase de recuperación (las dos se explican a continuación).
@@ -68,6 +68,7 @@ Tras desbloquear, verá sus proyectos. Un proyecto reúne el material de un estu
 
 - **Nuevo proyecto** pide un nombre, una descripción opcional (su pregunta de investigación, o una nota para usted en el futuro) y un color.
 - Haga clic en un proyecto para abrirlo. La próxima vez que desbloquee Trama, el último proyecto que tenía abierto se abre directamente.
+- **Buscar un proyecto** filtra la lista por el nombre; la lista se puede ordenar por **Abierto más recientemente**, **Nombre** o **Fecha de creación**.
 - El menú **…** de un proyecto permite editar sus detalles o eliminarlo. Para eliminarlo, Trama le pide que escriba el nombre del proyecto, y lo borra de este ordenador para siempre (las copias de seguridad guardadas en otro lugar no se tocan).
 - **Importar un archivo de proyecto** trae un archivo `.trama` o un proyecto REFI-QDA (`.qdpx`) de NVivo, MAXQDA o ATLAS.ti como proyecto nuevo; consulte [Intercambiar proyectos](09-exchange.md).
 - Para cambiar de proyecto con uno abierto, use el nombre del proyecto en la parte superior de la navegación.
@@ -116,9 +117,12 @@ Los **Ajustes** reúnen las opciones que le corresponden a usted y a este ordena
 
 - el idioma de la interfaz (English, Português, Español) y el tema (claro, oscuro o el del sistema);
 - cuánto tarda Trama en bloquearse;
-- la frase de contraseña y la frase de recuperación, que puede cambiar en cualquier momento;
+- **Su nombre**, que firma su codificación en los proyectos que cree a partir de ahora;
+- la frase de contraseña y la frase de recuperación, que puede cambiar en cualquier momento (**Crear una nueva frase de recuperación…** sustituye una frase perdida o que alguien haya podido ver);
 - **Qué sale de este ordenador**: todas las formas en que los datos pueden salir de Trama, y cuándo (consulte [Privacidad y seguridad](10-privacy-and-security.md));
-- para el proyecto abierto, el idioma del material, que se usa en la frecuencia de palabras y en las palabras vacías.
+- para el proyecto abierto, el idioma del material, que se usa en la frecuencia de palabras y en las palabras vacías;
+- **Acerca de**: la versión de Trama, la **Carpeta de datos** donde se guarda su biblioteca cifrada y el software de código abierto con el que está hecho Trama, con sus licencias;
+- **Borrar todo en este ordenador**, que elimina toda la biblioteca para siempre (las copias de seguridad y los archivos exportados guardados en otro lugar no se tocan).
 
 <a id="shortcuts"></a>
 

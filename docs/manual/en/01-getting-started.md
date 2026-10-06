@@ -20,7 +20,7 @@ The quickest way to see what Trama does is the example project: a fictional stud
 
 - On the welcome screen, choose **Try the example project**. It opens in memory: nothing you change is kept, and a ribbon at the top reminds you. Choose **Leave the example** to come back.
 - In your own library, **Add the example project** puts a copy next to your projects, where you can keep it as long as you like and delete it when you are done.
-- The installers also add a **Trama (example)** launcher. It opens a separate example library whose passphrase is **trama**, and it starts afresh every time. Your own library is never touched.
+- The Windows installers and the Linux `.deb` and `.rpm` packages also add a **Trama (example)** launcher (with the AppImage or on a Mac, start Trama with `--example`). It opens a separate example library whose passphrase is **trama**, and it starts afresh every time. Your own library is never touched.
 
 Everyone and everything in the example is invented. Never put real data in it.
 
@@ -30,7 +30,7 @@ Everyone and everything in the example is invented. Never put real data in it.
 
 ![The welcome screen](../img/en/welcome.png)
 
-1. Choose your language at the top. You can change it later.
+1. Choose your language under **Language**, below the two buttons. You can change it later.
 2. Choose **Create my library**.
 3. Type your name or initials. It signs the coding you do, so co-authors can tell whose work is whose. It stays on this computer.
 4. Choose a passphrase, then write down your recovery phrase (both explained below).
@@ -68,6 +68,7 @@ After unlocking, you see your projects. A project holds the material of one stud
 
 - **New project** asks for a name, an optional description (your research question, or a note to your future self) and a colour.
 - Click a project to open it. Next time you unlock Trama, the project you last had open opens straight away.
+- **Find a project** filters the list by name; the list can be sorted by **Last opened**, **Name** or **Date created**.
 - The **…** menu of a project lets you edit its details or delete it. Deleting asks you to type the project’s name, and removes it from this computer for good (backups kept elsewhere are not touched).
 - **Import a project file** brings in a `.trama` file or a REFI-QDA project (`.qdpx`) from NVivo, MAXQDA or ATLAS.ti as a new project — see [Exchanging projects](09-exchange.md).
 - To move to another project while one is open, use the project name at the top of the navigation.
@@ -116,9 +117,12 @@ If you lose **both** the passphrase and the recovery phrase, nobody can open the
 
 - the interface language (English, Português, Español) and the theme (light, dark, or following the system);
 - how soon Trama locks itself;
-- your passphrase and recovery phrase, which you can change at any time;
+- **Your name**, which signs your coding in the projects you create from now on;
+- your passphrase and recovery phrase, which you can change at any time (**Make a new recovery phrase…** replaces a lost or exposed one);
 - **What leaves this computer**: every way data can leave Trama, and when (see [Privacy and security](10-privacy-and-security.md));
-- for the open project, the language of your material, used for word frequencies and stop words.
+- for the open project, the language of your material, used for word frequencies and stop words;
+- **About**: Trama’s version, the **Data folder** where your encrypted library is kept, and the open-source software Trama is built with, with their licences;
+- **Erase everything on this computer**, which removes the whole library for good (backups and exported files elsewhere are not touched).
 
 <a id="shortcuts"></a>
 

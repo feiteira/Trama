@@ -122,7 +122,7 @@ export const importer: Messages['importer'] = {
 
   preview: {
     title: 'Pré-visualização',
-    firstChars: 'primeiros 2000 carateres',
+    firstChars: 'primeiros 2000 caracteres',
     more: 'O texto continua.',
     empty: 'Este documento não tem texto.',
     label: 'Pré-visualização de {name}',
@@ -271,7 +271,7 @@ export const importer: Messages['importer'] = {
     pdfNoText: 'Este PDF não tem camada de texto: provavelmente foi digitalizado. O OCR ainda não está disponível, por isso o documento ficará vazio, mas o PDF é guardado.',
     imagesSkipped: { one: '{n} imagem ficou de fora: o Trama importa o texto.', other: '{n} imagens ficaram de fora: o Trama importa o texto.' },
     commentsSkipped: { one: '{n} comentário do ficheiro ficou de fora.', other: '{n} comentários do ficheiro ficaram de fora.' },
-    rtfCodePage: 'O ficheiro usa um conjunto de carateres que o Trama não consegue ler (página de código {page}); foi lido como Europa Ocidental. Verifique as letras acentuadas.',
+    rtfCodePage: 'O ficheiro usa um conjunto de caracteres que o Trama não consegue ler (página de código {page}); foi lido como Europa Ocidental. Verifique as letras acentuadas.',
     cuesSkipped: { one: '{n} legenda sem tempo legível foi ignorada.', other: '{n} legendas sem tempo legível foram ignoradas.' },
     formulas: { one: '{n} fórmula não tinha resultado guardado e ficou vazia.', other: '{n} fórmulas não tinham resultado guardado e ficaram vazias.' },
     raggedRows: { one: '{n} linha tem mais ou menos células do que o cabeçalho.', other: '{n} linhas têm mais ou menos células do que o cabeçalho.' },

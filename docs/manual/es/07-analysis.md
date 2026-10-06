@@ -4,6 +4,14 @@
 
 Todo el análisis se ejecuta en su ordenador, sobre el proyecto completo, y se actualiza cuando codifica más.
 
+<a id="coders-counted"></a>
+
+## De quién son las codificaciones que se cuentan
+
+Cuando más de un codificador ha codificado en el proyecto (la copia de un compañero ya integrada, o un segundo codificador para comprobar el acuerdo), **Codificaciones de**, arriba a la derecha de **Análisis**, elige de quién son los segmentos codificados que cuentan las herramientas. Por defecto es su propia codificación; si aún no ha codificado nada, son todos los codificadores. Trama recuerda la elección para este proyecto en este ordenador, y una nota bajo las herramientas indica cuántas codificaciones de otros codificadores no se cuentan.
+
+Elija **Todos los codificadores** para contar juntas las codificaciones de todos. Un pasaje que varios codificadores codificaron con el mismo código cuenta entonces una sola vez, aunque sus segmentos empiecen o terminen en palabras distintas, y dos códigos solo aparecen juntos cuando los aplicó el mismo codificador; así, dos codificadores que discrepan sobre un pasaje nunca parecen una coocurrencia. La elección se aplica a todo lo que cuenta segmentos codificados; buscar y contar palabras en documentos completos no depende de ella.
+
 <a id="search"></a>
 
 ## Búsqueda de texto
@@ -69,7 +77,7 @@ Con los subcódigos incluidos, la fila de un código padre suma sus subcódigos.
 
 ## Código × atributo
 
-¿Hablan de forma distinta sobre un tema los participantes de más edad y los más jóvenes? Elija un [atributo](06-cases-and-attributes.md#attributes): sus valores pasan a ser las columnas, y los códigos, las filas. Los atributos numéricos se pueden agrupar en grupos iguales (de dos a cinco) o mostrarse con una columna por valor.
+¿Hablan de forma distinta sobre un tema los participantes de más edad y los más jóvenes? Elija un [atributo](06-cases-and-attributes.md#attributes): sus valores pasan a ser las columnas, y los códigos, las filas. Los atributos numéricos se pueden agrupar en grupos iguales (de dos a cinco) o mostrarse con una columna por valor; **Automático** muestra una columna por valor cuando hay como mucho ocho valores, y cuatro grupos iguales en los demás casos.
 
 Cuente **segmentos**, **documentos** (con el código al menos una vez) o **casos** (con el código en cualquiera de sus documentos), opcionalmente como porcentaje de la fila o de la columna. Los documentos sin caso aparecen en *(sin valor)*.
 

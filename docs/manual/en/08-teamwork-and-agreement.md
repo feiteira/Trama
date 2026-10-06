@@ -17,7 +17,7 @@ A **coder** is someone who codes in the project — usually a person. **Agreemen
 
 ## Copies for teammates
 
-1. **Make a copy for a teammate** saves the whole project — documents, codebook, coded segments, memos, cases — as one `.trama` file. Protect it with a **password** when it travels by e-mail or USB stick, and tell your teammate the password another way, by phone for instance. The pseudonymisation key is left out unless you include it.
+1. **Make a copy for a teammate** (in **Agreement → Coders & team**) saves the whole project — documents, codebook, coded segments, memos, cases — as one `.trama` file. Protect it with a **password** when it travels by e-mail or USB stick, and tell your teammate the password another way, by phone for instance. The pseudonymisation key is left out unless you include it.
 2. Your teammate chooses **Import a project file** on their projects screen, opens the file (with the password) and says who they are. Their codings are signed with their name.
 3. They code their copy — the same documents, or others. They can add codes and memos too.
 4. They send their copy back the same way: **Make a copy for a teammate** from their Trama.
@@ -28,11 +28,15 @@ To check agreement fairly, agree beforehand on the codebook (with definitions) a
 
 ## Merging a teammate’s copy
 
-**Merge a teammate’s copy** and choose the file they sent back. Before anything changes, Trama shows what the copy brings: how many documents, codes, coded segments, memos and cases are **new**, how many are **newer** versions of records you have, and which coders are new.
+In **Agreement → Coders & team**, choose **Merge a teammate’s copy** and the file they sent back. Before anything changes, Trama shows what the copy brings: how many documents, codes, coded segments, memos and cases are **new**, how many are **newer** versions of records you have, and which coders are new.
 
 - New work comes in and nothing of yours is lost.
-- Where a record was changed on both sides, the **newer** version is kept.
-- Nothing is removed from your project unless your teammate deleted it after your last change to it.
+- Where a record was changed on both sides, the version changed **more recently** is kept. Only real changes count: a coded segment that merely moved because the text around it was edited does not win over your teammate’s edit or deletion of it.
+- **Document texts edited on both sides** are the exception. This project’s text is kept — a newer typo fix must not undo pseudonymisation done here, say — and Trama lists the document, so you can compare the two texts and bring your teammate’s changes over by hand, or choose **Use their text** instead. When your teammate next merges your copy, they get the text you kept, and Trama tells them so.
+- Coded segments made on another version of a text are moved back onto their words. A coded segment whose words are no longer in the text, or whose code or document was deleted, is removed; Trama says how many.
+- Nothing is removed from your project unless your teammate deleted it after your last change to it. A code deleted on one side stays if the other side coded new segments with it after the delete, and so does a document your teammate deleted that you coded since; a document you deleted stays deleted (a participant may have withdrawn). Trama lists what was kept, so you can delete it again if it should go.
+- If you applied pseudonymisation, names the copy brings back from before it are replaced again. If text from the copy still holds real names from your key, Trama warns you and offers **Pseudonymise again** — do that before you share or export the project.
+- Damaged records in the copy are left out, and Trama says how many.
 - Only copies of the **same project** can be merged. A different project (or an automatic backup) is recognised and refused with an explanation; import it as a new project instead.
 
 Every merge is recorded in the [audit trail](10-privacy-and-security.md#audit-trail). Merge often: small, frequent merges are easier to understand than one large one at the end.
@@ -57,7 +61,7 @@ The results show summary statistics, a table **by code** and **by document**, an
 
 Disagreements are the useful part: each one is a passage where the codebook can be sharpened. The list shows every segment without a match — coded by only one coder, or with **boundaries** that differ too much. Select one to read the passage with both coders’ codings side by side. Then:
 
-- **Accept A** or **Accept B** — keep one coder’s coding and remove the other’s;
+- **Accept A** or **Accept B** (the buttons show the coders’ names) — keep one coder’s coding and remove the other’s;
 - **Keep both** — leave both and mark the disagreement as resolved.
 
 **Hide resolved** keeps your place in a long list. Each decision can be undone.

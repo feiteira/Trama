@@ -65,6 +65,7 @@ Para dar uma tecla de atalho a um código, escolha **Tecla de atalho…** no seu
 - **Mostrar só o código ativo** esbate todos os outros códigos, o que ajuda a verificar se um código foi aplicado de forma coerente.
 - **Codificadores**: quando várias pessoas codificaram o projeto, escolha de quem é a codificação a mostrar — de todos, só a sua, ou a de um colega.
 - **Tamanho do texto**: aumente ou diminua o texto no cabeçalho. A escolha fica memorizada.
+- **Segmentos codificados**, no cabeçalho, abre a lista dos segmentos codificados deste documento, e **Memorandos** os memorandos sobre o documento e as suas passagens.
 - Clique em texto codificado (ou ponha o cursor nele e prima `Enter`) para ver os **segmentos codificados neste ponto**. Em cada um pode acrescentar um comentário, **mudar de código**, **ajustar os limites** (selecione a nova extensão e prima `Enter`), escrever um memorando, abrir o código no livro de códigos ou **remover esta codificação**.
 
 <a id="find"></a>

@@ -65,6 +65,7 @@ To give a code a shortcut key, choose **Shortcut key…** in its menu and pick a
 - **Show only the active code** fades every other code, which helps when you check how consistently one code was applied.
 - **Coders**: when several people coded the project, choose whose coding to show — everyone’s, only yours, or one teammate’s.
 - **Text size**: make the text larger or smaller from the header. The choice is remembered.
+- **Coded segments** in the header opens a list of this document’s coded segments, and **Memos** the memos about the document and its passages.
 - Click coded text (or put the cursor in it and press `Enter`) to see the **coded segments here**. For each one you can add a comment, **change the code**, **adjust the boundaries** (select the new extent and press `Enter`), write a memo, open the code in the codebook, or **remove the coding**.
 
 <a id="find"></a>
@@ -99,4 +100,4 @@ Two ways to note something about a passage:
 
 ## Coding while listening
 
-For transcripts with an attached recording, the player sits above the text. Code as you listen: `Ctrl+Space` plays and pauses without leaving the text, `Alt+←` replays the last 5 seconds while it plays (`Alt+Shift+←` at any time), and **Follow the recording** keeps the turn being spoken in view. See [Transcripts and recordings](02-documents.md#transcripts).
+For transcripts with an attached recording, the player sits above the text. Code as you listen: `Ctrl+Space` plays and pauses without leaving the text, `Alt+←` replays the last 5 seconds while it plays (`Alt+Shift+←` at any time), and **Follow the recording in the text** keeps the turn being spoken in view. See [Transcripts and recordings](02-documents.md#transcripts).

@@ -20,7 +20,7 @@ A forma mais rápida de ver o que o Trama faz é o projeto de exemplo: um estudo
 
 - No ecrã de boas-vindas, escolha **Experimentar o projeto de exemplo**. Abre em memória: nada do que alterar é mantido, e uma faixa no topo lembra-o disso. Escolha **Sair do exemplo** para voltar.
 - Na sua biblioteca, **Adicionar o projeto de exemplo** coloca uma cópia junto dos seus projetos, onde pode ficar o tempo que quiser; elimine-a quando já não precisar.
-- Os instaladores acrescentam também um atalho **Trama (exemplo)**. Abre uma biblioteca de exemplo separada, cuja frase-passe é **trama**, e começa do zero sempre que é aberta. A sua biblioteca nunca é tocada.
+- Os instaladores para Windows e os pacotes `.deb` e `.rpm` para Linux acrescentam também um atalho **Trama (exemplo)** (com a AppImage ou num Mac, abra o Trama com `--example`). Abre uma biblioteca de exemplo separada, cuja frase-passe é **trama**, e começa do zero sempre que é aberta. A sua biblioteca nunca é tocada.
 
 Todas as pessoas e todos os lugares do exemplo são inventados. Nunca coloque lá dados reais.
 
@@ -30,7 +30,7 @@ Todas as pessoas e todos os lugares do exemplo são inventados. Nunca coloque l�
 
 ![O ecrã de boas-vindas](../img/pt/welcome.png)
 
-1. Escolha o idioma no topo. Pode mudá-lo mais tarde.
+1. Escolha o idioma em **Idioma**, por baixo dos dois botões. Pode mudá-lo mais tarde.
 2. Escolha **Criar a minha biblioteca**.
 3. Escreva o seu nome ou as suas iniciais. Assina a codificação que fizer, para que os coautores saibam o que é de quem. Fica neste computador.
 4. Escolha uma frase-passe e anote a sua frase de recuperação (ambas explicadas a seguir).
@@ -68,6 +68,7 @@ Depois de desbloquear, vê os seus projetos. Um projeto reúne o material de um 
 
 - **Novo projeto** pede um nome, uma descrição opcional (a pergunta de investigação, ou uma nota para si próprio no futuro) e uma cor.
 - Clique num projeto para o abrir. Da próxima vez que desbloquear o Trama, o último projeto que tinha aberto abre logo.
+- **Procurar um projeto** filtra a lista pelo nome; a lista pode ser ordenada por **Aberto há menos tempo**, **Nome** ou **Data de criação**.
 - O menu **…** de um projeto permite editar os detalhes ou eliminá-lo. Para eliminar, o Trama pede que escreva o nome do projeto, e remove-o deste computador para sempre (as cópias de segurança guardadas noutro sítio não são tocadas).
 - **Importar um ficheiro de projeto** traz um ficheiro `.trama` ou um projeto REFI-QDA (`.qdpx`) do NVivo, do MAXQDA ou do ATLAS.ti como novo projeto — ver [Trocar projetos](09-exchange.md).
 - Para mudar de projeto com um já aberto, use o nome do projeto no topo da navegação.
@@ -116,9 +117,12 @@ As **Definições** reúnem as escolhas que lhe dizem respeito a si e a este com
 
 - o idioma da interface (English, Português, Español) e o tema (claro, escuro ou o do sistema);
 - quanto tempo até o Trama se bloquear;
-- a frase-passe e a frase de recuperação, que pode mudar a qualquer momento;
+- **O seu nome**, que assina a sua codificação nos projetos que criar a partir de agora;
+- a frase-passe e a frase de recuperação, que pode mudar a qualquer momento (**Criar uma nova frase de recuperação…** substitui uma frase perdida ou que alguém possa ter visto);
 - **O que sai deste computador**: todas as formas de os dados saírem do Trama, e quando (ver [Privacidade e segurança](10-privacy-and-security.md));
-- para o projeto aberto, o idioma do material, usado na frequência de palavras e nas palavras vazias.
+- para o projeto aberto, o idioma do material, usado na frequência de palavras e nas palavras vazias;
+- **Sobre**: a versão do Trama, a **Pasta de dados** onde fica a sua biblioteca cifrada e o software de código aberto com que o Trama é feito, com as respetivas licenças;
+- **Apagar tudo neste computador**, que remove toda a biblioteca para sempre (as cópias de segurança e os ficheiros exportados guardados noutro sítio não são tocados).
 
 <a id="shortcuts"></a>
 

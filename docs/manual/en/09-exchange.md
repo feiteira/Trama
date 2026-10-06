@@ -33,7 +33,9 @@ Open **Project**, go to the **Export** tab, choose **REFI-QDA project** and save
 
 - **MAXQDA line endings** is the one option: it writes the text files with Windows line endings, so coded segments land in the right place in MAXQDA. Turn it on when the file is going to MAXQDA, and leave it off for other programs.
 - Memos and recordings are always included.
-- Original PDFs whose text you have edited are always written as text (see [What does not carry over](#lost)).
+- Original PDF and Word files whose text you have edited are always written as text (see [What does not carry over](#lost)).
+
+After saving, Trama lists anything that could not be carried over.
 
 The `.qdpx` file is **not encrypted** and never contains the pseudonymisation key, deleted items or the audit trail.
 
@@ -44,7 +46,7 @@ The `.qdpx` file is **not encrypted** and never contains the pseudonymisation ke
 | | Into Trama | Out of Trama |
 |---|---|---|
 | Documents (text) | Yes | Yes |
-| Original PDF and Word files | Kept as the original file | PDFs whose text has not been edited |
+| Original PDF and Word files | Kept as the original file | Those whose text has not been edited |
 | Transcripts with time stamps and recordings | Yes | Yes (time stamps need the recording) |
 | Codes, hierarchy, colours | Yes | Yes |
 | Code definitions | Yes | Yes, with *when to use*, *when not to use* and *example* as labelled parts of the description |
@@ -65,14 +67,20 @@ The `.qdpx` file is **not encrypted** and never contains the pseudonymisation ke
 - files the `.qdpx` refers to but does not contain (Trama never fetches anything from a disk path or the network);
 - sets of codes and of memos, graphs and networks, links that do not attach a memo, and code references on cases;
 - attribute values that do not fit their type, and the time part of date-time values;
-- codings to codes that do not exist, with impossible positions, or duplicated.
+- codings to codes that do not exist, with impossible positions, or duplicated (codings that run past the end of a text are shortened).
+
+Codes marked as folders that nevertheless hold codings come in as ordinary codes, so their codings stay visible. A text file that is not valid UTF-8 is read as well as it can be, and the summary says so.
 
 **Going out**, the other program does not get:
 
 - **Choice** attributes as choices: they become text, because REFI-QDA has no list of allowed values;
 - colours of cases, groups, memos and documents, code shortcut keys, and the document kinds *survey* and *note* (they become ordinary text documents);
 - the audit trail, deleted items and the pseudonymisation key;
-- the original PDF of a document whose text you have edited — for instance, pseudonymised. The original would still show what was removed, so the document is always written as text.
+- the original PDF or Word file of a document whose text you have edited — for instance, pseudonymised. The original would still show what was removed, so the document is always written as text. Original files in other formats (OpenDocument, RTF…) are never written, because REFI-QDA cannot hold them; their text is;
+- the time stamps of a transcript whose recording is missing;
+- files larger than the 2 GB REFI-QDA allows.
+
+Memos about something that was deleted are attached to the project.
 
 The full mapping, for the technically curious, is in `docs/spec/refi-qda.md` in Trama’s source code.
 
@@ -91,3 +99,5 @@ When exporting, you can **protect the file with a password** (strongly recommend
 Inside, a `.trama` file without a password is an ordinary ZIP archive: the data as JSON lines, the original files, and a `readable` folder with each document as plain text, the codebook as Markdown and each memo as a Markdown file — so a project stays readable for decades, with or without Trama. A password-protected file is that same archive encrypted.
 
 Import a `.trama` file with **Import a project file** on the projects screen.
+
+**Project → Export → Project report** is not for exchange but for reading: a Word document or web page with an overview of the project, the codebook with definitions and counts, the memos and the cases table — for a supervisor, an appendix or an archive. It holds no document text and is not encrypted.

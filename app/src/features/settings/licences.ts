@@ -30,5 +30,8 @@ export const BUNDLED: Record<'fonts' | 'libraries' | 'desktop', readonly Bundled
     { name: 'rusqlite', licence: 'MIT' },
     { name: 'RustCrypto argon2', licence: 'Apache-2.0 / MIT' },
     { name: 'OpenSSL', licence: 'Apache-2.0' },
+    { name: 'SQLite (inside SQLCipher and sql.js)', licence: 'Public domain' },
+    { name: 'serde, serde_json, hex, zeroize, thiserror, percent-encoding', licence: 'Apache-2.0 / MIT' },
+    { name: 'walkdir', licence: 'MIT / Unlicense' },
   ],
 };

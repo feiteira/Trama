@@ -72,7 +72,7 @@ describe('the reference example project', async () => {
 
   it('produces a consistent, valid bundle', () => {
     expectValid(b);
-    expect(b.project).toEqual({ id: null, name: 'Demo project', description: 'Project-level description', origin: 'Sala 0.1' });
+    expect(b.project).toEqual({ id: null, name: 'Demo project', description: 'Project-level description', origin: 'Example 0.1' });
   });
 
   it('reads users, the code tree and variables', () => {

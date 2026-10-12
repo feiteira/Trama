@@ -2,7 +2,7 @@
 <Project xmlns="urn:QDA-XML:project:1.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="urn:QDA-XML:project:1.0 http://schema.qdasoftware.org/versions/Project/v1.0/Project.xsd"
-         name="Demo project" origin="Sala 0.1"
+         name="Demo project" origin="Example 0.1"
          creatingUserGUID="5c94bc9e-db8c-4f1d-9cd6-e900c7440860"
          creationDateTime="2026-10-05T12:00:00Z"
          modifyingUserGUID="5c94bc9e-db8c-4f1d-9cd6-e900c7440860"

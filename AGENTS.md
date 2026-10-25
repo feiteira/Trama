@@ -30,6 +30,8 @@ Linux builds need `libwebkit2gtk-4.1-dev libgtk-3-dev libsoup-3.0-dev librsvg2-d
 
 Build and test locally. Never trigger macOS/Windows CI builds unless explicitly asked.
 
+Releases: bump the version (`desktop/src-tauri/tauri.conf.json`, `Cargo.toml`, the `package.json` files), write `docs/release-notes/v<version>.md` (English, Portuguese, Spanish), then, only when asked, `gh workflow run ci.yml --ref main -f run=release`: checks, the three builds, and a GitHub release `v<version>` with every installer.
+
 ## Architecture
 
 ```

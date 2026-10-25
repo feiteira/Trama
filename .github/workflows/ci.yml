@@ -8,13 +8,18 @@ name: CI
 # macOS runs only when asked for by name: it is the slowest build (two architectures). It builds the
 # app signed ad hoc (no certificate, no secrets here); signing and notarisation happen elsewhere.
 # The installers bundle the speech model (~575 MB, tools/fetch-speech-models.mjs, cached here).
+#
+# "release" runs the checks and all three builds, then publishes a GitHub release v<version>
+# (version from desktop/src-tauri/tauri.conf.json) with every installer attached and the notes in
+# docs/release-notes/v<version>.md. Run it from main:
+#   gh workflow run ci.yml --ref main -f run=release
 on:
   workflow_dispatch:
     inputs:
       run:
         description: What to run
         type: choice
-        options: [everything, Windows, Linux, macOS, Windows and macOS]
+        options: [everything, Windows, Linux, macOS, Windows and macOS, release]
         default: everything
 
 permissions:
@@ -23,7 +28,7 @@ permissions:
 jobs:
   checks:
     name: Typecheck, tests, lint
-    if: inputs.run == 'everything'
+    if: inputs.run == 'everything' || inputs.run == 'release'
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v7
@@ -58,7 +63,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        name: ${{ fromJSON(inputs.run == 'everything' && '["Linux","Windows"]' || inputs.run == 'Windows and macOS' && '["Windows","macOS"]' || format('["{0}"]', inputs.run)) }}
+        name: ${{ fromJSON(inputs.run == 'everything' && '["Linux","Windows"]' || inputs.run == 'release' && '["Linux","Windows","macOS"]' || inputs.run == 'Windows and macOS' && '["Windows","macOS"]' || format('["{0}"]', inputs.run)) }}
     runs-on: ${{ matrix.name == 'Windows' && 'windows-latest' || matrix.name == 'macOS' && 'macos-latest' || 'ubuntu-22.04' }}
     # The speech engine is compiled twice on macOS (Apple silicon and Intel).
     timeout-minutes: ${{ matrix.name == 'macOS' && 75 || 90 }}
@@ -68,6 +73,9 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      - name: Room on the disk (three Linux formats, each with a copy of the speech model)
+        if: runner.os == 'Linux'
+        run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL && df -h /
       - name: Linux build dependencies
         if: runner.os == 'Linux'
         run: |
@@ -120,3 +128,30 @@ jobs:
             desktop/src-tauri/target/universal-apple-darwin/release/bundle/macos/*.app.tar.gz
           if-no-files-found: error
           retention-days: 14
+
+  release:
+    name: Publish the release
+    needs: build
+    if: ${{ inputs.run == 'release' && needs.build.result == 'success' }}
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v7
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Create the release with every installer
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=$(node -p "require('./desktop/src-tauri/tauri.conf.json').version")
+          notes="docs/release-notes/v${version}.md"
+          test -f "$notes" || { echo "::error::$notes is missing: write the release notes first"; exit 1; }
+          if gh release view "v${version}" >/dev/null 2>&1; then
+            echo "::error::release v${version} already exists: bump the version first"; exit 1
+          fi
+          mapfile -t files < <(find dist -type f | sort)
+          printf '%s\n' "${files[@]}"
+          gh release create "v${version}" "${files[@]}" --target "$GITHUB_SHA" --title "Trama ${version}" --notes-file "$notes"

@@ -53,7 +53,7 @@ O **Trama** é um programa gratuito e de código aberto para análise qualitativ
 
 ## Install
 
-There are no published installers yet: build Trama from source (below). Test builds are not yet code-signed, so Windows SmartScreen and macOS Gatekeeper will warn before opening them.
+Download the installer for your system from [Releases](https://github.com/feiteira/Trama/releases): Windows 10 and 11 (`.exe` or `.msi`), macOS 14.2 or later (Apple silicon and Intel), and Linux (`.AppImage`, `.deb`, `.rpm`). Each is about 600 MB, almost all of it the speech model that transcribes on your computer. The builds are not yet code-signed, so Windows SmartScreen and macOS Gatekeeper will warn before opening them; the release notes say how to open them anyway. Or build Trama from source (below).
 
 The Windows installers and the Linux `.deb` and `.rpm` packages also add **Trama (example)** (elsewhere, start Trama with `--example`), which opens a fictional example study (passphrase `trama`) in a separate folder that is emptied every time — a safe place to try everything.
 

@@ -17,6 +17,7 @@ export const CHAPTER_FILES = [
   '08-teamwork-and-agreement.md',
   '09-exchange.md',
   '10-privacy-and-security.md',
+  '11-classes.md',
   'glossary.md',
 ] as const;
 

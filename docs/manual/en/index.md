@@ -14,7 +14,8 @@ This manual is also inside the app: choose **Help** in the navigation, search it
 8. [Teamwork and inter-coder agreement](08-teamwork-and-agreement.md) — copies for teammates, merging, coders, agreement statistics and what they mean
 9. [Exchanging projects](09-exchange.md) — REFI-QDA with NVivo, MAXQDA and ATLAS.ti, the `.trama` file, what carries over
 10. [Privacy and security](10-privacy-and-security.md) — encryption, backups, pseudonymisation, the audit trail, text for ethics applications and data management plans
-11. [Glossary](glossary.md)
+11. [Recording and studying classes](11-classes.md) — recording classes online and in the room, permission, organising a course, revision sheets
+12. [Glossary](glossary.md)
 
 The most useful [keyboard shortcuts](01-getting-started.md#shortcuts) are in the first chapter; Help also has a page listing all of them.
 

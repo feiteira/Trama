@@ -14,7 +14,8 @@ Este manual también está dentro de la aplicación: elija **Ayuda** en la naveg
 8. [Trabajo en equipo y acuerdo entre codificadores](08-teamwork-and-agreement.md) — copias para compañeros, fusión, codificadores, estadísticos de acuerdo y qué significan
 9. [Intercambiar proyectos](09-exchange.md) — REFI-QDA con NVivo, MAXQDA y ATLAS.ti, el archivo `.trama`, qué se conserva y qué no
 10. [Privacidad y seguridad](10-privacy-and-security.md) — cifrado, copias de seguridad, seudonimización, registro de auditoría, textos para comités de ética y planes de gestión de datos
-11. [Glosario](glossary.md)
+11. [Grabar y estudiar clases](11-classes.md) — grabar clases en línea y en el aula, permisos, organizar una asignatura, hojas de repaso
+12. [Glosario](glossary.md)
 
 Los [atajos de teclado](01-getting-started.md#shortcuts) más útiles están en el primer capítulo; la Ayuda tiene además una página con todos.
 

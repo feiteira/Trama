@@ -50,6 +50,42 @@ O Trama reconhece transcrições e mantém **uma intervenção por parágrafo**,
 - **Acompanhar a gravação no texto** realça a intervenção que está a ser ouvida.
 - Remover uma gravação apaga o ficheiro do projeto; a transcrição e as marcas de tempo ficam.
 
+<a id="record"></a>
+
+## Gravar uma chamada
+
+A aplicação para computador pode gravar uma entrevista feita por videochamada (Zoom, Teams, Meet, Jitsi ou qualquer outra) e transcrevê-la, tudo no seu computador. Nada é enviado para lado nenhum, e não é preciso conta nem ligação à internet.
+
+1. Escolha **Gravar uma chamada** (o botão do microfone no topo da lista de documentos, ou `Ctrl+K` e «Gravar uma chamada»).
+2. Dê um nome à gravação e indique os nomes que a transcrição deve usar para si e para o outro lado.
+3. Escolha a língua falada, ou deixe o Trama detetá-la.
+4. Marque **Todas as pessoas na chamada aceitaram ser gravadas**. A ética da investigação, e a lei em muitos países, exigem consentimento; diga no início da chamada que está a gravar. Sem isto, a gravação não começa.
+5. Escolha **Começar a gravar**.
+
+O Trama grava duas coisas: o seu **microfone** e **o que o computador reproduz**, ou seja, todas as outras pessoas na chamada. As duas ficam separadas, para que a transcrição saiba que palavras foram suas. Uma faixa no fundo da janela mostra há quanto tempo a gravação decorre e o nível de som de cada lado; aparece um aviso se um dos lados não estiver a ser gravado. Pode continuar a trabalhar no Trama entretanto, e o Trama não se bloqueia sozinho enquanto grava.
+
+Escolha **Parar e guardar**. A gravação passa a ser um documento de transcrição com o seu áudio, cifrado como todos os outros ficheiros do projeto. Se tiver marcado **Transcrever quando a gravação parar**, a transcrição é feita a seguir (ver abaixo).
+
+- **Use auscultadores.** Sem eles, o seu microfone também ouve o outro lado pelas colunas. O Trama retira do seu lado as palavras que também ouviu do computador, mas com auscultadores a transcrição fica mais limpa.
+- **Várias pessoas do outro lado** aparecem todas com o nome que deu ao outro lado. Depois, renomeie ou divida as intervenções com **Editar o texto…**.
+- **Se o Trama ou o computador pararem** a meio de uma chamada, a gravação não se perde. Da próxima vez que abrir o projeto, o que foi gravado até aos últimos segundos é guardado como documento.
+- As gravações ficam em ficheiros WAV estéreo de 16 kHz, cerca de 230 MB por hora.
+- O **macOS** pede, da primeira vez, autorização para usar o microfone e para gravar o som do computador; o Trama precisa das duas. Gravar exige o macOS 14.2 ou posterior. No **Linux**, o som do computador é gravado através do PulseAudio ou do PipeWire, que quase todos os ambientes de trabalho usam.
+
+<a id="transcribe"></a>
+
+## Transcrever uma gravação
+
+O Trama vem com um modelo de fala (Whisper large-v3-turbo, através do whisper.cpp) que transcreve uma gravação no seu computador. Compreende português, espanhol, inglês e cerca de cem outras línguas.
+
+- **Uma chamada gravada no Trama** é transcrita quando a gravação para, se o tiver pedido.
+- **Uma gravação que importe sem transcrição** (um `.mp3`, `.m4a`, `.wav`, `.flac`, `.ogg` ou o som de um vídeo `.mp4` ou `.mov`) passa a ser um documento de transcrição e é transcrita depois da importação.
+- **Qualquer gravação ainda sem transcrição**: abra o documento e escolha **Transcrever neste computador**.
+
+A transcrição demora algum tempo: num portátil recente, entre metade e toda a duração da gravação. Corre em segundo plano, uma gravação de cada vez; uma faixa no fundo da janela mostra o progresso, e pode continuar a trabalhar ou pará-la. Se o Trama se bloquear ou fechar antes do fim, continua da próxima vez que o projeto abrir. No fim, o texto aparece no documento, um parágrafo por intervenção e com marcas de tempo, para que a gravação acompanhe o texto ao tocar. O registo de auditoria indica que motor escreveu a transcrição.
+
+Leia a transcrição com a gravação antes de a codificar: a transcrição automática ouve mal nomes, palavras ditas baixinho e falas sobrepostas, e pode falhar uma resposta muito curta, como «Sim.», no início de uma intervenção. Uma transcrição só é escrita num documento que ainda não tenha texto, por isso nunca substitui o seu.
+
 <a id="surveys"></a>
 
 ## Respostas a inquéritos

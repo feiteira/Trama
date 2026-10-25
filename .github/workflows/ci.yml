@@ -5,8 +5,9 @@ name: CI
 # runs only that build, skipping the checks and the other builds to save minutes:
 #   gh workflow run ci.yml --ref <branch> -f run=Windows
 #   gh workflow run ci.yml --ref <branch> -f run="Windows and macOS"
-# macOS runs only when asked for by name: its minutes cost ten times Linux ones. It builds the app
-# signed ad hoc (no certificate, no secrets here); signing and notarisation happen elsewhere.
+# macOS runs only when asked for by name: it is the slowest build (two architectures). It builds the
+# app signed ad hoc (no certificate, no secrets here); signing and notarisation happen elsewhere.
+# The installers bundle the speech model (~575 MB, tools/fetch-speech-models.mjs, cached here).
 on:
   workflow_dispatch:
     inputs:
@@ -33,7 +34,7 @@ jobs:
       - name: Linux build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libsoup-3.0-dev librsvg2-dev patchelf
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libsoup-3.0-dev librsvg2-dev patchelf libasound2-dev libclang-dev cmake
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
@@ -59,8 +60,8 @@ jobs:
       matrix:
         name: ${{ fromJSON(inputs.run == 'everything' && '["Linux","Windows"]' || inputs.run == 'Windows and macOS' && '["Windows","macOS"]' || format('["{0}"]', inputs.run)) }}
     runs-on: ${{ matrix.name == 'Windows' && 'windows-latest' || matrix.name == 'macOS' && 'macos-latest' || 'ubuntu-22.04' }}
-    # macOS minutes cost ten times as much (the build itself takes under 10 minutes).
-    timeout-minutes: ${{ matrix.name == 'macOS' && 30 || 90 }}
+    # The speech engine is compiled twice on macOS (Apple silicon and Intel).
+    timeout-minutes: ${{ matrix.name == 'macOS' && 75 || 90 }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -71,7 +72,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libsoup-3.0-dev librsvg2-dev patchelf
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libsoup-3.0-dev librsvg2-dev patchelf libasound2-dev libclang-dev cmake
       - uses: dtolnay/rust-toolchain@stable
         with:
           # One universal app for Apple silicon and Intel Macs.
@@ -80,16 +81,22 @@ jobs:
         with:
           workspaces: desktop/src-tauri
       - run: npm ci
+      - name: Speech model files (cached; checked against their SHA-256)
+        uses: actions/cache@v4
+        with:
+          path: desktop/src-tauri/resources/speech
+          key: speech-models-${{ hashFiles('tools/fetch-speech-models.mjs') }}
+      - run: node tools/fetch-speech-models.mjs
       - name: Build installers (unsigned)
         if: runner.os != 'macOS'
-        run: npm run tauri --workspace @trama/desktop -- build --bundles ${{ matrix.name == 'Windows' && 'nsis,msi' || 'appimage,deb,rpm' }}
+        run: npm run tauri --workspace @trama/desktop -- build --config src-tauri/tauri.speech.conf.json --bundles ${{ matrix.name == 'Windows' && 'nsis,msi' || 'appimage,deb,rpm' }}
       - name: Build the Mac app (signed ad hoc)
         if: runner.os == 'macOS'
         env:
           # "-" signs ad hoc: the app runs after "Open" in System Settings, but is not notarised.
           APPLE_SIGNING_IDENTITY: "-"
         run: |
-          npm run tauri --workspace @trama/desktop -- build --target universal-apple-darwin --bundles app
+          npm run tauri --workspace @trama/desktop -- build --config src-tauri/tauri.speech.conf.json --target universal-apple-darwin --bundles app
           cd desktop/src-tauri/target/universal-apple-darwin/release/bundle/macos
           version=$(node -p "require('$GITHUB_WORKSPACE/desktop/src-tauri/tauri.conf.json').version")
           tar -czf "Trama_${version}_universal-adhoc.app.tar.gz" Trama.app

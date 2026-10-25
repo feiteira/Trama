@@ -21,6 +21,7 @@ import {
   transcriptModeFor,
   withDoc,
   withFailure,
+  withRecording,
 } from './model';
 
 const doc = (over: Partial<ImportedDoc> = {}): ImportedDoc => ({
@@ -171,6 +172,18 @@ describe('media', () => {
     expect(matchMedia('C:\\rec\\interview 3.mp3', rows)).toBe('a');
     expect(matchMedia('Interview 5.mp3', rows)).toBeNull();
     expect(matchMedia('Other.mp3', rows)).toBeNull();
+  });
+
+  it('makes a recording without a transcript into an empty transcript to transcribe', () => {
+    const bytes = new Uint8Array([1, 2, 3]);
+    const row = withRecording(newRow('r', 'file', '/x/Entrevista 7.m4a'), { filename: '/x/Entrevista 7.m4a', mime: 'audio/mp4', bytes });
+    expect(row).toMatchObject({ status: 'ready', name: 'Entrevista 7', kind: 'transcript', transcribe: true, sha: null, words: 0 });
+    expect(row.doc?.text).toBe('');
+    expect(row.media?.bytes).toBe(bytes);
+    expect(importable(row)).toBe(true);
+    expect(kindOptions(row)).toEqual(['transcript']);
+    // Two recordings never count as copies of each other: they have no text to compare yet.
+    expect(findDuplicates([row, { ...row, id: 's' }], new Map()).size).toBe(0);
   });
 });
 

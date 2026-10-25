@@ -1,0 +1,9 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "bundle": {
+    "resources": {
+      "resources/speech/ggml-large-v3-turbo-q5_0.bin": "speech/ggml-large-v3-turbo-q5_0.bin",
+      "resources/speech/ggml-silero-v5.1.2.bin": "speech/ggml-silero-v5.1.2.bin"
+    }
+  }
+}

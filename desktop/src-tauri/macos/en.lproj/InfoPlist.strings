@@ -1,0 +1,2 @@
+"NSMicrophoneUsageDescription" = "Trama records your side of a call you choose to record, on this computer. Nothing is sent anywhere.";
+"NSAudioCaptureUsageDescription" = "Trama records the other side of a call you choose to record, from what this computer plays. Nothing is sent anywhere.";

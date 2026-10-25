@@ -100,6 +100,10 @@ export const importer: Messages['importer'] = {
     hint: 'La contraseña solo se usa para leer el texto ahora; no se guarda.',
   },
 
+  recording: {
+    list: 'se transcribirá después de importar',
+    note: 'Una grabación sin transcripción con el mismo nombre. Después de importar, Trama la transcribe en este ordenador, sin enviarla a ninguna parte; puede seguir trabajando mientras tanto.',
+  },
   transcript: {
     title: 'Transcripción',
     speakers: 'Hablantes',

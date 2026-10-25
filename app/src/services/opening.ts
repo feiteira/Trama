@@ -7,10 +7,12 @@ import { finishPendingMerge } from './datafile';
 import type { Project } from './project';
 import { eraseDeletedKeyEntries, logInterruptedApply } from './pseudonyms';
 import { checkIntegrity } from './reconcile';
+import { parseOpenRecording, RECORDING_META, recoverRecording } from './recording';
 
 export async function afterOpen(project: Project): Promise<void> {
   const steps: [string, () => Promise<unknown>][] = [
     ['finishing an interrupted merge', () => finishPendingMerge(project)],
+    ['saving a recording that was cut short', () => recoverRecording(project)],
     ['checking documents and codings', () => checkIntegrity(project.store)],
     ['noting an interrupted pseudonymisation', () => logInterruptedApply(project)],
     ['erasing deleted key entries', () => eraseDeletedKeyEntries(project)],
@@ -35,6 +37,9 @@ export async function sweepBlobs(project: Project): Promise<number> {
   const onDisk = await project.platform.blobs.list(project.id);
   if (!onDisk.length) return 0;
   const used = new Set<string>();
+  // A recording being made (or not yet recovered) has no document yet.
+  const recording = parseOpenRecording(await project.store.getMeta(RECORDING_META));
+  if (recording) used.add(recording.blob_id);
   for (const d of (await project.store.list('document', { includeDeleted: true })) as Document[]) {
     for (const ref of [d.original, d.media] as (MediaRef | null)[]) if (ref) used.add(ref.blob_id);
   }

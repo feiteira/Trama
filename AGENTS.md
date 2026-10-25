@@ -17,15 +17,16 @@ npm run dev:web                  # browser demo at http://localhost:1420 — the
 npm run typecheck                # tsc --noEmit — also fails on any missing translation
 npm test                         # Vitest (app/src/**/*.test.ts)
 npx vitest run src/core/qda --root app          # one directory or file
-npm run test:rust                # cargo test (SQLCipher, Argon2 vectors, file helpers)
+npm run test:rust                # cargo test (SQLCipher, Argon2 vectors, file helpers, speech)
 npm run lint:rust                # cargo fmt --check + clippy -D warnings
-npm run build:desktop            # installers for the current OS (AppImage/deb/rpm on Linux)
+npm run build:desktop            # installers for the current OS (AppImage/deb/rpm on Linux), speech model bundled
+npm run fetch:speech             # the speech model files (575 MB, SHA-256 checked) for debug builds
 npm run gen:privacy              # regenerate PRIVACY.md from app/src/core/privacy/flows.ts
 npm run screenshots              # manual screenshots, all three languages (Playwright + the demo)
 xvfb-run -a node tools/desktop-e2e/run.mjs   # the real desktop app via WebDriver (after a release build)
 ```
 
-Linux builds need `libwebkit2gtk-4.1-dev libgtk-3-dev libsoup-3.0-dev librsvg2-dev patchelf`.
+Linux builds need `libwebkit2gtk-4.1-dev libgtk-3-dev libsoup-3.0-dev librsvg2-dev patchelf libasound2-dev libclang-dev cmake` (the last three for recording and whisper.cpp).
 
 Build and test locally. Never trigger macOS/Windows CI builds unless explicitly asked.
 
@@ -42,16 +43,19 @@ app/src/core/        platform-free TypeScript (no DOM, no React): runs in Vitest
   import/            parsers → ImportedDoc (txt, md, docx, odt, rtf, html, pdf, vtt, srt, transcripts, csv, xlsx)
   export/            .trama container (trama.ts), REFI-QDA qdpx/qdc (refi/), office writers (csv, xlsx, docx, html)
   privacy/           "What leaves this device" — source of PRIVACY.md
+  speech/            transcription results → transcript turns (echo removal, sync points), WAV header
   text/              normalisation (fold), small Markdown parser
 app/src/platform/    the device boundary (types.ts) + tauri.ts (desktop/mobile), memory.ts + sqljs.ts (tests, demo)
 app/src/services/    library (keyring, project list), project (store, blobs, me), domain operations
-                     (documents, codes, codings, memos, cases, groups, pseudonyms, log), undo, backups, data files
+                     (documents, codes, codings, memos, cases, groups, pseudonyms, log), undo, backups, data files,
+                     recording (a call sealed into a blob as it is made) and transcription (queue, engine)
 app/src/ui/          design system: tokens (tokens.css), components, icons (lucide-react), i18n provider
 app/src/shell/       app state (welcome/locked/library/project), router, layout, auto-lock, savers, error boundary
 app/src/features/    screens, one folder each: onboarding, projects, workbench, codes, segments, memos, cases,
-                     analysis, agreement, importer, exporter, pseudonyms, log, settings, help
+                     analysis, agreement, importer, exporter, pseudonyms, log, settings, help, speech
 app/src/demo/        browser demo boot + the fictional example project (exampleProject.ts)
-desktop/src-tauri/   Rust shell: SQLCipher databases (one per project), Argon2id, file I/O, dialogs. No network.
+desktop/src-tauri/   Rust shell: SQLCipher databases (one per project), Argon2id, file I/O, dialogs, speech/
+                     (recording with cpal, decoding with Symphonia, whisper.cpp via whisper-rs). No network.
 docs/                manual (en/pt/es), public specs (export format), security notes
 test-vectors/        crypto vectors checked by both Vitest and cargo test
 ```
@@ -84,6 +88,17 @@ Kinds: `coder`, `document`, `doctext` (the text, same id as its document), `code
 - `project.ts` — `Project {id, info, store, platform, me: Coder}`, `addBlob(bytes, filename, mime) → MediaRef`, `readBlob(ref)`, `removeBlob(ref)`, `log(action, summary, target?)`, `close()`.
 - Domain services (`documents.ts`, `codes.ts`, `codings.ts`, `memos.ts`, `cases.ts`, `groups.ts`, `pseudonyms.ts`) hold every multi-record operation (create a document with its text, delete a code with its codings, merge codes, apply/remove a coding, edit text with remapping…). Screens call these, not raw `store.put`, for anything beyond a one-field edit. `undo.ts` keeps an in-memory undo/redo stack of reversible operations for the open project.
 - `backup.ts` / `datafile.ts` — automatic encrypted backups to a chosen folder, `.trama` export/import (optionally password-protected), restore, merge a teammate's copy.
+
+### Speech (recording a call, transcribing recordings)
+
+Desktop only (`platform.speech`; absent in the browser demo, where the screens say so).
+
+- **The model ships with the app.** `tools/fetch-speech-models.mjs` downloads whisper.cpp's `ggml-large-v3-turbo-q5_0.bin` and Silero VAD at *build* time into `desktop/src-tauri/resources/speech/` (gitignored), checking pinned SHA-256s; `tauri.speech.conf.json` bundles them and only release builds pass it (`--config`), so `cargo test`/clippy never need them. The shell finds them in its resources, `TRAMA_SPEECH_DIR`, or (debug) `resources/speech/`. The app itself downloads nothing.
+- **whisper.cpp is built for other people's CPUs**: `.cargo/config.toml` sets `GGML_NATIVE=OFF` + AVX2/FMA/F16C; the shell refuses transcription on x86-64 without them (`UNSUPPORTED_CPU`). macOS minimum is 14.2 (cpal's Core Audio taps).
+- **Transcription** (`speech/transcribe.rs`): Silero VAD finds speech, the stretches are joined with short pauses and transcribed, and times are mapped back word by word (DTW token times), cutting segments at real pauses — whisper.cpp's own VAD only runs in `whisper_full`, not the `whisper_full_with_state` whisper-rs calls, and its segment starts after a pause are unreliable. Do not use whisper-rs 0.16's `set_abort_callback_safe`: its trampoline reads the closure as the wrong type (random aborts); `abort_if_cancelled` is the raw replacement. A call recorded in Trama has two channels (left: microphone, right: what the computer played) transcribed apart (`channels: 'split'`); `core/speech/transcript.ts` interleaves them into turns and drops microphone segments that repeat the other side (echo without headphones).
+- **Recording** (`speech/capture.rs`, `services/recording.ts`): two cpal streams (Linux: the PulseAudio monitor of the default output; Windows: WASAPI loopback; macOS: process tap), resampled to 16 kHz and kept in step with the clock (WASAPI sends nothing during silence). The UI takes the PCM every 400 ms and seals it into the blob in 256 KiB frames (`blobs.append`); the WAV length in frame 0 is rewritten at the stop (`blobs.writeAt`). Store meta `recording.open` marks a recording in progress: `afterOpen` recovers it after a crash and the blob sweep spares it. Recording holds the idle auto-lock off and is saved by a saver before any lock.
+- **Queue**: store meta `speech.queue` (device-local), run one at a time by `features/speech/controller.ts`; a transcript is only written into a document without text (`fillTranscript`, one undo step, audit entry naming the engine).
+- Tests: `platform/fakeSpeech.ts` stands in for the shell (also `?speech=fake` in the demo, for screenshots). Opt-in real runs: `TRAMA_SPEECH_SAMPLE=<file> [TRAMA_SPEECH_CHANNELS=split] cargo test --release transcribes_a_sample -- --ignored --nocapture`, and `record_from_devices` for the devices. The desktop e2e transcribes a flite-synthesised sample when ffmpeg and the model are present.
 
 ### UI (app/src/ui, app/src/shell, app/src/features)
 
@@ -126,7 +141,7 @@ Everything user-facing ships in **English, European Portuguese (pt-PT) and Europ
 
 ## Privacy
 
-Trama makes **no network connections**: there is no HTTP client, no update check, no telemetry. The Tauri capability file grants no network permission and the desktop e2e test checks that. `core/privacy/flows.ts` lists every way data can leave the computer (backups, exports, copies to the clipboard of segments) and generates `PRIVACY.md` (`npm run gen:privacy`); any feature that writes data outside the library must add an entry.
+Trama makes **no network connections**: there is no HTTP client, no update check, no telemetry. The Tauri capability file grants no network permission and the desktop e2e test checks that. `core/privacy/flows.ts` lists every way data can leave the computer (backups, exports, copies to the clipboard of segments) and generates `PRIVACY.md` (`npm run gen:privacy`); any feature that writes data outside the library must add an entry. Recording and transcription add none: audio and text stay in memory and in the encrypted project. The only download is the build's speech model fetch.
 
 ## What belongs in this repository
 

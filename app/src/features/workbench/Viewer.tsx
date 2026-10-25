@@ -31,6 +31,7 @@ import { MemosDrawer, SegmentsDrawer } from './Drawers';
 import { EditText } from './EditText';
 import { FindBar } from './FindBar';
 import { MediaBar, type MediaHandle } from './MediaBar';
+import { TranscriptPrompt } from '../speech/TranscriptPrompt';
 import { codeOptions, favourites, pushRecent } from './model/codeSearch';
 import { findAll, firstMatchFrom } from './model/find';
 import { type CoderFilter, coderFilterKey, filterByCoder, markColor, markStyles, parseCoderFilter } from './model/highlight';
@@ -1454,6 +1455,7 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer({ do
                 ) : (
                   <div ref={pageRef} className={`wb-page${gutter ? ' wb-page--gutter' : ''}${large ? ' wb-page--large' : ''}${textWidth < 600 ? ' wb-page--tight' : ''}`} style={pageStyle}>
                     <style>{dynamicCss}</style>
+                    {doc?.media && !text.trim() ? <TranscriptPrompt doc={doc} /> : null}
                     <div
                       ref={rootRef}
                       className={`wb-text${transcript ? ' wb-text--transcript' : ''}`}

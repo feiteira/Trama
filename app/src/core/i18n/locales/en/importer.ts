@@ -98,6 +98,10 @@ export const importer = {
     hint: 'The password is only used to read the text now; it is not stored.',
   },
 
+  recording: {
+    list: 'to be transcribed after the import',
+    note: 'A recording without a transcript of the same name. After the import, Trama transcribes it on this computer, without sending it anywhere; you can keep working meanwhile.',
+  },
   transcript: {
     title: 'Transcript',
     speakers: 'Speakers',

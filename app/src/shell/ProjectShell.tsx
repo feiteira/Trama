@@ -1,6 +1,8 @@
 import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronsUpDown, CircleHelp, FolderOpen, Keyboard, Library as LibraryIcon, Lock, Monitor, Moon, PanelLeftClose, PanelLeftOpen, Search, Sun } from 'lucide-react';
 import { HELP_TOPICS } from '../features/help/manualModel';
+import { SpeechDock } from '../features/speech/SpeechDock';
+import { SpeechProvider } from '../features/speech/SpeechProvider';
 import { ScreenView } from '../features/registry';
 import { inkOn } from '../ui/color';
 import { cx } from '../ui/cx';
@@ -48,7 +50,9 @@ export function ProjectShell({ initialRoute }: { initialRoute?: Route }) {
     // A fresh history and undo stack for each project opened.
     <RouterProvider key={project.id} initial={initialRoute ?? { name: 'workbench' }}>
       <UndoProvider key={project.id}>
-        <Layout />
+        <SpeechProvider key={project.id}>
+          <Layout />
+        </SpeechProvider>
       </UndoProvider>
     </RouterProvider>
   );
@@ -278,6 +282,7 @@ function Layout() {
             <ScreenView route={route} />
           </Suspense>
         </div>
+        <SpeechDock />
       </main>
 
       <CommandPalette open={palette} onClose={() => setPalette(false)} />

@@ -163,6 +163,8 @@ export const HELP_TOPICS = {
   documents: '02-documents#documents',
   import: '02-documents#import',
   transcripts: '02-documents#transcripts',
+  recordCall: '02-documents#record',
+  transcribe: '02-documents#transcribe',
   surveys: '02-documents#surveys',
   groups: '02-documents#groups',
   coding: '03-coding#select',

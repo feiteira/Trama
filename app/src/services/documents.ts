@@ -157,6 +157,11 @@ export interface NewDocument {
   source?: { filename: string; format: string; imported_at?: string };
   original?: FileInput;
   media?: FileInput;
+  /**
+   * A recording already stored in the project (a call recorded in Trama, see
+   * services/recording), instead of `media`. It stays if the document cannot be created.
+   */
+  mediaRef?: MediaRef;
   case_id?: string | null;
   group_ids?: string[];
   color?: string | null;
@@ -263,8 +268,9 @@ export async function createDocuments(
       };
       const original = input.original ? await ctx.addBlob(input.original.bytes, input.original.filename, input.original.mime) : null;
       if (original) blobs.push(original);
-      const media = input.media ? await ctx.addBlob(input.media.bytes, input.media.filename, input.media.mime) : null;
-      if (media) blobs.push(media);
+      const stored = input.media ? await ctx.addBlob(input.media.bytes, input.media.filename, input.media.mime) : null;
+      if (stored) blobs.push(stored);
+      const media = stored ?? input.mediaRef ?? null;
       const slot = slots.take(name);
       taken.push(slot.name);
       const id = plan.create('document', {
@@ -601,6 +607,41 @@ export async function takeTeammateText(ctx: ProjectContext, id: string, text: st
   const mine = revsOf(dt);
   const both = [...mine, ...theirRevs.filter((r) => !mine.includes(r))];
   return applyTextEdits(ctx, id, computeEdits(dt.text, next), { current: dt, revs: capRevs([...both, newRevId()]) });
+}
+
+/**
+ * Puts a transcript written on this computer (services/transcription) into a document that has
+ * no text yet: the text, its sync points, and an audit-trail entry naming the engine. One undo
+ * step. Refused when the document has text, which coding may already rest on.
+ */
+export async function fillTranscript(
+  ctx: ProjectContext,
+  id: string,
+  input: { text: string; sync: readonly SyncPoint[]; engine: string },
+): Promise<{ document: Document; undo: Undoable }> {
+  const doc = await need(ctx, 'document', id);
+  const dt = await need(ctx, 'doctext', id);
+  if (dt.text.trim()) throw new ServiceError('invalid_argument', 'the document already has text');
+  const canon = canonicalise(input.text);
+  const text = canon.text;
+  if (text.length > LIMITS.textMax) throw new ServiceError('too_large', 'the text is too long');
+  const sync = input.sync
+    .filter((s) => Number.isFinite(s.pos) && Number.isFinite(s.ms))
+    .map((s) => ({ pos: canon.mapOffset(Math.max(0, Math.floor(s.pos))), ms: Math.max(0, Math.round(s.ms)) }));
+  const plan = new Plan();
+  plan.change('doctext', dt, { text, sync, revs: nextRevs(dt, text) });
+  plan.change('document', doc, {
+    kind: 'transcript',
+    chars: text.length,
+    ...(doc.source ? { source: { ...doc.source, text_sha256: textSha256(text) } } : {}),
+  });
+  const summary = `${q(doc.name)} ← ${input.engine}`;
+  const { saved, undo } = await commit(ctx, plan, {
+    label: 'document.edit',
+    detail: q(doc.name),
+    logs: [{ action: 'document.edit', summary, target: { kind: 'document', id } }],
+  });
+  return { document: saved.get('document', id), undo };
 }
 
 // ---------------------------------------------------------------------------------------------

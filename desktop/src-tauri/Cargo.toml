@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Trama — free, offline, encrypted qualitative data analysis (desktop shell)"
 license = "MPL-2.0"
 edition = "2021"
-rust-version = "1.80"
+rust-version = "1.88"
 
 [lib]
 name = "trama_desktop_lib"
@@ -28,6 +28,17 @@ hex = "0.4"
 zeroize = "1"
 thiserror = "2"
 percent-encoding = "2"
+# On-device speech, desktop only: whisper.cpp (compiled from source by whisper-rs-sys; see
+# .cargo/config.toml at the repository root), decoding of the recordings people import, and
+# recording a call from the microphone and from what the computer plays.
+whisper-rs = "0.16"
+symphonia = { version = "0.6", default-features = false, features = ["all-codecs", "all-formats", "opt-simd"] }
+cpal = "0.18"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+# PulseAudio's native protocol, in Rust (PipeWire serves it too): the Linux backend that can
+# record what the speakers play, from the output's monitor source.
+cpal = { version = "0.18", features = ["pulseaudio"] }
 
 [dev-dependencies]
 tempfile = "3"

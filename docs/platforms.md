@@ -13,6 +13,17 @@ stable Rust toolchain from `rust-toolchain.toml`).
 | `npm run dev` | Desktop app with hot reload |
 | `npm run test:rust` / `npm run lint:rust` | `cargo test` / `cargo fmt --check` and `clippy -D warnings` |
 | `npm run build:desktop` | Installers for the current system, in `desktop/src-tauri/target/release/bundle/` |
+| `npm run fetch:speech` | The speech model files, into `desktop/src-tauri/resources/speech/` (575 MB, once) |
+
+**Speech.** The desktop app records calls (`cpal`) and transcribes recordings with whisper.cpp
+(compiled from source by `whisper-rs-sys`, which needs CMake, a C++ compiler and libclang for
+bindgen). The model files are not in the repository: `tools/fetch-speech-models.mjs` downloads
+them from the whisper.cpp project's Hugging Face pages and checks their SHA-256;
+`npm run build:desktop` runs it and bundles them (`tauri.speech.conf.json`). A debug build finds
+them in `resources/speech/` once fetched (or in `TRAMA_SPEECH_DIR`); without them transcription
+says it is unavailable and everything else works. `.cargo/config.toml` builds whisper.cpp for
+any x86-64 processor with AVX2 rather than for the build machine (`GGML_NATIVE=OFF`). This is the
+only download in the build; the app never connects anywhere.
 
 Release builds are unsigned unless you sign them yourself. The manual GitHub workflow
 (`.github/workflows/ci.yml`, run from the Actions tab) builds Linux, Windows and, when asked
@@ -21,11 +32,14 @@ for by name, macOS. It uses no secrets.
 ## Linux
 
 ```bash
-sudo apt-get install libwebkit2gtk-4.1-dev libgtk-3-dev libsoup-3.0-dev librsvg2-dev patchelf
+sudo apt-get install libwebkit2gtk-4.1-dev libgtk-3-dev libsoup-3.0-dev librsvg2-dev patchelf libasound2-dev libclang-dev cmake
 npm run build:desktop        # AppImage, .deb and .rpm
 ```
 
-On Fedora: `webkit2gtk4.1-devel gtk3-devel libsoup3-devel librsvg2-devel patchelf`. The .deb and
+On Fedora: `webkit2gtk4.1-devel gtk3-devel libsoup3-devel librsvg2-devel patchelf alsa-lib-devel clang-devel cmake`.
+Recording the computer's sound uses the PulseAudio protocol (PipeWire serves it too), spoken
+natively by Rust code: no libpulse is needed. The packages depend on ALSA's library
+(`libasound2`, `alsa-lib`), which `cpal` links. The .deb and
 .rpm also install a **Trama (example)** launcher (`linux/trama-example.desktop`), which runs
 `trama-desktop --example`.
 
@@ -48,6 +62,11 @@ Both installers add a **Trama (example)** Start-menu shortcut, named in the inst
 WebView2 runtime from Microsoft if the computer does not have it (Windows 10 and 11 normally do);
 the app itself never connects anywhere.
 
+The speech engine also needs CMake and LLVM (for libclang): `winget install Kitware.CMake LLVM.LLVM`
+(GitHub's Windows runners have both). Recording the other side of a call uses WASAPI loopback of
+the default output; Windows sends nothing while nothing plays, and Trama fills those gaps with
+silence so both sides stay in step.
+
 ## macOS
 
 Install Xcode's command-line tools (`xcode-select --install`), then:
@@ -56,6 +75,15 @@ Install Xcode's command-line tools (`xcode-select --install`), then:
 rustup target add aarch64-apple-darwin x86_64-apple-darwin
 npm run tauri --workspace @trama/desktop -- build --target universal-apple-darwin --bundles app,dmg
 ```
+
+Trama needs **macOS 14.2** or later (`bundle.macOS.minimumSystemVersion`): recording what the
+computer plays uses a Core Audio process tap, and `cpal` links those calls directly (recording the
+computer's sound needs 14.6). The app asks for the microphone (`NSMicrophoneUsageDescription`) and
+for system audio recording (`NSAudioCaptureUsageDescription`), both in `Info.plist` with
+translations in `macos/<lang>.lproj/InfoPlist.strings`; the hardened runtime needs the
+`com.apple.security.device.audio-input` entitlement (`macos/Entitlements.plist`) or the
+microphone stays silent. On macOS whisper.cpp uses Accelerate; the Metal GPU backend is not
+enabled yet.
 
 Unsigned or ad hoc–signed apps open after **System Settings → Privacy & Security → Open
 Anyway**. Distributing to others needs a Developer ID certificate and notarisation
@@ -86,6 +114,11 @@ npx tauri ios dev
 ```
 
 Things to know before the first mobile build:
+
+- **Speech.** Recording a call is desktop-only by design: iOS lets no app record another app's
+  sound, and Android only when the call app allows it (the common ones do not). Transcribing an
+  imported recording could work on a tablet, but the 575 MB model and the processor time make it
+  a separate decision.
 
 - **OpenSSL.** `rusqlite`'s `bundled-sqlcipher-vendored-openssl` compiles OpenSSL from source for
   each target. On Android that needs the NDK's clang on the `PATH` (Tauri's Android tooling sets

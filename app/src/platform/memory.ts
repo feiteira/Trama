@@ -18,6 +18,8 @@ export interface MemoryPlatformOptions {
   defaultFolder?: string;
   /** Behave like the example library (`--example`): backups are refused. */
   example?: boolean;
+  /** On-device speech (tests hand in a fake; the browser demo has none). */
+  speech?: Platform['speech'];
 }
 
 export interface MemoryPlatform extends Platform {
@@ -75,6 +77,7 @@ export function createMemoryPlatform(opts: MemoryPlatformOptions = {}): MemoryPl
     addDir: (path) => void dirs.add(trim(path)),
     blobStore: (project) => blobsOf(project, true)!,
     info: async (): Promise<AppInfo> => ({ version, os: 'web', data_dir: '/demo', example: !!opts.example }),
+    ...(opts.speech ? { speech: opts.speech } : {}),
     prefs: {
       get: async () => ({ ...prefs }),
       set: async (v) => void (prefs = { ...prefs, ...v }),
@@ -143,6 +146,38 @@ export function createMemoryPlatform(opts: MemoryPlatformOptions = {}): MemoryPl
       },
       remove: async (project, id) => void blobsOf(project, false)?.delete(id),
       list: async (project) => [...(blobsOf(project, false)?.keys() ?? [])].sort(),
+      append: async (project, id, bytes) => {
+        checkId('project', project);
+        checkId('blob', id);
+        const m = blobsOf(project, true)!;
+        const cur = m.get(id) ?? new Uint8Array(0);
+        const next = new Uint8Array(cur.length + bytes.length);
+        next.set(cur);
+        next.set(bytes, cur.length);
+        m.set(id, next);
+        return next.length;
+      },
+      writeAt: async (project, id, offset, bytes, truncate = false) => {
+        const m = blobsOf(project, false);
+        const cur = m?.get(id);
+        if (!m || !cur) throw notFound(`blob ${id}`);
+        if (offset > cur.length) throw new PlatformError('INVALID', 'offset past the end of the file');
+        const end = offset + bytes.length;
+        const next = new Uint8Array(truncate ? end : Math.max(cur.length, end));
+        next.set(cur.subarray(0, Math.min(cur.length, next.length)));
+        next.set(bytes, offset);
+        m.set(id, next);
+      },
+      readRange: async (project, id, offset, length) => {
+        const b = blobsOf(project, false)?.get(id);
+        if (!b) throw notFound(`blob ${id}`);
+        return b.slice(offset, offset + length);
+      },
+      size: async (project, id) => {
+        const b = blobsOf(project, false)?.get(id);
+        if (!b) throw notFound(`blob ${id}`);
+        return b.length;
+      },
     },
     files: {
       read: async (path) => {

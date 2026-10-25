@@ -191,7 +191,7 @@ export function RowDetail({
             <SurveyMapping table={row.table} mapping={row.survey} count={surveyCount} onChange={(survey) => onPatch((r) => ({ ...r, survey }))} onSheet={onSheet} />
           ) : null}
 
-          {row.doc ? <DocPreview row={row} /> : null}
+          {row.doc && !row.transcribe ? <DocPreview row={row} /> : null}
         </>
       ) : null}
     </div>
@@ -219,7 +219,12 @@ function TranscriptOptions({
           {t('importer.transcript.title')}
         </h3>
       </header>
-      <div className="imp-speakers">
+      {row.transcribe ? (
+        <p className="imp-hint" data-testid="import-to-transcribe">
+          {t('importer.recording.note')}
+        </p>
+      ) : null}
+      <div className="imp-speakers" hidden={row.transcribe}>
         <span className="imp-label">{t('importer.transcript.speakers')}</span>
         {speakers.length ? (
           <ul className="imp-speakers__list" data-testid="import-speakers">
@@ -231,14 +236,14 @@ function TranscriptOptions({
           <p className="imp-hint">{t('importer.transcript.noSpeakers')}</p>
         )}
       </div>
-      <Switch
+      {row.transcribe ? null : <Switch
         checked={row.autoCodeSpeakers}
         disabled={!speakers.length}
         onChange={(autoCodeSpeakers) => onPatch((r) => ({ ...r, autoCodeSpeakers }))}
         label={t('importer.transcript.autoCode')}
         description={t('importer.transcript.autoCodeHint', { category: t('importer.autocode.speakers') })}
         data-testid="import-autocode-speakers"
-      />
+      />}
       <div className="imp-recording">
         <span className="imp-label">{t('importer.transcript.recording')}</span>
         {row.media ? (
@@ -251,7 +256,9 @@ function TranscriptOptions({
             <Button size="sm" variant="ghost" onClick={onAttach} data-testid="import-recording-replace">
               {t('importer.transcript.replace')}
             </Button>
-            <IconButton icon={X} size="sm" label={t('importer.transcript.detach')} onClick={() => onPatch((r) => ({ ...r, media: null }))} data-testid="import-recording-remove" />
+            {row.transcribe ? null : (
+              <IconButton icon={X} size="sm" label={t('importer.transcript.detach')} onClick={() => onPatch((r) => ({ ...r, media: null }))} data-testid="import-recording-remove" />
+            )}
           </div>
         ) : (
           <Button size="sm" variant="secondary" icon={FileAudio} onClick={onAttach} data-testid="import-recording-attach">

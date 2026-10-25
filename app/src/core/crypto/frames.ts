@@ -9,19 +9,43 @@ import { concatBytes, randomBytes, readU32be, u32be, utf8 } from '../bytes';
 
 const MAGIC = utf8('TRAMF1');
 export const FRAME_SIZE = 1 << 20;
+/** The magic and the frame size, before the first frame. */
+export const SEALED_HEADER = 10;
+/** Bytes a sealed frame of `frameSize` plaintext bytes takes: nonce, ciphertext, tag. */
+export const frameStep = (frameSize: number): number => 24 + frameSize + 16;
 
 function aad(context: Uint8Array, index: number, last: boolean): Uint8Array {
   return concatBytes(context, u32be(index), new Uint8Array([last ? 1 : 0]));
 }
 
+/** What a sealed file starts with. */
+export function sealedHeader(frameSize = FRAME_SIZE): Uint8Array {
+  return concatBytes(MAGIC, u32be(frameSize));
+}
+
+/**
+ * One frame, for a file written piece by piece (a recording): every frame but the last holds
+ * exactly `frameSize` bytes; the last holds the rest, possibly nothing.
+ */
+export function sealFrame(key: Uint8Array, chunk: Uint8Array, context: string, index: number, last: boolean): Uint8Array {
+  const nonce = randomBytes(24);
+  return concatBytes(nonce, xchacha20poly1305(key, nonce, aad(utf8(context), index, last)).encrypt(chunk));
+}
+
+/** Opens one frame sealed by `sealFrame` (or `seal`); throws DecryptError. */
+export function openFrame(key: Uint8Array, frame: Uint8Array, context: string, index: number, last: boolean): Uint8Array {
+  try {
+    return xchacha20poly1305(key, frame.subarray(0, 24), aad(utf8(context), index, last)).decrypt(frame.subarray(24));
+  } catch {
+    throw new DecryptError();
+  }
+}
+
 export function seal(key: Uint8Array, plaintext: Uint8Array, context: string, frameSize = FRAME_SIZE): Uint8Array {
-  const ctx = utf8(context);
-  const parts: Uint8Array[] = [MAGIC, u32be(frameSize)];
+  const parts: Uint8Array[] = [sealedHeader(frameSize)];
   const count = Math.max(1, Math.ceil(plaintext.length / frameSize));
   for (let i = 0; i < count; i++) {
-    const chunk = plaintext.subarray(i * frameSize, (i + 1) * frameSize);
-    const nonce = randomBytes(24);
-    parts.push(nonce, xchacha20poly1305(key, nonce, aad(ctx, i, i === count - 1)).encrypt(chunk));
+    parts.push(sealFrame(key, plaintext.subarray(i * frameSize, (i + 1) * frameSize), context, i, i === count - 1));
   }
   return concatBytes(...parts);
 }

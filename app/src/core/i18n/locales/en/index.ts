@@ -18,6 +18,7 @@ import { settings } from './settings';
 import { pseudonyms } from './pseudonyms';
 import { log } from './log';
 import { help } from './help';
+import { speech } from './speech';
 
 export const en = {
   common,
@@ -38,6 +39,7 @@ export const en = {
   pseudonyms,
   log,
   help,
+  speech,
 };
 
 type DeepStringify<T> = T extends string ? string : { [K in keyof T]: DeepStringify<T[K]> };

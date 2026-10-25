@@ -1,12 +1,14 @@
 //! Trama desktop shell. The UI (React) owns the data model, SQL and cryptography; this crate
-//! provides what a webview cannot: encrypted SQLite files (one per project), fast Argon2id and
-//! access to files the researcher chooses. Trama makes no network connections: there is no
+//! provides what a webview cannot: encrypted SQLite files (one per project), fast Argon2id,
+//! access to files the researcher chooses, and on-device speech (recording a call, transcribing
+//! recordings; see speech/). Trama makes no network connections: there is no
 //! HTTP client here and the capability file grants no network permission.
 
 mod db;
 mod error;
 mod files;
 mod kdf;
+mod speech;
 
 use std::path::{Path, PathBuf};
 
@@ -18,6 +20,7 @@ use tauri::{AppHandle, Manager, State};
 
 use db::{DbState, ExecResult, Statement};
 use error::{AppError, AppResult};
+use speech::Speech;
 
 struct Paths {
     data: PathBuf,
@@ -232,6 +235,50 @@ async fn blob_read(paths: State<'_, Paths>, project: String, id: String) -> AppR
     Ok(Response::new(bytes))
 }
 
+/// Adds to a blob as it is made (a recording); returns its new length.
+#[tauri::command]
+async fn blob_append(paths: State<'_, Paths>, request: Request<'_>) -> AppResult<u64> {
+    let project = header(&request, "x-project")?;
+    let id = header(&request, "x-blob-id")?;
+    let path = files::blob_file_for_write(&paths.data, &project, &id)?;
+    let bytes = body_bytes(&request)?;
+    blocking(move || files::append(&path, &bytes)).await
+}
+
+/// Overwrites part of a blob (a recording's first frame, once its length is known), and with
+/// `x-truncate: 1` ends the blob after it.
+#[tauri::command]
+async fn blob_write_at(paths: State<'_, Paths>, request: Request<'_>) -> AppResult<()> {
+    let project = header(&request, "x-project")?;
+    let id = header(&request, "x-blob-id")?;
+    let offset: u64 = header(&request, "x-offset")?
+        .parse()
+        .map_err(|_| AppError::Invalid("offset".into()))?;
+    let truncate = header(&request, "x-truncate")? == "1";
+    let path = files::blob_file(&paths.data, &project, &id)?;
+    let bytes = body_bytes(&request)?;
+    blocking(move || files::write_at(&path, offset, &bytes, truncate)).await
+}
+
+#[tauri::command]
+async fn blob_read_range(
+    paths: State<'_, Paths>,
+    project: String,
+    id: String,
+    offset: u64,
+    length: u64,
+) -> AppResult<Response> {
+    let path = files::blob_file(&paths.data, &project, &id)?;
+    let bytes = blocking(move || files::read_range(&path, offset, length)).await?;
+    Ok(Response::new(bytes))
+}
+
+#[tauri::command]
+async fn blob_size(paths: State<'_, Paths>, project: String, id: String) -> AppResult<u64> {
+    let path = files::blob_file(&paths.data, &project, &id)?;
+    Ok(std::fs::metadata(path)?.len())
+}
+
 #[tauri::command]
 async fn blob_delete(paths: State<'_, Paths>, project: String, id: String) -> AppResult<()> {
     files::remove_blob(&paths.data, &project, &id)
@@ -310,6 +357,7 @@ pub fn run() {
             }
             std::fs::create_dir_all(&data)?;
             app.manage(Paths { data, example });
+            app.manage(Speech::new(speech::locate(app.handle())));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -328,6 +376,10 @@ pub fn run() {
             app_file_write,
             blob_write,
             blob_read,
+            blob_append,
+            blob_write_at,
+            blob_read_range,
+            blob_size,
             blob_delete,
             blob_list,
             fs_read,
@@ -336,11 +388,23 @@ pub fn run() {
             fs_remove,
             fs_exists,
             app_info,
+            speech::speech_info,
+            speech::transcribe_start,
+            speech::transcribe_status,
+            speech::transcribe_take,
+            speech::transcribe_cancel,
+            speech::recorder_start,
+            speech::recorder_status,
+            speech::recorder_take,
+            speech::recorder_stop,
         ])
         .build(tauri::generate_context!())
         .expect("error while building Trama")
         .run(|app, event| {
             if let tauri::RunEvent::Exit = event {
+                if let Some(speech) = app.try_state::<Speech>() {
+                    speech.shutdown();
+                }
                 // try_state: absent when setup failed before managing it.
                 let Some(paths) = app.try_state::<Paths>() else {
                     return;

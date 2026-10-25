@@ -1,6 +1,7 @@
 import { DateTime, Settings } from 'luxon';
 import wasmUrl from 'sql.js/dist/sql-wasm.wasm?url';
 import { isUiLocale, type UiLocale } from '../core/i18n/languages';
+import { createFakeSpeech } from '../platform/fakeSpeech';
 import { createMemoryPlatform, type MemoryPlatform } from '../platform/memory';
 import type { LibraryOptions } from '../services/library';
 import type { Phase } from '../shell/AppState';
@@ -69,7 +70,11 @@ export async function bootDemo(): Promise<DemoBoot> {
   const clock = q.get('clock');
   if (clock) freeze(clock);
 
-  const platform = createMemoryPlatform({ locateFile: () => wasmUrl, defaultFolder: '/home/demo/Documents' });
+  // `?speech=fake`: a stand-in for the desktop's recorder and transcriber, for screenshots of
+  // those screens (the demo has no speech of its own).
+  const speech = q.get('speech') === 'fake' ? createFakeSpeech() : undefined;
+  if (speech) speech.takeMs = 400;
+  const platform = createMemoryPlatform({ locateFile: () => wasmUrl, defaultFolder: '/home/demo/Documents', speech });
   // Hooks for the end-to-end tests and the screenshot pipeline (demo only).
   (window as unknown as { __tramaDemo: unknown }).__tramaDemo = {
     addFile: (path: string, base64: string) => platform.fileStore.set(path, Uint8Array.from(atob(base64), (ch) => ch.charCodeAt(0))),

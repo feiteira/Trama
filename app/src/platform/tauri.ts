@@ -4,7 +4,17 @@ import { open as openDialog, save as saveDialog } from '@tauri-apps/plugin-dialo
 import { fromHex, toHex } from '../core/bytes';
 import { checkKdfParams, type Kdf } from '../core/crypto/kdf';
 import type { Db, Row, SqlParam, SqlStatement } from '../core/store/db';
-import { type AppInfo, type FileEntry, type FileFilter, type Platform, PlatformError } from './types';
+import {
+  type AppInfo,
+  type FileEntry,
+  type FileFilter,
+  type Platform,
+  PlatformError,
+  type RecorderStatus,
+  type SpeechInfo,
+  type TranscribeStatus,
+  type Transcription,
+} from './types';
 
 // The desktop (and later phone) platform: every call goes to the Rust shell over Tauri's local
 // IPC. Nothing here opens a network connection; there is no http or opener plugin.
@@ -229,6 +239,11 @@ export function createTauriPlatform(): Platform {
       read: async (project, id) => toBytes(await call<ArrayBuffer>('blob_read', { project, id })),
       remove: (project, id) => call<void>('blob_delete', { project, id }),
       list: (project) => call<string[]>('blob_list', { project }),
+      append: (project, id, bytes) => call<number>('blob_append', body(bytes), { 'x-project': h(project), 'x-blob-id': h(id) }),
+      writeAt: (project, id, offset, bytes, truncate = false) =>
+        call<void>('blob_write_at', body(bytes), { 'x-project': h(project), 'x-blob-id': h(id), 'x-offset': String(offset), 'x-truncate': truncate ? '1' : '0' }),
+      readRange: async (project, id, offset, length) => toBytes(await call<ArrayBuffer>('blob_read_range', { project, id, offset, length })),
+      size: (project, id) => call<number>('blob_size', { project, id }),
     },
     files: {
       read: async (path) => toBytes(await call<ArrayBuffer>('fs_read', { path })),
@@ -256,6 +271,22 @@ export function createTauriPlatform(): Platform {
         const q = queuedAnswer();
         if (q.hit) return typeof q.value === 'string' ? q.value : null;
         return (await saveDialog({ title, defaultPath: defaultName, filters: dialogFilters(filters) })) ?? null;
+      },
+    },
+    speech: {
+      info: () => call<SpeechInfo>('speech_info'),
+      transcribe: {
+        start: (bytes, opts) =>
+          call<void>('transcribe_start', body(bytes), { 'x-ext': h(opts.ext), 'x-language': h(opts.language ?? ''), 'x-channels': opts.channels }),
+        status: () => call<TranscribeStatus>('transcribe_status'),
+        take: () => call<Transcription | null>('transcribe_take'),
+        cancel: () => call<void>('transcribe_cancel'),
+      },
+      recorder: {
+        start: () => call<RecorderStatus>('recorder_start'),
+        status: () => call<RecorderStatus | null>('recorder_status'),
+        take: async () => toBytes(await call<ArrayBuffer>('recorder_take')),
+        stop: async () => toBytes(await call<ArrayBuffer>('recorder_stop')),
       },
     },
     setTitle: (title) => getCurrentWindow().setTitle(title),

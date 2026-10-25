@@ -202,7 +202,11 @@ export class ImportSession {
         kind: row.kind,
         text: doc.text,
         sync: doc.sync,
-        source: { filename: row.origin === 'paste' ? '' : doc.source.filename, format: row.origin === 'paste' ? 'paste' : doc.source.format },
+        source: {
+          filename: row.origin === 'paste' ? '' : doc.source.filename,
+          // A recording to transcribe is recorded as its audio format (mp3, m4a…).
+          format: row.origin === 'paste' ? 'paste' : row.transcribe ? (/\.([a-z0-9]+)$/i.exec(doc.source.filename)?.[1] ?? 'audio') : doc.source.format,
+        },
         ...(doc.original ? { original: { bytes: doc.original.bytes, filename: doc.source.filename, mime: doc.original.mime } } : {}),
         ...(row.media && row.kind === 'transcript' ? { media: { bytes: row.media.bytes, filename: row.media.filename, mime: row.media.mime } } : {}),
         case_id: caseId,

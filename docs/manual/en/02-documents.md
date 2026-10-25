@@ -50,6 +50,42 @@ Trama recognises transcripts and keeps **one speaker turn per paragraph**, writt
 - **Follow the recording in the text** highlights the turn being spoken as it plays.
 - Removing a recording erases the file from the project; the transcript and its time stamps stay.
 
+<a id="record"></a>
+
+## Record a call
+
+The desktop app can record an interview held over a video call (Zoom, Teams, Meet, Jitsi or any other) and transcribe it, all on your computer. Nothing is sent anywhere, and no account or connection is needed.
+
+1. Choose **Record a call** (the microphone button at the top of the document list, or `Ctrl+K` and “Record a call”).
+2. Give the recording a name, and the names that the transcript should use for you and for the other side.
+3. Choose the language spoken, or let Trama detect it.
+4. Tick **Everyone on the call has agreed to be recorded**. Research ethics, and the law in many places, require consent; say at the start of the call that you are recording. Recording cannot start without this.
+5. Choose **Start recording**.
+
+Trama records two things: your **microphone** and **what your computer plays**, which is everyone else on the call. Both are kept apart, so the transcript knows which words were yours. A strip at the foot of the window shows how long the recording has run and a level for each side; a warning appears if one side is not being recorded. You can go on working in Trama meanwhile, and Trama does not lock itself while it records.
+
+Choose **Stop and save**. The recording becomes a transcript document with its audio, encrypted like every other file of the project. If **Transcribe when the recording stops** was ticked, the transcript is written next (see below).
+
+- **Use headphones.** Without them your microphone also hears the other side through the speakers. Trama leaves out of your side the words that it also heard from the computer, but headphones make the transcript cleaner.
+- **Several people on the other side** all appear under the one name you gave the other side. Rename or split their turns afterwards with **Edit the text…**.
+- **If Trama or the computer stops** in the middle of a call, the recording is not lost. The next time you open the project, what was recorded up to the last few seconds is saved as a document.
+- Recordings are kept as 16 kHz stereo WAV files, about 230 MB per hour.
+- **macOS** asks the first time for permission to use the microphone and to record the computer’s sound; Trama needs both. Recording needs macOS 14.2 or later. **Linux** records the computer’s sound through PulseAudio or PipeWire, which almost every desktop uses.
+
+<a id="transcribe"></a>
+
+## Transcribe a recording
+
+Trama comes with a speech model (Whisper large-v3-turbo, through whisper.cpp) that writes out a recording on your computer. It understands Portuguese, Spanish, English and about a hundred other languages.
+
+- **A call recorded in Trama** is transcribed when the recording stops, if you asked for it.
+- **A recording you import without a transcript** (an `.mp3`, `.m4a`, `.wav`, `.flac`, `.ogg` or the sound of an `.mp4` or `.mov` video) becomes a transcript document and is transcribed after the import.
+- **Any recording without a transcript yet**: open the document and choose **Transcribe on this computer**.
+
+Transcription takes a while: on a recent laptop, roughly half to the whole length of the recording. It runs in the background, one recording at a time; a strip at the foot of the window shows how far it has got, and you can keep working or stop it. If Trama locks or closes first, it carries on the next time the project opens. When it is done, the text arrives in the document, one paragraph per turn with time stamps, so the recording follows along as it plays. The audit trail records which engine wrote the transcript.
+
+Read the transcript against the recording before you code it: automatic transcription mishears names, quiet words and overlapping speech, and may miss a very short reply such as “Yes.” at the start of a turn. A transcript is only written into a document that has no text yet, so it never replaces your own.
+
 <a id="surveys"></a>
 
 ## Survey answers

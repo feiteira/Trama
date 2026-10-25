@@ -12,6 +12,7 @@ import {
   FolderPlus,
   Layers,
   MessagesSquare,
+  Mic,
   NotebookPen,
   Palette,
   Pencil,
@@ -43,6 +44,7 @@ import { SearchField } from '../../../ui/components/Field';
 import { Menu, MenuButton, type MenuEntry } from '../../../ui/components/Menu';
 import { useToast } from '../../../ui/components/Toast';
 import { useFail, useUndoToast } from '../../common/CodeTreeActions';
+import { useSpeech } from '../../speech/SpeechProvider';
 import { CasePicker, ColourPopover, DocumentMemoDialog, DocumentPropertiesDialog, NamePrompt, type DocumentChanges } from './DocumentDialogs';
 import { DocumentGroups } from './DocumentGroups';
 import { DOCS_MIME, displayOrder, filterDocs, rangeIds, reorderPlan, sectionDocs, sortDocs, type DocGrouping, type DocItem, type DocSort, type Section } from './documentList';
@@ -114,6 +116,7 @@ export function DocumentsPanel({ activeDocId, onOpen }: DocumentsPanelProps) {
   const { t, tp, meta } = useI18n();
   const project = useProject();
   const { go } = useRouter();
+  const speech = useSpeech();
   const { record } = useUndo();
   const toast = useToast();
   const confirm = useConfirm();
@@ -572,6 +575,9 @@ export function DocumentsPanel({ activeDocId, onOpen }: DocumentsPanelProps) {
         </h2>
         <div className="wpanel__tools">
           <MenuButton items={viewItems} label={t('documents.view.label')} icon={ArrowUpDown} iconOnly size="sm" variant="ghost" align="end" data-testid="doc-view" />
+          {speech.controller && !speech.state.recording ? (
+            <IconButton icon={Mic} label={t('speech.record.action')} size="sm" variant="ghost" onClick={speech.openRecord} data-testid="doc-record" />
+          ) : null}
           <IconButton icon={FileUp} label={t('documents.panel.import')} size="sm" variant="secondary" onClick={() => go({ name: 'import' })} data-testid="doc-import" />
         </div>
       </header>

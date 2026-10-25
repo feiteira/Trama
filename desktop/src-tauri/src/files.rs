@@ -171,6 +171,48 @@ pub fn write_atomic(path: &Path, bytes: &[u8]) -> AppResult<()> {
     Ok(())
 }
 
+// A blob that grows as it is made (a recording, encrypted frame by frame by the UI): appended
+// to and patched in place rather than rewritten, each write made durable, so a crash loses
+// only what had not arrived yet.
+
+/// Adds `bytes` at the end of the file (creating it). Returns the new length.
+pub fn append(path: &Path, bytes: &[u8]) -> AppResult<u64> {
+    let mut f = fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)?;
+    f.write_all(bytes)?;
+    f.sync_data()?;
+    Ok(f.metadata()?.len())
+}
+
+/// Overwrites the file from `offset` with `bytes`, and with `truncate` ends it right after
+/// them. The file must exist and `offset` lie within it: no holes.
+pub fn write_at(path: &Path, offset: u64, bytes: &[u8], truncate: bool) -> AppResult<()> {
+    use std::io::{Seek, SeekFrom};
+    let mut f = fs::OpenOptions::new().write(true).open(path)?;
+    if offset > f.metadata()?.len() {
+        return Err(AppError::Invalid("offset past the end of the file".into()));
+    }
+    f.seek(SeekFrom::Start(offset))?;
+    f.write_all(bytes)?;
+    if truncate {
+        f.set_len(offset + bytes.len() as u64)?;
+    }
+    f.sync_data()?;
+    Ok(())
+}
+
+/// Up to `len` bytes from `offset` (fewer at the end of the file, none past it).
+pub fn read_range(path: &Path, offset: u64, len: u64) -> AppResult<Vec<u8>> {
+    use std::io::{Read, Seek, SeekFrom};
+    let mut f = fs::File::open(path)?;
+    f.seek(SeekFrom::Start(offset))?;
+    let mut out = Vec::new();
+    f.take(len).read_to_end(&mut out)?;
+    Ok(out)
+}
+
 pub fn read_optional(path: &Path) -> AppResult<Option<Vec<u8>>> {
     match fs::read(path) {
         Ok(b) => Ok(Some(b)),
@@ -465,6 +507,29 @@ mod tests {
         let bytes: Vec<u8> = (0..20 * 1024 * 1024).map(|i| (i % 251) as u8).collect();
         write_atomic(&p, &bytes).unwrap();
         assert_eq!(fs::read(&p).unwrap(), bytes);
+    }
+
+    #[test]
+    fn a_growing_file_is_appended_patched_and_read_in_ranges() {
+        let dir = tempfile::tempdir().unwrap();
+        let p = dir.path().join("rec");
+        assert_eq!(append(&p, b"header..").unwrap(), 8);
+        assert_eq!(append(&p, b"frame1").unwrap(), 14);
+        write_at(&p, 0, b"HEADER", false).unwrap();
+        assert_eq!(fs::read(&p).unwrap(), b"HEADER..frame1");
+        assert_eq!(read_range(&p, 8, 3).unwrap(), b"fra");
+        assert_eq!(read_range(&p, 12, 100).unwrap(), b"e1");
+        assert!(read_range(&p, 50, 4).unwrap().is_empty());
+        // A torn last frame is cut off and replaced.
+        write_at(&p, 8, b"end", true).unwrap();
+        assert_eq!(fs::read(&p).unwrap(), b"HEADER..end");
+        assert_eq!(write_at(&p, 40, b"x", false).unwrap_err().code(), "INVALID");
+        assert_eq!(
+            write_at(&dir.path().join("missing"), 0, b"x", false)
+                .unwrap_err()
+                .code(),
+            "NOT_FOUND"
+        );
     }
 
     #[test]

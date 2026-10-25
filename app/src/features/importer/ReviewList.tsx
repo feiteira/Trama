@@ -87,6 +87,7 @@ export function ReviewList({
           } else {
             const parts: string[] = [t(`importer.kinds.${r.kind}`)];
             if (r.table) parts.push(tp('importer.list.respondents', r.table.table.rows.length), tp('importer.survey.documents', surveyCount(r).documents));
+            else if (r.transcribe) parts.push(t('importer.recording.list'));
             else parts.push(tp('importer.detail.words', r.words, { n: fmt.format(r.words) }));
             meta2 = parts.join(' · ');
           }

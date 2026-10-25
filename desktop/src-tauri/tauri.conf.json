@@ -40,7 +40,7 @@
     ],
     "category": "Education",
     "shortDescription": "Free, offline, encrypted qualitative data analysis",
-    "longDescription": "Trama is qualitative data analysis software for researchers: code interview transcripts, field notes and documents with a hierarchical codebook, write memos, describe cases, run queries, check inter-coder agreement and exchange projects with other tools through REFI-QDA. Everything stays encrypted on your own computer, with no account and no network connection.",
+    "longDescription": "Trama is qualitative data analysis software for researchers: code interview transcripts, field notes and documents with a hierarchical codebook, write memos, describe cases, run queries, check inter-coder agreement and exchange projects with other tools through REFI-QDA. Record calls and transcribe interviews on the same computer, with a speech model that ships with the app. Everything stays encrypted on your own computer, with no account and no network connection.",
     "copyright": "© Trama contributors",
     "license": "MPL-2.0",
     "icon": [
@@ -79,7 +79,9 @@
     },
     "linux": {
       "deb": {
-        "depends": [],
+        "depends": [
+          "libasound2"
+        ],
         "files": {
           "/usr/share/applications/trama-example.desktop": "linux/trama-example.desktop"
         }
@@ -90,7 +92,19 @@
       "rpm": {
         "files": {
           "/usr/share/applications/trama-example.desktop": "linux/trama-example.desktop"
-        }
+        },
+        "depends": [
+          "alsa-lib"
+        ]
+      }
+    },
+    "macOS": {
+      "minimumSystemVersion": "14.2",
+      "entitlements": "macos/Entitlements.plist",
+      "files": {
+        "Resources/en.lproj/InfoPlist.strings": "macos/en.lproj/InfoPlist.strings",
+        "Resources/pt.lproj/InfoPlist.strings": "macos/pt.lproj/InfoPlist.strings",
+        "Resources/es.lproj/InfoPlist.strings": "macos/es.lproj/InfoPlist.strings"
       }
     }
   }

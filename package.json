@@ -10,7 +10,8 @@
   "scripts": {
     "dev": "npm run tauri --workspace desktop -- dev",
     "dev:web": "npm run dev --workspace app",
-    "build:desktop": "npm run tauri --workspace desktop -- build",
+    "fetch:speech": "node tools/fetch-speech-models.mjs",
+    "build:desktop": "node tools/fetch-speech-models.mjs && npm run tauri --workspace desktop -- build --config src-tauri/tauri.speech.conf.json",
     "typecheck": "npm run typecheck --workspace app",
     "test": "npm run test --workspace app",
     "lint:rust": "cargo fmt --manifest-path desktop/src-tauri/Cargo.toml --check && cargo clippy --manifest-path desktop/src-tauri/Cargo.toml --all-targets -- -D warnings",

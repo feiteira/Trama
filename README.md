@@ -22,6 +22,7 @@
 **What it does**
 
 - **Bring in your material.** Plain text, Word, OpenDocument, RTF, Markdown, web pages and PDF; transcripts from Zoom, Teams, Otter or a transcriptionist (one speaker turn per paragraph, with time stamps) and their audio or video; open survey answers from CSV or Excel, with respondents' details as attributes. Paste text, or write field notes straight into Trama.
+- **Record and transcribe, on your computer.** Record an interview held over Zoom, Teams, Meet or any other call app (your microphone and the other side, kept apart), and transcribe it — or any recording you import — with a speech model that ships with the app (Whisper large-v3-turbo through whisper.cpp). Nothing is uploaded; the transcript arrives as speaker turns with time stamps.
 - **Code it.** Select a passage and apply a code from a hierarchical codebook — with the mouse, or entirely from the keyboard (favourite codes on 1–9, in-vivo codes, find-and-code). Coding stripes in the margin, comments on segments, memos on passages, and text corrections that keep every coding in place.
 - **Build the codebook.** Definitions with when to use and when not to use, examples, categories, merge and split, and codebook exchange as REFI-QDA (`.qdc`), Word, CSV, Excel or Markdown.
 - **Retrieve and write.** Gather coded segments across documents with filters (codes, documents and groups, cases and attributes, coders, words, co-location), read them in context, copy or export them. Memos on the project, documents, codes, segments and cases.
@@ -44,11 +45,11 @@
 
 ## Português
 
-O **Trama** é um programa gratuito e de código aberto para análise qualitativa de dados: codifique entrevistas, grupos focais, notas de campo, documentos e respostas abertas a inquéritos, escreva memorandos, descreva os participantes e encontre padrões em todo o material. Cada projeto fica cifrado no seu próprio computador; o Trama não precisa de conta e nunca se liga à Internet. Inclui um livro de códigos hierárquico com definições, recuperação de segmentos codificados com filtros, coocorrência, matrizes, frequência de palavras, concordância entre codificadores, pseudonimização, registo de auditoria e cópias de segurança cifradas, e troca projetos com o NVivo, o MAXQDA e o ATLAS.ti através do padrão aberto REFI-QDA. Disponível em português (Portugal), espanhol (Espanha) e inglês. O manual está na própria aplicação (**Ajuda**) e em [docs/manual/pt](docs/manual/pt/index.md).
+O **Trama** é um programa gratuito e de código aberto para análise qualitativa de dados: codifique entrevistas, grupos focais, notas de campo, documentos e respostas abertas a inquéritos, escreva memorandos, descreva os participantes e encontre padrões em todo o material. Cada projeto fica cifrado no seu próprio computador; o Trama não precisa de conta e nunca se liga à Internet. Grava entrevistas feitas por videochamada e transcreve gravações no próprio computador, com um modelo de fala incluído na aplicação. Inclui um livro de códigos hierárquico com definições, recuperação de segmentos codificados com filtros, coocorrência, matrizes, frequência de palavras, concordância entre codificadores, pseudonimização, registo de auditoria e cópias de segurança cifradas, e troca projetos com o NVivo, o MAXQDA e o ATLAS.ti através do padrão aberto REFI-QDA. Disponível em português (Portugal), espanhol (Espanha) e inglês. O manual está na própria aplicação (**Ajuda**) e em [docs/manual/pt](docs/manual/pt/index.md).
 
 ## Español
 
-**Trama** es un programa gratuito y de código abierto para el análisis cualitativo de datos: codifique entrevistas, grupos focales, notas de campo, documentos y respuestas abiertas de encuestas, escriba memorandos, describa a los participantes y encuentre patrones en todo el material. Cada proyecto se guarda cifrado en su propio ordenador; Trama no necesita cuenta y nunca se conecta a Internet. Incluye un libro de códigos jerárquico con definiciones, recuperación de segmentos codificados con filtros, coocurrencia, matrices, frecuencia de palabras, acuerdo entre codificadores, seudonimización, registro de auditoría y copias de seguridad cifradas, e intercambia proyectos con NVivo, MAXQDA y ATLAS.ti mediante el estándar abierto REFI-QDA. Disponible en español (España), portugués (Portugal) e inglés. El manual está en la propia aplicación (**Ayuda**) y en [docs/manual/es](docs/manual/es/index.md).
+**Trama** es un programa gratuito y de código abierto para el análisis cualitativo de datos: codifique entrevistas, grupos focales, notas de campo, documentos y respuestas abiertas de encuestas, escriba memorandos, describa a los participantes y encuentre patrones en todo el material. Cada proyecto se guarda cifrado en su propio ordenador; Trama no necesita cuenta y nunca se conecta a Internet. Graba entrevistas hechas por videollamada y transcribe grabaciones en el propio ordenador, con un modelo de voz incluido en la aplicación. Incluye un libro de códigos jerárquico con definiciones, recuperación de segmentos codificados con filtros, coocurrencia, matrices, frecuencia de palabras, acuerdo entre codificadores, seudonimización, registro de auditoría y copias de seguridad cifradas, e intercambia proyectos con NVivo, MAXQDA y ATLAS.ti mediante el estándar abierto REFI-QDA. Disponible en español (España), portugués (Portugal) e inglés. El manual está en la propia aplicación (**Ayuda**) y en [docs/manual/es](docs/manual/es/index.md).
 
 ## Install
 
@@ -61,10 +62,10 @@ The Windows installers and the Linux `.deb` and `.rpm` packages also add **Trama
 Requirements: Node.js 22.12 or later and a stable Rust toolchain (see `rust-toolchain.toml`). On Linux (Debian/Ubuntu):
 
 ```bash
-sudo apt-get install libwebkit2gtk-4.1-dev libgtk-3-dev libsoup-3.0-dev librsvg2-dev patchelf
+sudo apt-get install libwebkit2gtk-4.1-dev libgtk-3-dev libsoup-3.0-dev librsvg2-dev patchelf libasound2-dev libclang-dev cmake
 ```
 
-On Fedora: `webkit2gtk4.1-devel gtk3-devel libsoup3-devel librsvg2-devel patchelf`. Playing audio and video uses the system's GStreamer "good" plugins. Windows and macOS prerequisites are in [docs/platforms.md](docs/platforms.md).
+On Fedora: `webkit2gtk4.1-devel gtk3-devel libsoup3-devel librsvg2-devel patchelf alsa-lib-devel clang-devel cmake`. Playing audio and video uses the system's GStreamer "good" plugins. `npm run build:desktop` downloads the speech model once (575 MB, checked against its SHA-256) to bundle it; the app itself never downloads anything. Windows and macOS prerequisites are in [docs/platforms.md](docs/platforms.md).
 
 ```bash
 npm install
@@ -72,7 +73,8 @@ npm run dev              # run the desktop app
 npm run dev:web          # or: a browser demo with the fictional example project, in memory only
 npm run build:desktop    # installers for your operating system (AppImage, .deb and .rpm on Linux)
 npm run typecheck && npm test   # type checks (including missing translations) and the test suite
-npm run test:rust        # the Rust tests (SQLCipher, Argon2 vectors, file helpers)
+npm run test:rust        # the Rust tests (SQLCipher, Argon2 vectors, file helpers, speech)
+npm run fetch:speech     # the speech model for `npm run dev` (release builds fetch it themselves)
 ```
 
 Installers land in `desktop/src-tauri/target/release/bundle/`.

@@ -1,5 +1,5 @@
 import { toHex, wipe } from '../core/bytes';
-import { open, seal } from '../core/crypto/frames';
+import { open, openFrame, seal, sealFrame } from '../core/crypto/frames';
 import { type Keyring, subkey } from '../core/crypto/keyring';
 import { uuid } from '../core/ids';
 import type { Coder, Draft, LogAction, MediaRef } from '../core/model/types';
@@ -224,6 +224,18 @@ export class Project implements ProjectContext {
   private sealBlob(blobId: string, bytes: Uint8Array): Uint8Array {
     this.ensureOpen();
     return seal(this.fileKey, bytes, blobContext(blobId));
+  }
+
+  /** Seals one frame of a blob written piece by piece (a recording, see services/recording). */
+  sealBlobFrame(blobId: string, chunk: Uint8Array, index: number, last: boolean): Uint8Array {
+    this.ensureOpen();
+    return sealFrame(this.fileKey, chunk, blobContext(blobId), index, last);
+  }
+
+  /** Opens one frame of a blob (recovering a recording a crash cut short). */
+  openBlobFrame(blobId: string, frame: Uint8Array, index: number, last: boolean): Uint8Array {
+    this.ensureOpen();
+    return openFrame(this.fileKey, frame, blobContext(blobId), index, last);
   }
 
   async addBlob(bytes: Uint8Array, filename: string, mime: string): Promise<MediaRef> {

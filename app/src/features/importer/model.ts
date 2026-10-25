@@ -51,6 +51,8 @@ export interface ReviewRow {
   groups: GroupRef[];
   autoCodeSpeakers: boolean;
   media: MediaFile | null;
+  /** A recording without a transcript: transcribed on this computer after the import. */
+  transcribe: boolean;
   /** SHA-256 of the canonical text (documents only). */
   sha: string | null;
   words: number;
@@ -74,6 +76,7 @@ export function newRow(id: string, origin: RowOrigin, filename: string): ReviewR
     groups: [],
     autoCodeSpeakers: false,
     media: null,
+    transcribe: false,
     sha: null,
     words: 0,
   };
@@ -96,6 +99,30 @@ export function withDoc(row: ReviewRow, doc: ImportedDoc): ReviewRow {
     sha: textSha256(doc.text),
     words: wordCount(doc.text),
     autoCodeSpeakers: doc.kind === 'transcript' ? row.autoCodeSpeakers : false,
+  };
+}
+
+/**
+ * A recording that arrived without a transcript of the same name, where this computer can
+ * transcribe: it becomes an empty transcript with the recording, written out after the import.
+ */
+export function withRecording(row: ReviewRow, media: MediaFile): ReviewRow {
+  const name = (media.filename.split(/[\\/]/).pop() ?? media.filename).replace(/\.[a-z0-9]+$/i, '');
+  return {
+    ...row,
+    status: 'ready',
+    failure: null,
+    format: null,
+    doc: { name, kind: 'transcript', text: '', sync: [], speakers: [], source: { filename: media.filename, format: 'txt' }, warnings: [] },
+    table: null,
+    survey: null,
+    name: row.name || name,
+    kind: 'transcript',
+    media,
+    transcribe: true,
+    autoCodeSpeakers: false,
+    sha: null,
+    words: 0,
   };
 }
 

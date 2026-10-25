@@ -39,6 +39,15 @@ const EXAMPLE_CODE = `Fennimorel${tag}`; // a change made to the example project
 const PASS = 'violet river morning tea lamp';
 const DOC_FILE = join(INBOX, `Entrevista São Brás ${tag}.txt`); // non-ASCII path on purpose
 const PASSAGE = `the ${MARKER} committee met every Thursday`;
+// On-device transcription: the model files (tools/fetch-speech-models.mjs) and a spoken sample,
+// synthesised with ffmpeg's flite voice (fictional words, nothing recorded). Skipped without them.
+const SPEECH_DIR = process.env.TRAMA_SPEECH_DIR ?? join(ROOT, 'desktop/src-tauri/resources/speech');
+// Named without the run's tag: openDocument(tag) means the text document.
+const SPEECH_SAMPLE = join(INBOX, 'Gravação da horta.wav');
+const SPEECH_WORDS = 'We planted tomatoes in the community garden every spring.';
+const hasSpeech =
+  existsSync(join(SPEECH_DIR, 'ggml-large-v3-turbo-q5_0.bin')) &&
+  spawnSync('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-f', 'lavfi', '-i', `flite=text='${SPEECH_WORDS}':voice=slt`, '-ar', '16000', '-ac', '1', SPEECH_SAMPLE]).status === 0;
 writeFileSync(
   DOC_FILE,
   [
@@ -86,7 +95,7 @@ async function startDriver(env = {}) {
   // the desktop's bus, under Xvfb, each start waits ~30 s for a portal that cannot answer).
   if (PRIVATE_BUS) cmd.unshift('dbus-run-session', '--');
   driver = spawn(cmd[0], cmd.slice(1), {
-    env: { ...process.env, TRAMA_DATA_DIR: DATA, ...env },
+    env: { ...process.env, TRAMA_DATA_DIR: DATA, ...(hasSpeech ? { TRAMA_SPEECH_DIR: SPEECH_DIR } : {}), ...env },
     stdio: ['ignore', 'pipe', 'pipe'],
     detached: true, // its own process group, ended as a whole
   });
@@ -565,7 +574,7 @@ function filesUnder(dir) {
 
 function checkDisk() {
   const files = filesUnder(DATA).filter((f) => !relative(DATA, f).startsWith('example'));
-  const needles = [MARKER, CODE, PROJECT, 'committee met every Thursday'];
+  const needles = [MARKER, CODE, PROJECT, 'committee met every Thursday', ...(hasSpeech ? ['WAVEfmt', 'community garden'] : [])];
   const found = [];
   for (const f of files) {
     const bytes = readFileSync(f);
@@ -772,6 +781,69 @@ try {
     assert(style.inline && painted, `the coded passage is not painted: ${JSON.stringify(style)}`);
     await present('stripe', 10_000);
     return `coded run painted: ${style.bgImage !== 'none' ? style.bgImage.slice(0, 80) : style.bg}`;
+  });
+
+  await step('transcribe a recording on this computer with the bundled speech model', async () => {
+    if (!hasSpeech) return 'skipped: no speech model files, or no ffmpeg with flite for a sample';
+    await click('nav-import');
+    await present('import-start-panel');
+    await js('window.__TRAMA_E2E_DIALOGS__ = [arguments[0]]', SPEECH_SAMPLE);
+    await click('import-choose');
+    // A recording without a transcript of the same name: transcribed after the import.
+    await present('import-to-transcribe', 30_000);
+    if (SHOTS) await screenshot('import recording');
+    await click('import-start');
+    await present('import-done', 60_000);
+    await click('import-created-doc');
+    await present('transcript-prompt', 30_000);
+    await present('speech-transcribing', 30_000);
+    if (SHOTS) await screenshot('transcribing');
+    const started = Date.now();
+    await until('the transcript', `const t = document.querySelector('[data-testid="doc-text"]'); return t && /community garden/i.test(t.textContent)`, [], 5 * 60_000);
+    const text = await js(`return document.querySelector('[data-testid="doc-text"]').textContent.trim()`);
+    assert(!(await exists('transcript-prompt')), 'the transcription prompt stayed after the transcript arrived');
+    if (SHOTS) await screenshot('transcribed');
+    return `"${text}" in ${since(started)}`;
+  });
+
+  await step('record a call: consent first; without a sound device it says so', async () => {
+    if (!(await exists('doc-record'))) return 'skipped: no on-device speech in this build';
+    await click('doc-record');
+    await present('record-dialog');
+    if (SHOTS) await screenshot('record dialog');
+    assert(await js(`return document.querySelector('[data-testid="record-start"]').disabled`), 'recording could start without consent');
+    await click('record-consent');
+    await click('record-start');
+    const outcome = await until(
+      'the recording to start or be refused',
+      // "Starting…" shows first; then the recording runs, or the dialog says why it cannot.
+      `return document.querySelector('[data-testid="speech-recording"][data-phase="recording"]') ? 'recording' : document.querySelector('[data-testid="record-error"]') ? 'refused' : null`,
+      [],
+      30_000,
+    );
+    if (outcome === 'recording') {
+      await sleep(5000);
+      await click('speech-stop');
+      await until('the recording to be saved', `return !document.querySelector('[data-testid="speech-recording"]')`, [], 60_000);
+      return "recorded 5 s from this computer's devices";
+    }
+    const why = await js(`return document.querySelector('[data-testid="record-error"]').textContent.trim()`);
+    if (SHOTS) await screenshot('record refused');
+    await keys('\uE00C'); // Escape
+    await until('the dialog to close', `return !document.querySelector('[data-testid="record-dialog"]')`, [], 10_000);
+    return `no sound device here: "${why}"`;
+  });
+
+  // The steps after this one expect the text document to be the open one.
+  await step('back to the text document', async () => {
+    await click('nav-workbench');
+    const opened = await js(
+      `const o = [...document.querySelectorAll('[data-testid="doc-list"] [role="option"]')].find((e) => e.textContent.includes(arguments[0]));
+       if (o) o.click(); return !!o;`,
+      tag,
+    );
+    assert(opened, 'the text document is not in the list');
+    await until('its text', `const t = document.querySelector('[data-testid="doc-text"]'); return t && t.textContent.includes(arguments[0])`, [MARKER], 30_000);
   });
 
   await step('lock with Ctrl+L; a wrong passphrase is refused; unlock; the coding is still there', async () => {

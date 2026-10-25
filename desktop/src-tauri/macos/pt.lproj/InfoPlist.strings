@@ -1,0 +1,2 @@
+"NSMicrophoneUsageDescription" = "O Trama grava o seu lado de uma chamada que escolha gravar, neste computador. Nada é enviado para lado nenhum.";
+"NSAudioCaptureUsageDescription" = "O Trama grava o outro lado de uma chamada que escolha gravar, a partir do que este computador reproduz. Nada é enviado para lado nenhum.";

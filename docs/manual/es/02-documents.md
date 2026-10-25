@@ -50,6 +50,42 @@ Trama reconoce las transcripciones y mantiene **un turno de palabra por párrafo
 - **Seguir la grabación en el texto** resalta el turno que se está oyendo.
 - Quitar una grabación borra el archivo del proyecto; la transcripción y sus marcas de tiempo se conservan.
 
+<a id="record"></a>
+
+## Grabar una llamada
+
+La aplicación de escritorio puede grabar una entrevista hecha por videollamada (Zoom, Teams, Meet, Jitsi o cualquier otra) y transcribirla, todo en su ordenador. No se envía nada a ninguna parte, y no hace falta cuenta ni conexión a internet.
+
+1. Elija **Grabar una llamada** (el botón del micrófono en la parte superior de la lista de documentos, o `Ctrl+K` y «Grabar una llamada»).
+2. Dé un nombre a la grabación e indique los nombres que la transcripción debe usar para usted y para la otra parte.
+3. Elija el idioma hablado, o deje que Trama lo detecte.
+4. Marque **Todas las personas de la llamada han aceptado ser grabadas**. La ética de la investigación, y la ley en muchos lugares, exigen consentimiento; diga al comienzo de la llamada que está grabando. Sin esto, la grabación no empieza.
+5. Elija **Empezar a grabar**.
+
+Trama graba dos cosas: su **micrófono** y **lo que reproduce el ordenador**, es decir, a todas las demás personas de la llamada. Se guardan por separado, para que la transcripción sepa qué palabras fueron suyas. Una franja en la parte inferior de la ventana muestra cuánto dura la grabación y el nivel de sonido de cada parte; aparece un aviso si una de las partes no se está grabando. Puede seguir trabajando en Trama mientras tanto, y Trama no se bloquea solo mientras graba.
+
+Elija **Detener y guardar**. La grabación se convierte en un documento de transcripción con su audio, cifrado como todos los demás archivos del proyecto. Si marcó **Transcribir cuando termine la grabación**, la transcripción se hace a continuación (ver más abajo).
+
+- **Use auriculares.** Sin ellos, su micrófono también oye a la otra parte por los altavoces. Trama quita de su parte las palabras que también oyó del ordenador, pero con auriculares la transcripción queda más limpia.
+- **Varias personas en la otra parte** aparecen todas con el nombre que dio a la otra parte. Después, renombre o divida sus intervenciones con **Editar el texto…**.
+- **Si Trama o el ordenador se detienen** en mitad de una llamada, la grabación no se pierde. La próxima vez que abra el proyecto, lo grabado hasta los últimos segundos se guarda como documento.
+- Las grabaciones se guardan como archivos WAV estéreo de 16 kHz, unos 230 MB por hora.
+- **macOS** pide la primera vez permiso para usar el micrófono y para grabar el sonido del ordenador; Trama necesita los dos. Grabar requiere macOS 14.2 o posterior. En **Linux**, el sonido del ordenador se graba mediante PulseAudio o PipeWire, que usan casi todos los escritorios.
+
+<a id="transcribe"></a>
+
+## Transcribir una grabación
+
+Trama incluye un modelo de voz (Whisper large-v3-turbo, mediante whisper.cpp) que transcribe una grabación en su ordenador. Entiende portugués, español, inglés y unos cien idiomas más.
+
+- **Una llamada grabada en Trama** se transcribe cuando termina la grabación, si lo pidió.
+- **Una grabación que importe sin transcripción** (un `.mp3`, `.m4a`, `.wav`, `.flac`, `.ogg` o el sonido de un vídeo `.mp4` o `.mov`) se convierte en un documento de transcripción y se transcribe después de importar.
+- **Cualquier grabación aún sin transcripción**: abra el documento y elija **Transcribir en este ordenador**.
+
+La transcripción tarda un rato: en un portátil reciente, entre la mitad y toda la duración de la grabación. Se hace en segundo plano, una grabación cada vez; una franja en la parte inferior de la ventana muestra el progreso, y puede seguir trabajando o detenerla. Si Trama se bloquea o se cierra antes, continúa la próxima vez que se abra el proyecto. Al terminar, el texto aparece en el documento, un párrafo por intervención y con marcas de tiempo, para que la grabación acompañe al texto al reproducirse. El registro de auditoría indica qué motor escribió la transcripción.
+
+Lea la transcripción con la grabación antes de codificarla: la transcripción automática entiende mal nombres, palabras dichas en voz baja y voces que se solapan, y puede omitir una respuesta muy corta, como «Sí.», al comienzo de una intervención. Una transcripción solo se escribe en un documento que aún no tiene texto, así que nunca sustituye al suyo.
+
 <a id="surveys"></a>
 
 ## Respuestas de encuestas

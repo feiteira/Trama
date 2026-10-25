@@ -1,0 +1,205 @@
+/* On-device speech: the recording and transcription strip, the dialogs, the prompt on a recording
+   without a transcript. */
+
+.speech-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+}
+
+.speech-form__pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--s-3);
+}
+
+@media (max-width: 560px) {
+  .speech-form__pair {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* The strip at the foot of the main area */
+
+.speech-dock {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--rule);
+  background: var(--paper-raised);
+  font-family: var(--font-ui);
+  font-size: var(--fs-sm);
+}
+
+.speech-dock__row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s-2) var(--s-3);
+  min-height: 44px;
+  padding: var(--s-1) var(--s-3) var(--s-1) var(--s-4);
+}
+
+.speech-dock__row + .speech-dock__row {
+  border-top: 1px solid var(--rule-faint);
+}
+
+.speech-dock__title {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.speech-dock__name {
+  min-width: 0;
+  max-width: 28ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink-2);
+}
+
+.speech-dock__time {
+  min-width: 5ch;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.speech-dock__meta {
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+
+.speech-dock__icon {
+  color: var(--accent-text);
+}
+
+.speech-dock__progress {
+  flex: 0 1 220px;
+  min-width: 120px;
+}
+
+.speech-dock__spacer {
+  flex: 1;
+}
+
+.speech-dot {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--ink-4);
+}
+
+.speech-dot--live {
+  background: var(--danger);
+  animation: speech-pulse 1.6s var(--ease) infinite;
+}
+
+@keyframes speech-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .speech-dot--live {
+    animation: none;
+  }
+}
+
+.speech-meter {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+  color: var(--ink-3);
+}
+
+.speech-meter__label {
+  font-size: var(--fs-xs);
+}
+
+.speech-meter__bar {
+  position: relative;
+  width: 64px;
+  height: 6px;
+  border-radius: var(--r-pill);
+  background: var(--paper-sunk);
+  overflow: hidden;
+}
+
+.speech-meter__bar > span {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: inherit;
+  background: var(--success-text);
+  transition: width 120ms linear;
+}
+
+.speech-meter__warn {
+  display: inline-flex;
+  color: var(--warning-text);
+  border-radius: var(--r-xs);
+}
+
+.speech-meter__warn:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+@media (forced-colors: active) {
+  .speech-meter__bar > span,
+  .speech-dot--live {
+    background: Highlight;
+  }
+}
+
+/* Over the empty page of a recording without a transcript */
+
+.speech-prompt {
+  /* In the viewer's page grid: the text's column. */
+  grid-column: 2;
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  margin: 0 0 var(--s-5);
+  padding: var(--s-4);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-lg);
+  background: var(--paper-raised);
+  font-family: var(--font-ui);
+}
+
+.speech-prompt__icon {
+  flex: none;
+  color: var(--accent-text);
+}
+
+.speech-prompt__main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+}
+
+.speech-prompt__title {
+  margin: 0;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.speech-prompt__hint {
+  margin: 0;
+  font-size: var(--fs-sm);
+  color: var(--ink-3);
+}
+
+@media (max-width: 560px) {
+  .speech-prompt {
+    flex-wrap: wrap;
+  }
+}

@@ -17,6 +17,7 @@ import { settings } from './settings';
 import { pseudonyms } from './pseudonyms';
 import { log } from './log';
 import { help } from './help';
+import { speech } from './speech';
 
 export const pt: Messages = {
   common,
@@ -37,4 +38,5 @@ export const pt: Messages = {
   pseudonyms,
   log,
   help,
+  speech,
 };

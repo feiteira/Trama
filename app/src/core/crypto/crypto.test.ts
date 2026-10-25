@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import vectors from '../../../../test-vectors/argon2id.json';
 import { fromHex, fromUtf8, randomBytes, toHex, utf8 } from '../bytes';
-import { DecryptError, isSealed, open, seal } from './frames';
+import { DecryptError, frameStep, isSealed, open, openFrame, seal, sealedHeader, sealFrame, SEALED_HEADER } from './frames';
 import { jsKdf, type KdfParams } from './kdf';
 import {
   createKeyring, isValidRecoveryPhrase, newLibraryKey, newRecoveryPhrase, parseKeyring,
@@ -85,6 +85,27 @@ describe('frames', () => {
     expect(() => open(key, tampered, 'attachment')).toThrow(DecryptError);
     const frame = 24 + 100 + 16;
     expect(() => open(key, sealed.subarray(0, 10 + frame * 2), 'attachment')).toThrow(DecryptError);
+  });
+
+  it('opens a file sealed frame by frame, with an empty last frame, like one sealed at once', () => {
+    const data = randomBytes(300);
+    const parts = [sealedHeader(100)];
+    for (let i = 0; i < 3; i++) parts.push(sealFrame(key, data.subarray(i * 100, (i + 1) * 100), 'rec', i, false));
+    parts.push(sealFrame(key, new Uint8Array(0), 'rec', 3, true));
+    const file = new Uint8Array(parts.reduce((n, p) => n + p.length, 0));
+    let at = 0;
+    for (const p of parts) {
+      file.set(p, at);
+      at += p.length;
+    }
+    expect(open(key, file, 'rec')).toEqual(data);
+    // A frame rewritten in place (same length) opens too; one not sealed as last cannot end a file.
+    file.set(sealFrame(key, new Uint8Array(100).fill(7), 'rec', 0, false), SEALED_HEADER);
+    expect(open(key, file, 'rec').subarray(0, 100)).toEqual(new Uint8Array(100).fill(7));
+    const unfinished = file.subarray(0, SEALED_HEADER + 3 * frameStep(100));
+    expect(() => open(key, unfinished, 'rec')).toThrow(DecryptError);
+    expect(openFrame(key, unfinished.subarray(SEALED_HEADER + frameStep(100), SEALED_HEADER + 2 * frameStep(100)), 'rec', 1, false)).toEqual(data.subarray(100, 200));
+    expect(() => openFrame(key, unfinished.subarray(SEALED_HEADER, SEALED_HEADER + frameStep(100)), 'rec', 0, true)).toThrow(DecryptError);
   });
 });
 

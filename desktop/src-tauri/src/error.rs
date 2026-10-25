@@ -14,6 +14,9 @@ pub enum AppError {
     Io(#[from] std::io::Error),
     #[error("invalid argument: {0}")]
     Invalid(String),
+    /// A failure the UI tells apart by its code (speech: `NO_MICROPHONE`, `UNSUPPORTED_AUDIO`…).
+    #[error("{1}")]
+    Coded(&'static str, String),
     #[error("{0}")]
     Other(String),
 }
@@ -30,6 +33,7 @@ impl AppError {
             }
             AppError::Io(_) => "IO_ERROR",
             AppError::Invalid(_) => "INVALID",
+            AppError::Coded(code, _) => code,
             AppError::Other(_) => "ERROR",
         }
     }

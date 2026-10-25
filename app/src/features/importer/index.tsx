@@ -37,8 +37,10 @@ import {
   transcriptModeFor,
   withDoc,
   withFailure,
+  withRecording,
   withTable,
 } from './model';
+import { useSpeech } from '../speech/SpeechProvider';
 import { ReviewList } from './ReviewList';
 import { RowDetail, type ProjectLists } from './RowDetail';
 import { DonePanel, RunPanel, type DoneState, type RunState } from './RunPanel';
@@ -83,6 +85,10 @@ export default function ImporterScreen(_props: ScreenProps<'import'>) {
   const { record } = useUndo();
   const toast = useToast();
   const confirm = useConfirm();
+  const speech = useSpeech();
+  // Read when a recording arrives, which may be before the speech info is known.
+  const canTranscribe = useRef(false);
+  canTranscribe.current = !!speech.state.info?.transcribe;
 
   const [phase, setPhase] = useState<Phase>('edit');
   const [rows, setRowsState] = useState<ReviewRow[]>([]);
@@ -180,6 +186,17 @@ export default function ImporterScreen(_props: ScreenProps<'import'>) {
       const target = matchMedia(file.name, rowsRef.current);
       if (!target) {
         const id = uuid();
+        if (canTranscribe.current) {
+          // No transcript of the same name: one is written on this computer after the import.
+          try {
+            const bytes = await file.read();
+            setRows((rs) => [...rs, withRecording(newRow(id, 'file', file.name), { filename: file.name, mime: mediaMime(file.name), bytes })]);
+            setSelected((s) => s ?? id);
+          } catch (e) {
+            toast.error(e);
+          }
+          return;
+        }
         setRows((rs) => [...rs, withFailure(newRow(id, 'file', file.name), { code: 'NO_MEDIA_MATCH', detail: null })]);
         return;
       }
@@ -341,6 +358,7 @@ export default function ImporterScreen(_props: ScreenProps<'import'>) {
     const created: CreatedDoc[] = [];
     const failures: DoneState['failures'] = [];
     const importedIds: string[] = [];
+    const toTranscribe: string[] = [];
     let stopped: DoneState['stopped'] = null;
     const work = (async () => {
       for (let i = 0; i < todo.length; i++) {
@@ -359,6 +377,7 @@ export default function ImporterScreen(_props: ScreenProps<'import'>) {
           });
           appendAll(created, docs);
           importedIds.push(row.id);
+          if (row.transcribe) for (const d of docs) toTranscribe.push(d.id);
           setRun((r) => (r ? { ...r, statuses: { ...r.statuses, [row.id]: 'done' } } : r));
         } catch (e) {
           if (e instanceof JobStopped || isLocked(e) || !project.isOpen) {
@@ -380,6 +399,9 @@ export default function ImporterScreen(_props: ScreenProps<'import'>) {
       job.current = null;
     }
     if (session.undos.length) record(combineUndo('document.add', `×${created.length}`, session.undos));
+    for (const id of toTranscribe) {
+      await speech.controller?.request({ document_id: id, language: null, channels: 'mix', speakers: [null] }).catch((e: unknown) => console.error('queueing a transcription failed', e));
+    }
     // What was imported leaves the list; failures and what was not reached stay for another try.
     const gone = new Set(importedIds);
     for (const id of gone) sources.current.delete(id);
@@ -388,7 +410,7 @@ export default function ImporterScreen(_props: ScreenProps<'import'>) {
     setDone({ created, failures, stopped });
     setPhase('done');
     setRun(null);
-  }, [project, t, record, setRows]);
+  }, [project, t, record, setRows, speech.controller]);
 
   // Locking (or opening another project) waits for the current file, then the job stops.
   useRegisterSaver(async () => {

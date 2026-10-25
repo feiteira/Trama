@@ -6,7 +6,7 @@ content security policy, the capability file, the Rust shell (SQLCipher, Argon2i
 native-window behaviour, restarts and what actually lands on disk.
 
 ```bash
-npm run build:desktop                        # release build (AppImage, deb, rpm + the binary)
+npm run build:desktop                        # release build (AppImage, deb + the binary)
 xvfb-run -a node tools/desktop-e2e/run.mjs   # ~1 minute
 ```
 
@@ -91,6 +91,8 @@ artifacts folder), the crash screen's text if the app crashed, uncaught page err
 | `TRAMA_E2E_KEEP` | off | `1`: keep the temporary library and files for inspection |
 | `TRAMA_E2E_PRIVATE_BUS` | on when `dbus-run-session` exists | `0`: use the inherited D-Bus session |
 | `TRAMA_E2E_TIMEOUT_MS` | 900000 | a watchdog for the whole run |
+| `TRAMA_SPEECH_DIR` | `desktop/src-tauri/resources/speech` | the speech model handed to the app for the transcription step (skipped without it, or without ffmpeg's flite voice for the sample) |
+| `TRAMA_E2E_BUNDLED_SPEECH` | off | `1`: hand no model to the app, which must find the one it carries (an installed .deb, an extracted AppImage run through its `AppRun`; the quit step then cannot find the app's process) |
 
 The driver listens on a free local port chosen at each run, so several runs (or another WebDriver
 session) do not collide. The app must not already be running from the same binary: the test

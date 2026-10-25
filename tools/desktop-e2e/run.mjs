@@ -42,11 +42,14 @@ const PASSAGE = `the ${MARKER} committee met every Thursday`;
 // On-device transcription: the model files (tools/fetch-speech-models.mjs) and a spoken sample,
 // synthesised with ffmpeg's flite voice (fictional words, nothing recorded). Skipped without them.
 const SPEECH_DIR = process.env.TRAMA_SPEECH_DIR ?? join(ROOT, 'desktop/src-tauri/resources/speech');
+// TRAMA_E2E_BUNDLED_SPEECH=1: test an installed bundle (an extracted AppImage, an installed .deb),
+// which must find the model it carries; TRAMA_SPEECH_DIR is not passed then.
+const BUNDLED_SPEECH = process.env.TRAMA_E2E_BUNDLED_SPEECH === '1';
 // Named without the run's tag: openDocument(tag) means the text document.
 const SPEECH_SAMPLE = join(INBOX, 'Gravação da horta.wav');
 const SPEECH_WORDS = 'We planted tomatoes in the community garden every spring.';
 const hasSpeech =
-  existsSync(join(SPEECH_DIR, 'ggml-large-v3-turbo-q5_0.bin')) &&
+  (BUNDLED_SPEECH || existsSync(join(SPEECH_DIR, 'ggml-large-v3-turbo-q5_0.bin'))) &&
   spawnSync('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-f', 'lavfi', '-i', `flite=text='${SPEECH_WORDS}':voice=slt`, '-ar', '16000', '-ac', '1', SPEECH_SAMPLE]).status === 0;
 writeFileSync(
   DOC_FILE,
@@ -95,7 +98,7 @@ async function startDriver(env = {}) {
   // the desktop's bus, under Xvfb, each start waits ~30 s for a portal that cannot answer).
   if (PRIVATE_BUS) cmd.unshift('dbus-run-session', '--');
   driver = spawn(cmd[0], cmd.slice(1), {
-    env: { ...process.env, TRAMA_DATA_DIR: DATA, ...(hasSpeech ? { TRAMA_SPEECH_DIR: SPEECH_DIR } : {}), ...env },
+    env: { ...process.env, TRAMA_DATA_DIR: DATA, ...(hasSpeech && !BUNDLED_SPEECH ? { TRAMA_SPEECH_DIR: SPEECH_DIR } : {}), ...env },
     stdio: ['ignore', 'pipe', 'pipe'],
     detached: true, // its own process group, ended as a whole
   });

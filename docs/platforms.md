@@ -33,19 +33,24 @@ for by name, macOS. It uses no secrets.
 
 ```bash
 sudo apt-get install libwebkit2gtk-4.1-dev libgtk-3-dev libsoup-3.0-dev librsvg2-dev patchelf libasound2-dev libclang-dev cmake
-npm run build:desktop        # AppImage, .deb and .rpm
+npm run build:desktop        # AppImage and .deb
 ```
 
 On Fedora: `webkit2gtk4.1-devel gtk3-devel libsoup3-devel librsvg2-devel patchelf alsa-lib-devel clang-devel cmake`.
 Recording the computer's sound uses the PulseAudio protocol (PipeWire serves it too), spoken
 natively by Rust code: no libpulse is needed. The packages depend on ALSA's library
-(`libasound2`, `alsa-lib`), which `cpal` links. The .deb and
-.rpm also install a **Trama (example)** launcher (`linux/trama-example.desktop`), which runs
-`trama-desktop --example`.
+(`libasound2`, `alsa-lib`), which `cpal` links. The .deb also installs a **Trama (example)**
+launcher (`linux/trama-example.desktop`), which runs `trama-desktop --example`.
 
-Audio and video playback in the webview uses the system's GStreamer. The AppImage does not bundle
-it (`bundleMediaFramework: false`), so playing media needs GStreamer's "good" plugins installed
-on the system (most desktops have them).
+**No .rpm for now.** Tauri's RPM packager feeds the payload to its compressor so slowly that, with
+the 575 MB speech model inside, gzip and zstd alike run for well over an hour (a CI build timed
+out); only an uncompressed payload is fast, and older `rpm` versions may not accept one. Fedora
+and openSUSE users run the AppImage. `--bundles rpm` still works, given the time.
+
+Audio and video playback in the webview uses GStreamer. The .deb uses the system's. The AppImage
+bundles WebKit's GStreamer libraries anyway, and without the plugins they cannot load the
+system's (playing a recording then crashed WebKit's page process), so it carries GStreamer's
+plugins too (`bundleMediaFramework: true`, about 10 MB).
 
 ## Windows
 

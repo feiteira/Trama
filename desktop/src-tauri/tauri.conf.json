@@ -34,7 +34,6 @@
     "targets": [
       "appimage",
       "deb",
-      "rpm",
       "nsis",
       "msi"
     ],
@@ -87,7 +86,7 @@
         }
       },
       "appimage": {
-        "bundleMediaFramework": false
+        "bundleMediaFramework": true
       },
       "rpm": {
         "files": {

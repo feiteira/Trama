@@ -19,7 +19,7 @@ npm test                         # Vitest (app/src/**/*.test.ts)
 npx vitest run src/core/qda --root app          # one directory or file
 npm run test:rust                # cargo test (SQLCipher, Argon2 vectors, file helpers, speech)
 npm run lint:rust                # cargo fmt --check + clippy -D warnings
-npm run build:desktop            # installers for the current OS (AppImage/deb/rpm on Linux), speech model bundled
+npm run build:desktop            # installers for the current OS (AppImage/deb on Linux), speech model bundled
 npm run fetch:speech             # the speech model files (575 MB, SHA-256 checked) for debug builds
 npm run gen:privacy              # regenerate PRIVACY.md from app/src/core/privacy/flows.ts
 npm run screenshots              # manual screenshots, all three languages (Playwright + the demo)

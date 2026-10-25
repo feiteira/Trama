@@ -53,9 +53,9 @@ O **Trama** é um programa gratuito e de código aberto para análise qualitativ
 
 ## Install
 
-Download the installer for your system from [Releases](https://github.com/feiteira/Trama/releases): Windows 10 and 11 (`.exe` or `.msi`), macOS 14.2 or later (Apple silicon and Intel), and Linux (`.AppImage`, `.deb`, `.rpm`). Each is about 600 MB, almost all of it the speech model that transcribes on your computer. The builds are not yet code-signed, so Windows SmartScreen and macOS Gatekeeper will warn before opening them; the release notes say how to open them anyway. Or build Trama from source (below).
+Download the installer for your system from [Releases](https://github.com/feiteira/Trama/releases): Windows 10 and 11 (`.exe` or `.msi`), macOS 14.2 or later (Apple silicon and Intel), and Linux (`.AppImage` for any distribution, `.deb` for Debian and Ubuntu). Each is about 600 MB, almost all of it the speech model that transcribes on your computer. The builds are not yet code-signed, so Windows SmartScreen and macOS Gatekeeper will warn before opening them; the release notes say how to open them anyway. Or build Trama from source (below).
 
-The Windows installers and the Linux `.deb` and `.rpm` packages also add **Trama (example)** (elsewhere, start Trama with `--example`), which opens a fictional example study (passphrase `trama`) in a separate folder that is emptied every time — a safe place to try everything.
+The Windows installers and the Linux `.deb` package also add **Trama (example)** (elsewhere, start Trama with `--example`), which opens a fictional example study (passphrase `trama`) in a separate folder that is emptied every time — a safe place to try everything.
 
 ## Build from source
 
@@ -71,7 +71,7 @@ On Fedora: `webkit2gtk4.1-devel gtk3-devel libsoup3-devel librsvg2-devel patchel
 npm install
 npm run dev              # run the desktop app
 npm run dev:web          # or: a browser demo with the fictional example project, in memory only
-npm run build:desktop    # installers for your operating system (AppImage, .deb and .rpm on Linux)
+npm run build:desktop    # installers for your operating system (AppImage and .deb on Linux)
 npm run typecheck && npm test   # type checks (including missing translations) and the test suite
 npm run test:rust        # the Rust tests (SQLCipher, Argon2 vectors, file helpers, speech)
 npm run fetch:speech     # the speech model for `npm run dev` (release builds fetch it themselves)

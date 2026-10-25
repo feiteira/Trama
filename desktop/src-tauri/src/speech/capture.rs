@@ -507,7 +507,9 @@ mod device_tests {
         let frames = bytes.len() / 4;
         let peak = |ch: usize| {
             bytes
-                .chunks_exact(4)
+                .as_chunks::<4>()
+                .0
+                .iter()
                 .map(|f| i16::from_le_bytes([f[ch * 2], f[ch * 2 + 1]]).unsigned_abs())
                 .max()
                 .unwrap_or(0)

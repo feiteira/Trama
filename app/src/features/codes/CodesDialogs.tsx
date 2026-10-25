@@ -6,7 +6,7 @@ import { Checkbox } from '../../ui/components/Choice';
 import { Dialog } from '../../ui/components/Dialog';
 import { Badge, Notice } from '../../ui/components/Feedback';
 import { TextField } from '../../ui/components/Field';
-import { codeChoices, subtreeIds, type TreeItem } from '../common/codeTree';
+import { codeChoices, subtreeIds, type TreeItem } from '../common/codeTreeModel';
 import { CodePickList } from '../common/CodeTreeDialogs';
 import type { MergeField, MergePlan } from './codebookIO';
 import './codes.css';

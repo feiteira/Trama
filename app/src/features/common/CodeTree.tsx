@@ -33,7 +33,7 @@ import {
   type CountMode,
   type DropZone,
   type TreeItem,
-} from './codeTree';
+} from './codeTreeModel';
 import './CodeTree.css';
 
 /** Text dragged out of a document (the Workbench sets it): dropping it on a code applies the code. */

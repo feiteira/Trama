@@ -10,7 +10,7 @@ import { usePlatform, useProject } from '../../shell/AppState';
 import { useUndo } from '../../shell/undo';
 import { useI18n } from '../../ui/i18n';
 import { useToast } from '../../ui/components/Toast';
-import { pathsOf } from '../common/codeTree';
+import { pathsOf } from '../common/codeTreeModel';
 import type { CodeData } from '../common/CodeTreeActions';
 import {
   codebookMarkdown,

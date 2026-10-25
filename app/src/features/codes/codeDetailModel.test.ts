@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { perCoder, perDocument, segmentContext } from './codeDetail';
+import { perCoder, perDocument, segmentContext } from './codeDetailModel';
 
 describe('segmentContext', () => {
   const text = 'First paragraph here.\nWe grow beans and share them with the neighbours every summer.\nLast one.';

@@ -14,7 +14,7 @@ import { MenuButton } from '../../ui/components/Menu';
 import { SplitPane } from '../../ui/components/SplitPane';
 import { CodeTree, type CodeTreeHandle } from '../common/CodeTree';
 import { useCodeActions, useCodeData, useCollapsed, useFail, useUndoToast } from '../common/CodeTreeActions';
-import { branchIds } from '../common/codeTree';
+import { branchIds } from '../common/codeTreeModel';
 import { CodeDetail } from './CodeDetail';
 import { MergeCodesDialog } from './CodesDialogs';
 import { useCodebookFiles, type ExportFormat } from './useCodebookFiles';

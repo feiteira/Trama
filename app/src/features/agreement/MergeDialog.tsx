@@ -19,7 +19,7 @@ import { type MessageKey, useI18n } from '../../ui/i18n';
 import { problemKey } from '../../ui/problems';
 import { fmtInt } from './model';
 import { baseName } from './files';
-import { fileProblem, type FileProblem, PREVIEW_KINDS, previewRows, sameProject } from './team';
+import { fileProblem, type FileProblem, PREVIEW_KINDS, previewRows, sameProject } from './teamModel';
 import { MergeReport } from './MergeReport';
 
 type Stage =

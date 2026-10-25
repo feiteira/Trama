@@ -18,9 +18,9 @@ import { Spinner } from '../../ui/components/Feedback';
 import { Select, TextArea, TextField } from '../../ui/components/Field';
 import { MenuButton } from '../../ui/components/Menu';
 import { Popover } from '../../ui/components/Popover';
-import { codeChoices, pathsOf } from '../common/codeTree';
+import { codeChoices, pathsOf } from '../common/codeTreeModel';
 import { useFail, useUndoToast, type CodeActions, type CodeData } from '../common/CodeTreeActions';
-import { perCoder, perDocument, segmentContext, type SegmentContext } from './codeDetail';
+import { perCoder, perDocument, segmentContext, type SegmentContext } from './codeDetailModel';
 import { SplitCodeDialog } from './CodesDialogs';
 import './codes.css';
 

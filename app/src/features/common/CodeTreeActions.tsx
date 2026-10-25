@@ -10,7 +10,7 @@ import { useLive } from '../../shell/useLive';
 import type { MessageKey } from '../../ui/i18n';
 import { useI18n } from '../../ui/i18n';
 import { useToast } from '../../ui/components/Toast';
-import { subtreeIds, type TreeItem } from './codeTree';
+import { subtreeIds, type TreeItem } from './codeTreeModel';
 import { CodeDefinitionDialog, DeleteCodeDialog, MergeIntoDialog } from './CodeTreeDialogs';
 
 // Shared plumbing of the code tree: the codebook as live data, which branches are folded

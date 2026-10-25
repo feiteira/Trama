@@ -10,7 +10,7 @@ import { SearchField } from '../../../ui/components/Field';
 import type { MenuEntry } from '../../../ui/components/Menu';
 import { CodeTree, type CodeTreeHandle } from '../../common/CodeTree';
 import { useCodeActions, useCodeData, useCollapsed } from '../../common/CodeTreeActions';
-import { branchIds, filterTree, type CountMode } from '../../common/codeTree';
+import { branchIds, filterTree, type CountMode } from '../../common/codeTreeModel';
 import { definitionSummary } from './panelText';
 import './panels.css';
 

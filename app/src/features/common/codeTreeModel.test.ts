@@ -13,7 +13,7 @@ import {
   typeAhead,
   visibleRows,
   type TreeItem,
-} from './codeTree';
+} from './codeTreeModel';
 
 const item = (id: string, depth: number, name = id): TreeItem => ({ id, name, depth, color: '#3a6ea5', codable: true, shortcut: null, own: 1, total: 1, childCount: 0 });
 
@@ -175,7 +175,7 @@ describe('codeChoices', () => {
 
 describe('matchRanges', () => {
   it('maps folded matches back to the name', async () => {
-    const { matchRanges } = await import('./codeTree');
+    const { matchRanges } = await import('./codeTreeModel');
     expect(matchRanges('Pertença à comunidade', 'pertenca')).toEqual([[0, 8]]);
     expect(matchRanges('Conflict over plots', 'plot con')).toEqual([[0, 3], [14, 18]]);
     expect(matchRanges('Anything', '')).toEqual([]);

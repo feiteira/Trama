@@ -8,7 +8,7 @@ import { Button } from '../../ui/components/Button';
 import { RadioGroup } from '../../ui/components/Choice';
 import { Dialog } from '../../ui/components/Dialog';
 import { SearchField, TextArea, TextField } from '../../ui/components/Field';
-import { codeChoices, filterChoices, type CodeChoice, type TreeItem } from './codeTree';
+import { codeChoices, filterChoices, type CodeChoice, type TreeItem } from './codeTreeModel';
 import './CodeTree.css';
 
 // ---------------------------------------------------------------------------------------------

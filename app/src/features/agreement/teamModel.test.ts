@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { NotTramaFileError, UnlockRequiredError } from '../../core/export/trama';
 import { DecryptError } from '../../core/crypto/frames';
 import { DataFileError } from '../../services/datafile';
-import { copyFileName, fileProblem, PREVIEW_KINDS, previewRows, sameProject } from './team';
+import { copyFileName, fileProblem, PREVIEW_KINDS, previewRows, sameProject } from './teamModel';
 
 describe('merge preview rows', () => {
   it('lists documents, codes, codings, memos and cases, and sums the rest as other', () => {
